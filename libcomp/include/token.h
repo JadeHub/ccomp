@@ -14,8 +14,13 @@ typedef enum
     tok_r_brace,            // }
     tok_l_paren,            // (
     tok_r_paren,            // )
-    tok_semi_colon,          // ;
-
+    tok_semi_colon,         // ;
+    tok_minus,              // -
+    tok_tilda,              // ~
+    tok_exclaim,            // !
+    tok_plus,               // +
+    tok_star,               // *
+    tok_slash,              // /
     //keywords
     tok_return,
     tok_int,

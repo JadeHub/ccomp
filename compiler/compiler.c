@@ -7,7 +7,9 @@
 #include <libcomp/include/parse.h>
 #include <libcomp/include/code_gen.h>
 
-static const char* _src = "int main() \r\n{return 2;}";
+//static const char* _src = "int main() \r\n{return 2;}";
+
+static const char* _src = "int main() \r\n{return (-12)/5;}";
 
 void print_tokens(token_t* toks)
 {
@@ -27,13 +29,15 @@ void asm_print(const char* line)
 
 void diag_err(token_t* tok, uint32_t err, const char* msg)
 {
-    printf("%s", msg);
+    printf("%s\n", msg);
     exit(1);
 }
 
 int main(int argc, char* argv[])
 {
     lex_init();
+
+    int r = (-12) / 5;
 
     source_range_t sr;
     sr.ptr = _src;
@@ -58,9 +62,9 @@ int main(int argc, char* argv[])
     }
 
     token_t* toks = lex_source(&sr);
-
+   // print_tokens(toks);
     ast_trans_unit_t* ast = parse_translation_unit(toks, &diag_err);
-
+   // ast_print(ast);
     code_gen(ast, &asm_print);
 }
 

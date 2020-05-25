@@ -159,6 +159,30 @@ lex_next_tok:
 		result->kind = tok_semi_colon;
 		result->len = 1;
 		break;
+	case '-':
+		result->kind = tok_minus;
+		result->len = 1;
+		break;
+	case '~':
+		result->kind = tok_tilda;
+		result->len = 1;
+		break;
+	case '!':
+		result->kind = tok_exclaim;
+		result->len = 1;
+		break;
+	case '+':
+		result->kind = tok_plus;
+		result->len = 1;
+		break;
+	case '*':
+		result->kind = tok_star;
+		result->len = 1;
+		break;
+	case '/':
+		result->kind = tok_slash;
+		result->len = 1;
+		break;
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':		
 		_lex_num_literal(src, pos, result);

@@ -29,6 +29,18 @@ const char* tok_kind_name(tok_kind k)
 		return "identifier";
 	case tok_num_literal:
 		return "num_literal";
+	case tok_minus:
+		return "num_minus";
+	case tok_tilda:
+		return "num_tilda";
+	case tok_exclaim:
+		return "num_exclaim";
+	case tok_plus:
+		return "tok_plus";
+	case tok_star:
+		return "tok_star";
+	case tok_slash:
+		return "tok_slash";
 	}
 	return "invalid";
 }
