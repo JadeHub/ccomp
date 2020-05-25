@@ -16,6 +16,18 @@ static inline bool _get_next_and_adv(source_range_t* sr, const char** pos, char*
 	return false;
 }
 
+static inline bool _test_next_and_adv(source_range_t* sr, const char** pos, char* result)
+{
+	if (*pos < sr->end)
+	{
+		*result = **pos;
+		(*pos)++;
+		return true;
+	}
+	return false;
+}
+
+
 /*
 [0-9]
 */
@@ -121,11 +133,7 @@ lex_next_tok:
 	//Skip any white space
 	while(*pos == ' ' || *pos == '\t')
 	{
-		if (!_get_next_and_adv(src, &pos, &ch))
-		{
-			result->kind = tok_eof;
-			return true;
-		}
+		if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
 	};
 
 	result->loc = pos;
@@ -168,8 +176,16 @@ lex_next_tok:
 		result->len = 1;
 		break;
 	case '!':
-		result->kind = tok_exclaim;
-		result->len = 1;
+		if (pos[1] == '=')
+		{
+			result->kind = tok_exclaimequal;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_exclaim;
+			result->len = 1;
+		}
 		break;
 	case '+':
 		result->kind = tok_plus;
@@ -183,6 +199,86 @@ lex_next_tok:
 		result->kind = tok_slash;
 		result->len = 1;
 		break;
+	case '%':
+		result->kind = tok_percent;
+		result->len = 1;
+		break;
+	case '^':
+		result->kind = tok_caret;
+		result->len = 1;
+		break;
+
+	case '&':
+		if (pos[1] == '&')
+		{
+			result->kind = tok_ampamp;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_amp;
+			result->len = 1;
+		}
+		break;
+	case '|':
+		if (pos[1] == '|')
+		{
+			result->kind = tok_pipepipe;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_pipe;
+			result->len = 1;
+		}
+		break;
+	case '=':
+		if (pos[1] == '=')
+		{
+			result->kind = tok_equalequal;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_equal;
+			result->len = 1;
+		}
+		break;
+	case '<':
+		if (pos[1] == '<')
+		{
+			result->kind = tok_lesserlesser;
+			result->len = 2;
+		}
+		else if (pos[1] == '=')
+		{
+			result->kind = tok_lesserequal;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_lesser;
+			result->len = 1;
+		}
+		break;
+	case '>':
+		if (pos[1] == '>')
+		{
+			result->kind = tok_greatergreater;
+			result->len = 2;
+		}
+		else if (pos[1] == '=')
+		{
+			result->kind = tok_greaterequal;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_greater;
+			result->len = 1;
+		}
+		break;
+	
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':		
 		_lex_num_literal(src, pos, result);
@@ -201,6 +297,10 @@ lex_next_tok:
 		break;
 	};	
 	return result->kind != tok_invalid;
+
+_hit_end:
+	result->kind = tok_eof;
+	return true;
 }
 
 token_t* lex_source(source_range_t* sr)

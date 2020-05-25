@@ -30,6 +30,34 @@ static const char* _op_to_str(op_kind k)
 		return "[*] Multiplication";
 	case op_div:
 		return "[/] Division";
+	case op_and:
+		return "[&&] And";
+	case op_or:
+		return "[||] Or";
+	case op_eq:
+		return "[==] Equal";
+	case op_neq:
+		return "[!=] Not equal";
+	case op_lessthan:
+		return "[<] Less than";
+	case op_lessthanequal:
+		return "[<=] Less than or equal";
+	case op_greaterthan:
+		return "[>] Greater than";
+	case op_greaterthanequal:
+		return "[>] Greater than or equal";
+	case op_shiftleft:
+		return "[<<] Shift left";
+	case op_shiftright:
+		return "[>>] Shift right";
+	case op_bitwise_and:
+		return "[&] Bitwise and";
+	case op_bitwise_or:
+		return "[|] Bitwise or";
+	case op_bitwise_xor:
+		return "[^] Bitwise xor";
+	case op_mod:
+		return "[%] Modulo";
 	}
 	return "ERROR";
 }

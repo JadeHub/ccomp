@@ -41,6 +41,23 @@ const char* tok_kind_name(tok_kind k)
 		return "tok_star";
 	case tok_slash:
 		return "tok_slash";
+	case tok_ampamp:
+		return "tok_ampamp";
+	case tok_pipepipe:
+		return "tok_pipepipe";
+	case tok_equalequal:
+		return "tok_equalequal";
+	case tok_exclaimequal:
+		return "tok_exclaimequal";
+	case tok_lesser:
+		return "tok_lesser";
+	case tok_lesserequal:
+		return "tok_lesserequal";
+	case tok_greater:
+		return "tok_greater";
+	case tok_greaterequal:
+		return "tok_greaterequal";
+
 	}
 	return "invalid";
 }

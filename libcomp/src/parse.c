@@ -80,7 +80,9 @@ static op_kind _get_unary_operator(token_t* tok)
 	case tok_exclaim:
 		return op_not;
 	}
+
 	_err_diag(ERR_SYNTAX, "Unknown unary op {}", tok_kind_name(tok->kind));
+	return op_unknown;
 }
 
 static op_kind _get_binary_operator(token_t* tok)
@@ -95,17 +97,60 @@ static op_kind _get_binary_operator(token_t* tok)
 		return op_mul;
 	case tok_slash:
 		return op_div;
+	case tok_ampamp:
+		return op_and;
+	case tok_pipepipe:
+		return op_or;
+	case tok_equalequal:
+		return op_eq;
+	case tok_exclaimequal:
+		return op_neq;
+	case tok_lesser:
+		return op_lessthan;
+	case tok_lesserequal:
+		return op_lessthanequal;
+	case tok_greater:
+		return op_greaterthan;
+	case tok_greaterequal:
+		return op_greaterthanequal;
+	case tok_lesserlesser:
+		return op_shiftleft;
+	case tok_greatergreater:
+		return op_shiftright;
+	case tok_amp:
+		return op_bitwise_and;
+	case tok_pipe:
+		return op_bitwise_or;
+	case tok_caret:
+		return op_bitwise_xor;
+	case tok_percent:
+		return op_mod;
 	}
 	_err_diag(ERR_SYNTAX, "Unknown binary op {}", tok_kind_name(tok->kind));
+	return op_unknown;
 }
 
 ast_expression_t* parse_expression();
 
 
 /*
-<exp> ::= <term> { ("+" | "-") <term> }
+<program> ::= <function>
+<function> ::= "int" <id> "(" ")" "{" <statement> "}"
+<statement> ::= "return" <exp> ";"
+<exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+<logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
+
+<bitwise-or> :: = <bitwise-xor> { ("|") <bitwise-xor> }
+<bitwise-xor> :: = <bitwise-and> { ("^") <bitwise-and> }
+<bitwise-and> :: = <equality-exp> { ("&") <equality-exp> }
+
+<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+<relational-exp> ::= <bitshift-exp> { ("<" | ">" | "<=" | ">=") <bitshift-exp> }
+<bitshift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+<additive-exp> ::= <term> { ("+" | "-") <term> }
 <term> ::= <factor> { ("*" | "/") <factor> }
 <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+<unary_op> ::= "!" | "~" | "-"
 */
 
 
@@ -152,7 +197,7 @@ ast_expression_t* parse_factor()
 ast_expression_t* parse_term()
 {
 	ast_expression_t* expr = parse_factor();
-	while (current()->kind == tok_star || current()->kind == tok_slash)
+	while (current()->kind == tok_star || current()->kind == tok_slash || current()->kind == tok_percent)
 	{
 		op_kind op = _get_binary_operator(current());
 		next_tok();
@@ -171,9 +216,9 @@ ast_expression_t* parse_term()
 }
 
 /*
-<exp> ::= <term> { ("+" | "-") <term> }
+<additive-exp> ::= <term> { ("+" | "-") <term> }
 */
-ast_expression_t* parse_expression()
+ast_expression_t* parse_additive_expr()
 {
 	ast_expression_t* expr = parse_term();
 	while (current()->kind == tok_plus || current()->kind == tok_minus)
@@ -190,7 +235,206 @@ ast_expression_t* parse_expression()
 		expr->data.binary_op.operation = op;
 		expr->data.binary_op.lhs = cur_expr;
 		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
 
+/*
+<bitshift - exp> :: = <additive - exp>{ ("<<" | ">>") < additive - exp > }
+*/
+ast_expression_t* parse_bitshift_expr()
+{
+	ast_expression_t* expr = parse_additive_expr();
+	while (current()->kind == tok_lesserlesser || current()->kind == tok_greatergreater)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_additive_expr();
+
+		//our two terms are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<relational - exp> :: = <additive - exp>{ ("<" | ">" | "<=" | ">=") < additive - exp > }
+*/
+ast_expression_t* parse_relational_expr()
+{
+	ast_expression_t* expr = parse_bitshift_expr();
+
+	while (current()->kind == tok_lesser || current()->kind == tok_lesserequal ||
+		current()->kind == tok_greater || current()->kind == tok_greaterequal)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_bitshift_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<equality-exp> :: = <relational - exp>{ ("!=" | "==") < relational - exp > }
+*/
+ast_expression_t* parse_equality_expr()
+{
+	ast_expression_t* expr = parse_relational_expr();
+
+	while (current()->kind == tok_exclaimequal || current()->kind == tok_equalequal)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_relational_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<bitwise-and> :: = <equality-exp>{ ("&") < equality-exp > }
+*/
+ast_expression_t* parse_bitwise_and_expr()
+{
+	ast_expression_t* expr = parse_equality_expr();
+
+	while (current()->kind == tok_amp)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_equality_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<bitwise-xor> :: = <bitwise-and>{ ("^") < bitwise-and > }
+*/
+ast_expression_t* parse_bitwise_xor_expr()
+{
+	ast_expression_t* expr = parse_bitwise_and_expr();
+
+	while (current()->kind == tok_caret)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_bitwise_and_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<bitwise-or > :: = <bitwise-xor>{ ("|") < bitwise-xor > }
+*/
+ast_expression_t* parse_bitwise_or_expr()
+{
+	ast_expression_t* expr = parse_bitwise_xor_expr();
+
+	while (current()->kind == tok_pipe)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_bitwise_xor_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
+*/
+ast_expression_t* parse_logical_and_expr()
+{
+	ast_expression_t* expr = parse_bitwise_or_expr();
+
+	while (current()->kind == tok_ampamp)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_bitwise_or_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
+	}
+	return expr;
+}
+
+/*
+<logical-or-exp> :: = <equality - exp>{ "||" < equality - exp > }
+*/
+ast_expression_t* parse_expression()
+{
+	ast_expression_t* expr = parse_logical_and_expr();
+
+	while (current()->kind == tok_pipepipe)
+	{
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = parse_logical_and_expr();
+
+		//our two expressions are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
 	}
 	return expr;
 }

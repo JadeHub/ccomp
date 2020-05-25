@@ -21,6 +21,24 @@ typedef enum
     tok_plus,               // +
     tok_star,               // *
     tok_slash,              // /
+
+    tok_amp,                // &
+    tok_ampamp,             // &&
+    tok_pipe,               // |
+    tok_pipepipe,           // ||
+    tok_equal,              // =
+    tok_equalequal,         // ==
+    tok_exclaimequal,       // !=
+    tok_lesser,             // <
+    tok_lesserlesser,       // <<
+    tok_lesserequal,        // <=
+    tok_greater,            // >
+    tok_greatergreater,     // >>
+    tok_greaterequal,       // >=
+
+    tok_percent,            //%
+    tok_caret,            //^
+
     //keywords
     tok_return,
     tok_int,

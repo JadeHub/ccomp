@@ -6,6 +6,7 @@ struct ast_expression;
 
 typedef enum
 {
+	op_unknown,
 	//unary operators
 	op_negate,
 	op_compliment,
@@ -14,7 +15,25 @@ typedef enum
 	op_add,
 	op_sub,
 	op_mul,
-	op_div
+	op_div,
+	op_mod,
+
+	op_shiftleft,
+	op_shiftright,
+
+	op_bitwise_or,
+	op_bitwise_xor,
+	op_bitwise_and,
+
+	//logical operators
+	op_and,
+	op_or,
+	op_eq,
+	op_neq,
+	op_lessthan,
+	op_lessthanequal,
+	op_greaterthan,
+	op_greaterthanequal,
 
 }op_kind;
 
