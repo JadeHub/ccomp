@@ -9,7 +9,7 @@
 
 //static const char* _src = "int main() \r\n{return 2;}";
 
-static const char* _src = "int main() \r\n{return 1 << 2;}";
+static const char* _src = "int main() {return0;}";
 
 void print_tokens(token_t* toks)
 {
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
 
         fseek(f, 0, SEEK_SET);
 
-        sr.ptr = (const char*)malloc(len+1);
+        sr.ptr = (char*)malloc(len+1);
         memset(sr.ptr, 0, len + 1);
         if (fread(sr.ptr, 1, len, f) != len)
             return -1;
@@ -65,6 +65,6 @@ int main(int argc, char* argv[])
    // print_tokens(toks);
     ast_trans_unit_t* ast = parse_translation_unit(toks, &diag_err);
    // ast_print(ast);
-    code_gen(ast, &asm_print);
+    code_gen(ast, &asm_print, &diag_err);
 }
 

@@ -12,7 +12,7 @@ static void _print_indent()
 	}
 }
 
-static const char* _op_to_str(op_kind k)
+const char* ast_op_name(op_kind k)
 {
 	switch (k)
 	{
@@ -69,14 +69,14 @@ void ast_print_expression(ast_expression_t* expr, const char* prefix)
 	switch (expr->kind)
 	{
 		case expr_binary_op:
-			printf("%sBinaryOp %s\n", prefix, _op_to_str(expr->data.binary_op.operation));
+			printf("%sBinaryOp %s\n", prefix, ast_op_name(expr->data.binary_op.operation));
 			_cur_indent++;
 			ast_print_expression(expr->data.binary_op.lhs, "lhs: ");
 			ast_print_expression(expr->data.binary_op.rhs, "rhs: ");
 			_cur_indent--;
 			break;
 		case expr_unary_op:
-			printf("%sUnaryOp %s\n", prefix, _op_to_str(expr->data.unary_op.operation));
+			printf("%sUnaryOp %s\n", prefix, ast_op_name(expr->data.unary_op.operation));
 			_cur_indent++;
 			ast_print_expression(expr->data.unary_op.expression, "");
 			_cur_indent--;
@@ -101,7 +101,7 @@ void ast_print_function(ast_function_decl_t* f)
 	_print_indent();
 	printf("FunctionDecl %s\n", f->name);
 	_cur_indent++;
-	ast_print_statement(f->return_statement);
+	ast_print_statement(f->statements);
 	_cur_indent--;
 }
 

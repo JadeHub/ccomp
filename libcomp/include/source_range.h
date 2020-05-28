@@ -5,6 +5,6 @@
 
 typedef struct
 {
-    const char* ptr;
-    const char* end;
+    char* ptr;
+    char* end;
 }source_range_t;

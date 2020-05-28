@@ -57,6 +57,14 @@ typedef struct token
     struct token* prev;
 }token_t;
 
+typedef struct
+{
+    token_t* start;
+    token_t* end;
+
+}token_range_t;
+
+
 const char* tok_kind_name(tok_kind);
 
 void tok_printf(token_t* tok);
