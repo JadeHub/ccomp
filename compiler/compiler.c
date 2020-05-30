@@ -9,7 +9,7 @@
 
 //static const char* _src = "int main() \r\n{return 2;}";
 
-static const char* _src = "int main() {return0;}";
+static const char* _src = "int main() {int a = 2; if(a){a = 3; int a = 0; } return a; }";
 
 void print_tokens(token_t* toks)
 {
@@ -27,7 +27,7 @@ void asm_print(const char* line)
     printf("%s\n", line);
 }
 
-void diag_err(token_t* tok, uint32_t err, const char* msg)
+void diag_err_print(token_t* tok, uint32_t err, const char* msg)
 {
     printf("%s\n", msg);
     exit(1);
@@ -36,6 +36,7 @@ void diag_err(token_t* tok, uint32_t err, const char* msg)
 int main(int argc, char* argv[])
 {
     lex_init();
+    diag_set_handler(&diag_err_print);
 
     int r = (-12) / 5;
 
@@ -63,7 +64,7 @@ int main(int argc, char* argv[])
 
     token_t* toks = lex_source(&sr);
    // print_tokens(toks);
-    ast_trans_unit_t* ast = parse_translation_unit(toks, &diag_err);
+    ast_trans_unit_t* ast = parse_translation_unit(toks);
    // ast_print(ast);
     code_gen(ast, &asm_print, &diag_err);
 }

@@ -6,11 +6,13 @@
 #include <stdarg.h>
 
 void gen_expression(ast_expression_t* expr);
+void gen_block_item(ast_block_item_t* bi);
 
 static write_asm_cb _asm_cb;
 static diag_cb _diag_cb;
 
 static var_set_t* _var_set;
+static bool _returned = false;
 
 static void _gen_asm(const char* format, ...)
 {
@@ -72,7 +74,23 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 
 void gen_expression(ast_expression_t* expr)
 {
-	if (expr->kind == expr_assign)
+	if (expr->kind == expr_condition)
+	{
+		char label_false[16];
+		char label_end[16];
+		_make_label_name(label_false);
+		_make_label_name(label_end);
+
+		gen_expression(expr->data.condition.cond); //condition
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_false);
+		gen_expression(expr->data.condition.true_branch); //true
+		_gen_asm("jmp %s", label_end);
+		_gen_asm("%s:", label_false);
+		gen_expression(expr->data.condition.false_branch);
+		_gen_asm("%s:", label_end);
+	}
+	else if (expr->kind == expr_assign)
 	{
 		stack_var_data_t* var = var_find(_var_set, expr->data.assignment.name);
 		if (!var)
@@ -197,45 +215,83 @@ void gen_expression(ast_expression_t* expr)
 	}
 }
 
-bool returned = false;
-
 void gen_statement(ast_statement_t* smnt)
 {
 	if (smnt->kind == smnt_return)
 	{
-		gen_expression(smnt->expr);
+		gen_expression(smnt->data.expr);
 
 		//function epilogue
 		_gen_asm("movl %%ebp, %%esp");
 		_gen_asm("pop %%ebp");
 
 		_gen_asm("ret");		
-
-		returned = true;
+		_returned = true;
 	}
 	else if (smnt->kind == smnt_expr)
 	{
-		gen_expression(smnt->expr);
+		gen_expression(smnt->data.expr);
 	}
-	else if (smnt->kind == smnt_var_decl)
+	else if (smnt->kind == smnt_if)
 	{
-		stack_var_data_t* var = var_decl_stack_var(_var_set, smnt);
-		if (smnt->expr)
+		char label_false[16];
+		char label_end[16];
+		_make_label_name(label_false);
+		_make_label_name(label_end);
+
+		gen_expression(smnt->data.if_smnt.condition); //condition
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_false);
+		gen_statement(smnt->data.if_smnt.true_branch); //true
+		_gen_asm("jmp %s", label_end);
+		_gen_asm("%s:", label_false);
+		if(smnt->data.if_smnt.false_branch)
+			gen_statement(smnt->data.if_smnt.false_branch);
+		_gen_asm("%s:", label_end);
+	}
+	else if (smnt->kind == smnt_compound)
+	{
+		var_enter_block(_var_set);
+
+		ast_block_item_t* blk = smnt->data.compound.blocks;
+		while (blk)
 		{
-			gen_expression(smnt->expr);
+			gen_block_item(blk);
+			blk = blk->next;
+		}
+
+		int bsp = var_leave_block(_var_set);
+		_gen_asm("addl $%d, %%esp", bsp);
+	}
+	//if, break, continue, while etc
+}
+
+void gen_block_item(ast_block_item_t* bi)
+{
+	if (bi->kind == blk_smnt)
+	{
+		gen_statement(bi->smnt);
+	}
+	else if (bi->kind == blk_var_def)
+	{
+		stack_var_data_t* var = var_decl_stack_var(_var_set, bi->var_decl);
+		if (bi->var_decl->expr)
+		{
+			gen_expression(bi->var_decl->expr);
 			_gen_asm("pushl %%eax");
 		}
 		else
 		{
 			_gen_asm("pushl $0");
-		}		
+		}
 	}
-	//if, break, continue, while etc
 }
 
 void gen_function(ast_function_decl_t* fn)
 {
 	var_enter_function(_var_set, fn);
+
+	_returned = false;
 
 	_gen_asm(".globl %s", fn->name);
 	_gen_asm("%s:", fn->name);
@@ -244,15 +300,15 @@ void gen_function(ast_function_decl_t* fn)
 	_gen_asm("push %%ebp");
 	_gen_asm("movl %%esp, %%ebp");
 
-	ast_statement_t* smnt = fn->statements;
+	ast_block_item_t* blk = fn->blocks;
 
-	while (smnt)
+	while (blk)
 	{
-		gen_statement(smnt);
-		smnt = smnt->next;
+		gen_block_item(blk);
+		blk = blk->next;
 	}
 
-	if (!returned)
+	if (!_returned)
 	{
 		//function epilogue
 		_gen_asm("movl $0, %%eax");

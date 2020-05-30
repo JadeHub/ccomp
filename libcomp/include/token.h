@@ -36,12 +36,16 @@ typedef enum
     tok_greatergreater,     // >>
     tok_greaterequal,       // >=
 
-    tok_percent,            //%
-    tok_caret,            //^
+    tok_percent,            // %
+    tok_caret,              // ^
+    tok_colon,              // :
+    tok_question,           // ?
 
     //keywords
     tok_return,
     tok_int,
+    tok_if,
+    tok_else,
 
     tok_identifier,         // main
     tok_num_literal         // 1234

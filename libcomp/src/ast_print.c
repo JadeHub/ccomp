@@ -89,20 +89,20 @@ void ast_print_expression(ast_expression_t* expr, const char* prefix)
 
 void ast_print_statement(ast_statement_t* s)
 {
-	_print_indent();
+	/*_print_indent();
 	printf("ReturnStatement\n");
 	_cur_indent++;
-	ast_print_expression(s->expr, "");
-	_cur_indent--;
+	ast_print_expression(s->data.expr, "");
+	_cur_indent--;*/
 }
 
 void ast_print_function(ast_function_decl_t* f)
 {
-	_print_indent();
+	/*_print_indent();
 	printf("FunctionDecl %s\n", f->name);
 	_cur_indent++;
 	ast_print_statement(f->statements);
-	_cur_indent--;
+	_cur_indent--;*/
 }
 
 void ast_print(ast_trans_unit_t* tl)

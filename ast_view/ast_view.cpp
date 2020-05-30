@@ -79,7 +79,7 @@ SourceFile* LoadSourceFile(LPTSTR path)
     strcpy_s(sf->szFileName, PathFindFileName(path));
 
     sf->pTokens = lex_source(&sr);
-    sf->pAst = parse_translation_unit(sf->pTokens, &diag_err);
+    sf->pAst = parse_translation_unit(sf->pTokens);
 
     return sf;
 }

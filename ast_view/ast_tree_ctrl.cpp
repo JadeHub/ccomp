@@ -6,6 +6,8 @@
 HWND hWndTree;
 int iImgIdx_C;
 
+void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk);
+
 AstTreeItem* AllocTreeItem()
 {
     AstTreeItem* result = (AstTreeItem*)malloc(sizeof(AstTreeItem));
@@ -67,42 +69,90 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         sprintf_s(item->name, "%sVar Ref: %s", prefix, expr->data.var_reference.name);
         tree_item = TreeInsert(parent, item);
         break;
+    case expr_condition:
+        sprintf_s(item->name, "%sCondition", prefix);
+        tree_item = TreeInsert(parent, item);
+        InsertExpression(tree_item, expr->data.condition.cond, "cond: ");
+        InsertExpression(tree_item, expr->data.condition.true_branch, "true: ");
+        if(expr->data.condition.false_branch)
+            InsertExpression(tree_item, expr->data.condition.false_branch, "false: ");
+        break;
     default:
         sprintf_s(item->name, "%sUnknown expression kind %d", prefix, expr->kind);
         tree_item = TreeInsert(parent, item);
     }
 }
 
-void InsertStatement(HTREEITEM parent, ast_statement_t* smnt)
+void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem();
+    item->tokens = smnt->tokens;
     HTREEITEM tree_item;
 
     item->tokens = smnt->tokens;
     switch (smnt->kind)
     {
     case smnt_expr:
-        sprintf_s(item->name, "Expr Statement");
+        sprintf_s(item->name, "%sExpr Statement", prefix);
         tree_item = TreeInsert(parent, item);
-        InsertExpression(tree_item, smnt->expr, "expr: ");
+        InsertExpression(tree_item, smnt->data.expr, "expr: ");
         break;
     case smnt_return:
-        sprintf_s(item->name, "Return Statement");
+        sprintf_s(item->name, "%sReturn Statement", prefix);
         tree_item = TreeInsert(parent, item);
-        if (smnt->expr)
+        if (smnt->data.expr)
         {
-            InsertExpression(tree_item, smnt->expr, "expr: ");
+            InsertExpression(tree_item, smnt->data.expr, "expr: ");
         }
         break;
-    case smnt_var_decl:
-        sprintf_s(item->name, "Var Decl: %s", smnt->decl_name);
+    case smnt_if:
+        sprintf_s(item->name, "%sIf Statement", prefix);
         tree_item = TreeInsert(parent, item);
-        if (smnt->expr)
+        InsertExpression(tree_item, smnt->data.if_smnt.condition, "cond: ");
+        InsertStatement(tree_item, smnt->data.if_smnt.true_branch, "true: ");
+        if(smnt->data.if_smnt.false_branch)
+            InsertStatement(tree_item, smnt->data.if_smnt.false_branch, "false: ");
+        break;
+    case smnt_compound:
+
+        sprintf_s(item->name, "%sCompound", prefix);
+        tree_item = TreeInsert(parent, item);
+
+        ast_block_item_t* block = smnt->data.compound.blocks;
+        while (block)
         {
-            InsertExpression(tree_item, smnt->expr, "= expr: ");
+            InsertBlockItem(tree_item, block);
+            block = block->next;
         }
+
         break;
     }
+}
+
+void InsertVarDefItem(HTREEITEM parent, ast_var_decl_t* var)
+{
+    AstTreeItem* item = AllocTreeItem();
+    item->tokens = var->tokens;
+    sprintf_s(item->name, "Var Decl: %s", var->decl_name);
+    HTREEITEM tree_item = TreeInsert(parent, item);
+    if (var->expr)
+    {
+        InsertExpression(tree_item, var->expr, "= expr: ");
+    }
+}
+
+void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk)
+{
+    if (blk->kind == blk_smnt)
+    {
+        InsertStatement(parent, blk->smnt, "");
+    }
+    else if (blk->kind == blk_var_def)
+    {
+        InsertVarDefItem(parent, blk->var_decl);
+    }
+
+    //item->tokens = func->tokens;
 }
 
 void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
@@ -112,18 +162,19 @@ void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
     sprintf_s(item->name, "Function: %s", func->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    ast_statement_t* smnt = func->statements;
+    ast_block_item_t* blk = func->blocks;
 
-    while (smnt)
+    while (blk)
     {
-        InsertStatement(tree_item, smnt);
-        smnt = smnt->next;
+        InsertBlockItem(tree_item, blk);
+        blk = blk->next;
     }
 }
 
 void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t* tl)
 {
     AstTreeItem* item = AllocTreeItem();
+    item->tokens = tl->tokens;
     sprintf_s(item->name, "TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 

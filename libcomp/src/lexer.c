@@ -80,10 +80,15 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		}
 	}
 
+	//Keywords
 	if (tok_spelling_cmp(result, "int"))
 		result->kind = tok_int;
-	if (tok_spelling_cmp(result, "return"))
+	else if (tok_spelling_cmp(result, "return"))
 		result->kind = tok_return;
+	else if (tok_spelling_cmp(result, "if"))
+		result->kind = tok_if;
+	else if (tok_spelling_cmp(result, "else"))
+		result->kind = tok_else;
 }
 
 static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -207,7 +212,14 @@ lex_next_tok:
 		result->kind = tok_caret;
 		result->len = 1;
 		break;
-
+	case ':':
+		result->kind = tok_colon;
+		result->len = 1;
+		break;
+	case '?':
+		result->kind = tok_question;
+		result->len = 1;
+		break;
 	case '&':
 		if (pos[1] == '&')
 		{

@@ -4,25 +4,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 
 ast_expression_t* parse_expression();
+ast_block_item_t* parse_block_item();
 
-static diag_cb _diag_cb;
-static token_t* _start_tok = NULL; 
 static token_t* _cur_tok = NULL;
-
-static void _err_diag(uint32_t err, const char* format, ...)
-{
-	char buff[512];
-
-	va_list args;
-	va_start(args, format);
-	vsnprintf(buff, 512, format, args);
-	va_end(args);
-
-	_diag_cb(_cur_tok, err, buff);
-}
 
 static inline token_t* current()
 {
@@ -40,10 +26,15 @@ static inline bool current_is(tok_kind k)
 	return _cur_tok->kind == k;
 }
 
+static inline bool next_is(tok_kind k)
+{
+	return _cur_tok->next->kind == k;
+}
+
 static void expect_cur(tok_kind k)
 {
 	if (!current_is(k))
-		_err_diag(ERR_SYNTAX, "Expected %s", tok_kind_name(k));
+		diag_err(current(), ERR_SYNTAX, "Expected %s", tok_kind_name(k));
 }
 
 static void expect_next(tok_kind k)
@@ -76,7 +67,7 @@ static op_kind _get_unary_operator(token_t* tok)
 		return op_not;
 	}
 
-	_err_diag(ERR_SYNTAX, "Unknown unary op {}", tok_kind_name(tok->kind));
+	diag_err(current(),	ERR_SYNTAX, "Unknown unary op {}", tok_kind_name(tok->kind));
 	return op_unknown;
 }
 
@@ -121,7 +112,7 @@ static op_kind _get_binary_operator(token_t* tok)
 	case tok_percent:
 		return op_mod;
 	}
-	_err_diag(ERR_SYNTAX, "Unknown binary op {}", tok_kind_name(tok->kind));
+	diag_err(current(), ERR_SYNTAX, "Unknown binary op {}", tok_kind_name(tok->kind));
 	return op_unknown;
 }
 
@@ -140,7 +131,10 @@ static ast_expression_t* _alloc_expr()
 			  | <exp> ";"
 			  | "int" <id> [ = <exp>] ";"
 <exp> ::= <assignment_exp>
-<assignment_exp> ::= <id> "=" <exp> | <logical-or-exp>
+<assignment_exp> ::= <id> "=" <exp> | <conditional-exp>
+
+<conditional-exp> ::= <logical-or-exp> "?" <exp> ":" <conditional-exp>
+
 <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 <logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
 
@@ -157,10 +151,8 @@ static ast_expression_t* _alloc_expr()
 <unary_op> ::= "!" | "~" | "-"
 */
 
-tok_kind assignment_ops[] = { tok_equal, tok_invalid };
 tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
 tok_kind logical_and_ops[] = { tok_ampamp, tok_invalid };
-
 tok_kind bitwise_or_ops[] = { tok_pipe, tok_invalid };
 tok_kind bitwise_xor_ops[] = { tok_caret, tok_invalid };
 tok_kind bitwise_and_ops[] = { tok_amp, tok_invalid };
@@ -249,7 +241,7 @@ ast_expression_t* parse_factor()
 	}
 	else
 	{
-		_err_diag(ERR_SYNTAX, "parse_factor failed");
+		diag_err(current(), ERR_SYNTAX, "parse_factor failed");
 	}
 	if(expr)
 		expr->tokens.end = current();
@@ -354,7 +346,33 @@ ast_expression_t* parse_logical_or_expr()
 }
 
 /*
-<assignment-exp> ::= <id> "=" <exp> | <logical-or-exp>
+<conditional-exp> :: = <logical-or-exp> "?" <exp> ":" <conditional-exp>
+*/
+ast_expression_t* parse_conditional_expression()
+{
+	token_t* start = current();
+	ast_expression_t* expr = parse_logical_or_expr();
+
+	if (current_is(tok_question))
+	{
+		next_tok();
+		ast_expression_t* condition = expr;
+		
+		expr = _alloc_expr();
+		expr->tokens.start = start;
+		expr->kind = expr_condition;
+		expr->data.condition.cond = condition;
+		expr->data.condition.true_branch = parse_expression();
+		expect_cur(tok_colon);
+		next_tok();
+		expr->data.condition.false_branch = parse_conditional_expression();
+	}
+	expr->tokens.end = current();
+	return expr;
+}
+
+/*
+<assignment-exp> ::= <id> "=" <exp> | <conditional-or-exp>
 */
 ast_expression_t* parse_assignment_expression()
 {
@@ -371,7 +389,7 @@ ast_expression_t* parse_assignment_expression()
 	}
 	else
 	{
-		expr = parse_logical_or_expr();
+		expr = parse_conditional_expression();
 	}
 	expr->tokens.end = current();
 	return expr;
@@ -383,9 +401,10 @@ ast_expression_t* parse_expression()
 }
 
 /*
-<statement> :: = "return" < exp > ";"
-| < exp> ";"
-| "int" < id > [= <exp>] ";"
+<statement> ::= "return" <exp> ";"
+			  | <exp> ";"
+			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+			  | "{" { <block-item> } "}
 */
 ast_statement_t* parse_statement()
 {
@@ -397,25 +416,73 @@ ast_statement_t* parse_statement()
 		//<statement> :: = "return" < exp > ";"
 		next_tok();
 		result->kind = smnt_return;
-		result->expr = parse_expression();
-	}
-	else if (current_is(tok_int))
-	{
-		//<statement ::= "int" < id > [= <exp>] ";"
-		expect_next(tok_identifier);
-		result->kind = smnt_var_decl;
-		tok_spelling_cpy(current(), result->decl_name, 32);
+		result->data.expr = parse_expression();
+		expect_cur(tok_semi_colon);
 		next_tok();
-		if (current_is(tok_equal))
+	}
+	else if (current_is(tok_if))
+	{
+		//<statement> ::= "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+		expect_next(tok_l_paren);
+		next_tok();
+		result->kind = smnt_if;
+		result->data.if_smnt.condition = parse_expression();
+		expect_cur(tok_r_paren);
+		next_tok();
+		result->data.if_smnt.true_branch = parse_statement();
+
+		if (current_is(tok_else))
 		{
 			next_tok();
-			result->expr = parse_expression();
+			result->data.if_smnt.false_branch = parse_statement();
 		}
+	}
+	else if (current_is(tok_l_brace))
+	{
+		//<statement> ::= "{" { <block - item> } "}"
+		next_tok();
+		result->kind = smnt_compound;
+		ast_block_item_t* block;
+		ast_block_item_t* last_block = NULL;
+		do
+		{			
+			block = parse_block_item();
+
+			if (last_block)
+				last_block->next = block;
+			else
+				result->data.compound.blocks = block;
+			last_block = block;
+		
+		} while (!current_is(tok_r_brace));
+		next_tok();
 	}
 	else
 	{
 		//<statement ::= <exp> ";"
 		result->kind = smnt_expr;
+		result->data.expr = parse_expression();
+		expect_cur(tok_semi_colon);
+		next_tok();
+	}	
+	result->tokens.end = current();
+	return result;
+}
+
+ast_var_decl_t* parse_var_decl()
+{
+	//<declaration> :: = "int" < id > [= <exp>] ";"
+	ast_var_decl_t* result = (ast_var_decl_t*)malloc(sizeof(ast_var_decl_t));
+	memset(result, 0, sizeof(ast_var_decl_t));
+	result->tokens.start = current();
+	expect_cur(tok_int);
+	next_tok();
+	expect_cur(tok_identifier);
+	tok_spelling_cpy(current(), result->decl_name, MAX_LITERAL_NAME);
+	next_tok();
+	if (current_is(tok_equal))
+	{
+		next_tok();
 		result->expr = parse_expression();
 	}
 	expect_cur(tok_semi_colon);
@@ -424,8 +491,27 @@ ast_statement_t* parse_statement()
 	return result;
 }
 
+ast_block_item_t* parse_block_item()
+{
+	ast_block_item_t* result = (ast_block_item_t*)malloc(sizeof(ast_block_item_t));
+	memset(result, 0, sizeof(ast_block_item_t));
+	result->tokens.start = current();
+	if (current_is(tok_int) && next_is(tok_identifier))
+	{
+		result->kind = blk_var_def;
+		result->var_decl = parse_var_decl();
+	}
+	else
+	{
+		result->kind = blk_smnt;
+		result->smnt = parse_statement();
+	}
+	result->tokens.end = current();
+	return result;
+}
+
 /*
-<function> ::= "int" <id> "(" ")" "{" { <statement> } "}"
+<function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
 */
 ast_function_decl_t* parse_function_decl()
 {
@@ -451,31 +537,34 @@ ast_function_decl_t* parse_function_decl()
 
 	next_tok();
 
-	ast_statement_t* last_smnt = NULL;
+	ast_block_item_t* last_blk = NULL;
 
 	while (!current_is(tok_r_brace))
 	{
-		ast_statement_t* smnt = parse_statement();
-		if (last_smnt)
-			last_smnt->next = smnt;
+		ast_block_item_t* blk = parse_block_item();
+		if (last_blk)
+			last_blk->next = blk;
 		else
-			result->statements = smnt;
-		last_smnt = smnt;
-		last_smnt->next = NULL;
+			result->blocks = blk;
+		last_blk = blk;
+		last_blk->next = NULL;
 	}
 	next_tok();
 	result->tokens.end = current();
 	return result;
 }
 
-ast_trans_unit_t* parse_translation_unit(token_t* tok, diag_cb dcb)
+ast_trans_unit_t* parse_translation_unit(token_t* tok)
 {
-	_start_tok = _cur_tok = tok;
-	_diag_cb = dcb;
+	_cur_tok = tok;
 
 	ast_trans_unit_t* result = (ast_trans_unit_t*)malloc(sizeof(ast_trans_unit_t));
-
+	memset(result, 0, sizeof(ast_trans_unit_t));
+	result->tokens.start = current();
 	result->function = parse_function_decl();
+	result->tokens.end = current();
+
+	expect_cur(tok_eof);
 
 	return result;
 }

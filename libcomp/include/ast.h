@@ -82,14 +82,25 @@ typedef struct
 	char name[MAX_LITERAL_NAME];
 }var_ref_expr_data_t;
 
+/*
+conditional expression
+x ? y : z;
+*/
+typedef struct
+{
+	struct ast_expression* cond;
+	struct ast_expression* true_branch;
+	struct ast_expression* false_branch;
+}var_cond_expr_data_t;
+
 typedef enum
 {
 	expr_unary_op,
 	expr_binary_op,
 	expr_int_literal,
 	expr_assign,
-	expr_var_ref
-
+	expr_var_ref,
+	expr_condition
 }expression_kind;
 
 typedef struct ast_expression
@@ -103,28 +114,75 @@ typedef struct ast_expression
 		uint32_t const_val;
 		assign_expr_data_t assignment;
 		var_ref_expr_data_t var_reference;
+		var_cond_expr_data_t condition;
 	}data;
 }ast_expression_t;
 
-/* Statements */
+/* Declaration */
+typedef struct
+{
+	token_range_t tokens;
+	char decl_name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
+	ast_expression_t* expr;
+}ast_var_decl_t;
 
+/* Statements */
 typedef enum
 {
 	smnt_return,
 	smnt_expr,
-	smnt_var_decl
+	smnt_if,
+	smnt_compound
 }statement_kind;
+
+typedef struct
+{
+	ast_expression_t* condition;
+	struct ast_statement* true_branch;
+	struct ast_statement* false_branch;
+
+}ast_if_stmn_data_t;
+
+typedef struct
+{
+	struct ast_block_item* blocks;
+
+}ast_compound_data_t;
 
 typedef struct ast_statement
 {
 	token_range_t tokens;
 	statement_kind kind;
-	ast_expression_t* expr;
 
-	char decl_name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
-
-	struct ast_statement* next;
+	union
+	{
+		ast_expression_t* expr; //return and expr types
+		ast_if_stmn_data_t if_smnt;
+		ast_compound_data_t compound;
+	}data;
 }ast_statement_t;
+
+/* Block item */
+
+typedef enum
+{
+	blk_smnt,
+	blk_var_def
+
+}ast_block_item_type;
+
+typedef struct ast_block_item
+{
+	token_range_t tokens;
+	ast_block_item_type kind;
+
+	union
+	{
+		ast_statement_t* smnt;
+		ast_var_decl_t* var_decl;
+	};
+	struct ast_block_item* next;
+}ast_block_item_t;
 
 /* Functions */
 
@@ -137,16 +195,17 @@ typedef struct ast_function
 	//return type
 	//static?
 
-	ast_statement_t* statements;
+	//ast_statement_t* statements;
+	ast_block_item_t* blocks;
 
 }ast_function_decl_t;
 
 typedef struct
 {
+	token_range_t tokens;
 	char path[256];
 	ast_function_decl_t* function;
 }ast_trans_unit_t;
-
 
 void ast_print(ast_trans_unit_t* tl);
 
