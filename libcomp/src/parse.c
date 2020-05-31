@@ -67,7 +67,7 @@ static op_kind _get_unary_operator(token_t* tok)
 		return op_not;
 	}
 
-	diag_err(current(),	ERR_SYNTAX, "Unknown unary op {}", tok_kind_name(tok->kind));
+	diag_err(current(),	ERR_SYNTAX, "Unknown unary op %s", tok_kind_name(tok->kind));
 	return op_unknown;
 }
 
@@ -112,7 +112,7 @@ static op_kind _get_binary_operator(token_t* tok)
 	case tok_percent:
 		return op_mod;
 	}
-	diag_err(current(), ERR_SYNTAX, "Unknown binary op {}", tok_kind_name(tok->kind));
+	diag_err(current(), ERR_SYNTAX, "Unknown binary op %s", tok_kind_name(tok->kind));
 	return op_unknown;
 }
 
@@ -197,6 +197,30 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 	}
 	expr->tokens.end = current();
 	return expr;
+}
+
+/*
+<declaration> :: = "int" < id > [= <exp>] ";"
+*/
+ast_var_decl_t* parse_declaration()
+{
+	ast_var_decl_t* result = (ast_var_decl_t*)malloc(sizeof(ast_var_decl_t));
+	memset(result, 0, sizeof(ast_var_decl_t));
+	result->tokens.start = current();
+	expect_cur(tok_int);
+	next_tok();
+	expect_cur(tok_identifier);
+	tok_spelling_cpy(current(), result->decl_name, MAX_LITERAL_NAME);
+	next_tok();
+	if (current_is(tok_equal))
+	{
+		next_tok();
+		result->expr = parse_expression();
+	}
+	expect_cur(tok_semi_colon);
+	next_tok();
+	result->tokens.end = current();
+	return result;
 }
 
 /*
@@ -401,10 +425,39 @@ ast_expression_t* parse_expression()
 }
 
 /*
+<exp-option>
+*/
+ast_expression_t* parse_optional_expression(tok_kind term_tok)
+{
+	ast_expression_t* result = NULL;
+	if (current_is(term_tok))
+	{
+		result = _alloc_expr();
+		result->kind = expr_null;
+	}
+	else
+	{
+		result = parse_expression();
+		if (!current_is(term_tok))
+		{
+			diag_err(current(), ERR_SYNTAX, "Expected %s", tok_kind_name(term_tok));
+		}
+	}
+	//next_tok();
+	return result;
+}
+
+/*
 <statement> ::= "return" <exp> ";"
-			  | <exp> ";"
+			  | <exp-option> ";"
 			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
 			  | "{" { <block-item> } "}
+			  | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+			  | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+			  | "while" "(" <exp> ")" <statement>
+			  | "do" <statement> "while" <exp> ";"
+			  | "break" ";"
+			  | "continue" ";"
 */
 ast_statement_t* parse_statement()
 {
@@ -417,6 +470,77 @@ ast_statement_t* parse_statement()
 		next_tok();
 		result->kind = smnt_return;
 		result->data.expr = parse_expression();
+		expect_cur(tok_semi_colon);
+		next_tok();
+	}
+	else if (current_is(tok_continue))
+	{
+		next_tok();
+		result->kind = smnt_continue;
+	}
+	else if (current_is(tok_break))
+	{
+		next_tok();
+		result->kind = smnt_break;
+	}
+	else if (current_is(tok_for))
+	{
+		expect_next(tok_l_paren);
+		next_tok();
+		
+		if (current_is(tok_int) && next_is(tok_identifier))
+		{
+			//<statement> ::= "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+			result->kind = smnt_for_decl;
+			result->data.for_smnt.init_decl = parse_declaration();
+			result->data.for_smnt.condition = parse_optional_expression(tok_semi_colon);
+			expect_cur(tok_semi_colon);
+			next_tok();
+			result->data.for_smnt.post = parse_optional_expression(tok_r_paren);
+		}
+		else
+		{
+			//<statement> ::= "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+			result->kind = smnt_for;
+			result->data.for_smnt.init = parse_optional_expression(tok_semi_colon);
+			expect_cur(tok_semi_colon);
+			next_tok();
+			result->data.for_smnt.condition = parse_optional_expression(tok_semi_colon);
+			expect_cur(tok_semi_colon);
+			next_tok();
+			result->data.for_smnt.post = parse_optional_expression(tok_r_paren);
+		}
+		expect_cur(tok_r_paren);
+		next_tok();
+		result->data.for_smnt.statement = parse_statement();
+
+		if (result->data.for_smnt.condition->kind == expr_null)
+		{
+			//if no condition add a constant literal of 1
+			result->data.for_smnt.condition->kind = expr_int_literal;
+			result->data.for_smnt.condition->data.const_val = 1;
+		}
+	}
+	else if (current_is(tok_while))
+	{
+		//<statement> :: = "while" "(" <exp> ")" <statement> ";"
+		expect_next(tok_l_paren);
+		next_tok();
+		result->kind = smnt_while;
+		result->data.while_smnt.condition = parse_expression();
+		expect_cur(tok_r_paren);
+		next_tok();
+		result->data.while_smnt.statement = parse_statement();
+	}
+	else if (current_is(tok_do))
+	{
+		next_tok();
+		//<statement> :: = "do" <statement> "while" <exp> ";"
+		result->kind = smnt_do;
+		result->data.while_smnt.statement = parse_statement();
+		expect_cur(tok_while);
+		next_tok();
+		result->data.while_smnt.condition = parse_expression();
 		expect_cur(tok_semi_colon);
 		next_tok();
 	}
@@ -459,34 +583,12 @@ ast_statement_t* parse_statement()
 	}
 	else
 	{
-		//<statement ::= <exp> ";"
+		//<statement ::= <exp-option> ";"
 		result->kind = smnt_expr;
-		result->data.expr = parse_expression();
+		result->data.expr = parse_optional_expression(tok_semi_colon);
 		expect_cur(tok_semi_colon);
 		next_tok();
 	}	
-	result->tokens.end = current();
-	return result;
-}
-
-ast_var_decl_t* parse_var_decl()
-{
-	//<declaration> :: = "int" < id > [= <exp>] ";"
-	ast_var_decl_t* result = (ast_var_decl_t*)malloc(sizeof(ast_var_decl_t));
-	memset(result, 0, sizeof(ast_var_decl_t));
-	result->tokens.start = current();
-	expect_cur(tok_int);
-	next_tok();
-	expect_cur(tok_identifier);
-	tok_spelling_cpy(current(), result->decl_name, MAX_LITERAL_NAME);
-	next_tok();
-	if (current_is(tok_equal))
-	{
-		next_tok();
-		result->expr = parse_expression();
-	}
-	expect_cur(tok_semi_colon);
-	next_tok();
 	result->tokens.end = current();
 	return result;
 }
@@ -499,7 +601,7 @@ ast_block_item_t* parse_block_item()
 	if (current_is(tok_int) && next_is(tok_identifier))
 	{
 		result->kind = blk_var_def;
-		result->var_decl = parse_var_decl();
+		result->var_decl = parse_declaration();
 	}
 	else
 	{

@@ -46,6 +46,11 @@ typedef enum
     tok_int,
     tok_if,
     tok_else,
+    tok_for,
+    tok_while,
+    tok_do,
+    tok_break,
+    tok_continue,
 
     tok_identifier,         // main
     tok_num_literal         // 1234

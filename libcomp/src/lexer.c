@@ -89,6 +89,16 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_if;
 	else if (tok_spelling_cmp(result, "else"))
 		result->kind = tok_else;
+	if (tok_spelling_cmp(result, "for"))
+		result->kind = tok_for;
+	else if (tok_spelling_cmp(result, "while"))
+		result->kind = tok_while;
+	else if (tok_spelling_cmp(result, "do"))
+		result->kind = tok_do;
+	else if (tok_spelling_cmp(result, "break"))
+		result->kind = tok_break;
+	else if (tok_spelling_cmp(result, "continue"))
+		result->kind = tok_continue;
 }
 
 static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)

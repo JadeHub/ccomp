@@ -74,7 +74,11 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 
 void gen_expression(ast_expression_t* expr)
 {
-	if (expr->kind == expr_condition)
+	if (expr->kind == expr_null)
+	{
+		//null
+	}
+	else if (expr->kind == expr_condition)
 	{
 		char label_false[16];
 		char label_end[16];

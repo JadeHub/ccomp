@@ -100,7 +100,8 @@ typedef enum
 	expr_int_literal,
 	expr_assign,
 	expr_var_ref,
-	expr_condition
+	expr_condition,
+	expr_null
 }expression_kind;
 
 typedef struct ast_expression
@@ -126,13 +127,20 @@ typedef struct
 	ast_expression_t* expr;
 }ast_var_decl_t;
 
-/* Statements */
+/* Statement */
 typedef enum
 {
 	smnt_return,
 	smnt_expr,
 	smnt_if,
-	smnt_compound
+	smnt_compound,
+
+	smnt_for,
+	smnt_for_decl,
+	smnt_while,
+	smnt_do,
+	smnt_break,
+	smnt_continue,
 }statement_kind;
 
 typedef struct
@@ -141,13 +149,32 @@ typedef struct
 	struct ast_statement* true_branch;
 	struct ast_statement* false_branch;
 
-}ast_if_stmn_data_t;
+}ast_if_smnt_data_t;
 
 typedef struct
 {
 	struct ast_block_item* blocks;
+}ast_compound_smnt_data_t;
 
-}ast_compound_data_t;
+typedef struct
+{
+	ast_expression_t* condition;
+	struct ast_statement* statement;
+}ast_while_smnt_data_t;
+
+/*
+for(i=0;i<10;i++) 
+{
+}
+*/
+typedef struct
+{
+	ast_var_decl_t* init_decl; //for(int i = 0;...
+	ast_expression_t* init; //for(i = 0;...
+	ast_expression_t* condition;
+	ast_expression_t* post;
+	struct ast_statement* statement;
+}ast_for_smnt_data_t;
 
 typedef struct ast_statement
 {
@@ -157,8 +184,10 @@ typedef struct ast_statement
 	union
 	{
 		ast_expression_t* expr; //return and expr types
-		ast_if_stmn_data_t if_smnt;
-		ast_compound_data_t compound;
+		ast_if_smnt_data_t if_smnt;
+		ast_compound_smnt_data_t compound;
+		ast_while_smnt_data_t while_smnt;
+		ast_for_smnt_data_t for_smnt;
 	}data;
 }ast_statement_t;
 

@@ -57,6 +57,28 @@ const char* tok_kind_name(tok_kind k)
 		return "tok_greater";
 	case tok_greaterequal:
 		return "tok_greaterequal";
+	case tok_percent:
+		return "tok_percent";
+	case tok_caret:
+		return "tok_caret";
+	case tok_colon:
+		return "tok_colon";
+	case tok_question:
+		return "tok_question";
+	case tok_if:
+		return "tok_if";
+	case tok_else:
+		return "tok_else";
+	case tok_for:
+		return "tok_for";
+	case tok_while:
+		return "tok_while";
+	case tok_do:
+		return "tok_do";
+	case tok_break:
+		return "tok_break";
+	case tok_continue:
+		return "tok_continue";
 
 	}
 	return "invalid";

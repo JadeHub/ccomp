@@ -77,9 +77,25 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         if(expr->data.condition.false_branch)
             InsertExpression(tree_item, expr->data.condition.false_branch, "false: ");
         break;
+    case expr_null:
+        sprintf_s(item->name, "%sNull Expr", prefix);
+        tree_item = TreeInsert(parent, item);
+        break;
     default:
         sprintf_s(item->name, "%sUnknown expression kind %d", prefix, expr->kind);
         tree_item = TreeInsert(parent, item);
+    }
+}
+
+void InsertVariableDefinition(HTREEITEM parent, ast_var_decl_t* var, const char* prefix)
+{
+    AstTreeItem* item = AllocTreeItem();
+    item->tokens = var->tokens;
+    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->decl_name);
+    HTREEITEM tree_item = TreeInsert(parent, item);
+    if (var->expr)
+    {
+        InsertExpression(tree_item, var->expr, "= expr: ");
     }
 }
 
@@ -88,6 +104,7 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
     AstTreeItem* item = AllocTreeItem();
     item->tokens = smnt->tokens;
     HTREEITEM tree_item;
+    ast_block_item_t* block;
 
     item->tokens = smnt->tokens;
     switch (smnt->kind)
@@ -114,30 +131,54 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
             InsertStatement(tree_item, smnt->data.if_smnt.false_branch, "false: ");
         break;
     case smnt_compound:
-
         sprintf_s(item->name, "%sCompound", prefix);
         tree_item = TreeInsert(parent, item);
 
-        ast_block_item_t* block = smnt->data.compound.blocks;
+        block = smnt->data.compound.blocks;
         while (block)
         {
             InsertBlockItem(tree_item, block);
             block = block->next;
         }
-
         break;
-    }
-}
+    case smnt_for:
+    case smnt_for_decl:
+        sprintf_s(item->name, "%sfor", prefix);
+        tree_item = TreeInsert(parent, item);
 
-void InsertVarDefItem(HTREEITEM parent, ast_var_decl_t* var)
-{
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = var->tokens;
-    sprintf_s(item->name, "Var Decl: %s", var->decl_name);
-    HTREEITEM tree_item = TreeInsert(parent, item);
-    if (var->expr)
-    {
-        InsertExpression(tree_item, var->expr, "= expr: ");
+        if(smnt->data.for_smnt.init)
+            InsertExpression(tree_item, smnt->data.for_smnt.init, "init ");
+        if (smnt->data.for_smnt.init_decl)
+            InsertVariableDefinition(tree_item, smnt->data.for_smnt.init_decl, "init ");
+
+        if (smnt->data.for_smnt.condition)
+            InsertExpression(tree_item, smnt->data.for_smnt.condition, "cond ");
+
+        if (smnt->data.for_smnt.post)
+            InsertExpression(tree_item, smnt->data.for_smnt.post, "post ");
+
+        InsertStatement(tree_item, smnt->data.for_smnt.statement, "body ");
+        break;    
+    case smnt_while:
+        sprintf_s(item->name, "%swhile", prefix);
+        tree_item = TreeInsert(parent, item);
+        InsertExpression(tree_item, smnt->data.while_smnt.condition, "cond ");
+        InsertStatement(tree_item, smnt->data.while_smnt.statement, "body ");
+        break;
+    case smnt_do:
+        sprintf_s(item->name, "%sdo..while", prefix);
+        tree_item = TreeInsert(parent, item);
+        InsertStatement(tree_item, smnt->data.while_smnt.statement, "body ");
+        InsertExpression(tree_item, smnt->data.while_smnt.condition, "cond ");        
+        break;
+    case smnt_break:
+        sprintf_s(item->name, "%sbreak", prefix);
+        tree_item = TreeInsert(parent, item);
+        break;
+    case smnt_continue:
+        sprintf_s(item->name, "%scontinue", prefix);
+        tree_item = TreeInsert(parent, item);
+        break;
     }
 }
 
@@ -149,10 +190,8 @@ void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk)
     }
     else if (blk->kind == blk_var_def)
     {
-        InsertVarDefItem(parent, blk->var_decl);
+        InsertVariableDefinition(parent, blk->var_decl, "");
     }
-
-    //item->tokens = func->tokens;
 }
 
 void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
