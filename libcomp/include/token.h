@@ -16,9 +16,12 @@ typedef enum
     tok_r_paren,            // )
     tok_semi_colon,         // ;
     tok_minus,              // -
+    tok_minusminus,         // --
     tok_tilda,              // ~
     tok_exclaim,            // !
     tok_plus,               // +
+    tok_plusplus,           // ++
+    tok_plusequal,          // +=
     tok_star,               // *
     tok_slash,              // /
 
@@ -40,6 +43,7 @@ typedef enum
     tok_caret,              // ^
     tok_colon,              // :
     tok_question,           // ?
+    tok_comma,              // ,
 
     //keywords
     tok_return,

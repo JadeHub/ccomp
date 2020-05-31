@@ -7,8 +7,6 @@
 #include <stdbool.h>
 #include <assert.h>
 
-static diag_cb _diag_cb;
-
 static stack_var_data_t* _make_stack_var(int bsp_offset)
 {
 	stack_var_data_t* var = (stack_var_data_t*)malloc(sizeof(stack_var_data_t));
@@ -30,9 +28,8 @@ static stack_var_data_t* _find_in_current_block(var_set_t* vars, const char* nam
 	return NULL;
 }
 
-var_set_t* var_init_set(diag_cb cb)
+var_set_t* var_init_set()
 {
-	_diag_cb = cb;
 	var_set_t* vars = (var_set_t*)malloc(sizeof(var_set_t));
 	memset(vars, 0, sizeof(var_set_t));
 	var_enter_block(vars);

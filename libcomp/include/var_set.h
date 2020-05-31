@@ -21,7 +21,7 @@ typedef struct
 }var_set_t;
 
 
-var_set_t* var_init_set(diag_cb);
+var_set_t* var_init_set();
 
 void var_enter_function(var_set_t*, ast_function_decl_t*);
 void var_leave_function(var_set_t*);

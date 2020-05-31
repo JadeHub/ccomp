@@ -58,6 +58,14 @@ const char* ast_op_name(op_kind k)
 		return "[^] Bitwise xor";
 	case op_mod:
 		return "[%] Modulo";
+	case op_prefix_inc:
+		return "[++] Prefix inc";
+	case op_prefix_dec:
+		return "[-] Prefix dec";
+	case op_postfix_inc:
+		return "[++] Postfix inc";
+	case op_postfix_dec:
+		return "[--] Postfix inc";
 	}
 	return "ERROR";
 }

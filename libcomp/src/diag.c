@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include <stdio.h>
 
 static diag_cb _diag_cb = NULL;
 

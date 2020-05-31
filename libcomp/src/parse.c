@@ -43,6 +43,17 @@ static void expect_next(tok_kind k)
 	expect_cur(k);
 }
 
+static bool _is_postfix_op(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_plusplus:
+	case tok_minusminus:
+		return true;
+	}
+	return false;
+}
+
 static bool _is_unary_op(token_t* tok)
 {
 	switch (tok->kind)
@@ -50,9 +61,25 @@ static bool _is_unary_op(token_t* tok)
 	case tok_minus:
 	case tok_tilda:
 	case tok_exclaim:
+	case tok_plusplus:
+	case tok_minusminus:
 		return true;
 	}
 	return false;
+}
+
+static op_kind _get_postfix_operator(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_minusminus:
+		return op_postfix_dec;
+	case tok_plusplus:
+		return op_postfix_inc;
+	}
+
+	diag_err(current(), ERR_SYNTAX, "Unknown postfix op %s", tok_kind_name(tok->kind));
+	return op_unknown;
 }
 
 static op_kind _get_unary_operator(token_t* tok)
@@ -65,6 +92,10 @@ static op_kind _get_unary_operator(token_t* tok)
 		return op_compliment;
 	case tok_exclaim:
 		return op_not;
+	case tok_minusminus:
+		return op_prefix_dec;
+	case tok_plusplus:
+		return op_prefix_inc;
 	}
 
 	diag_err(current(),	ERR_SYNTAX, "Unknown unary op %s", tok_kind_name(tok->kind));
@@ -126,7 +157,7 @@ static ast_expression_t* _alloc_expr()
 
 /*
 <program> ::= <function>
-<function> ::= "int" <id> "(" ")" "{" <statement> "}"
+<function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 <statement> ::= "return" <exp> ";"
 			  | <exp> ";"
 			  | "int" <id> [ = <exp>] ";"
@@ -147,8 +178,10 @@ static ast_expression_t* _alloc_expr()
 <bitshift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
 <additive-exp> ::= <term> { ("+" | "-") <term> }
 <term> ::= <factor> { ("*" | "/") <factor> }
-<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
-<unary_op> ::= "!" | "~" | "-"
+<factor> ::= <function-call> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id> [ <postfix_op> ]
+<function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
+<postfix_op> ::= "++" | "--"
+<unary_op> ::= "!" | "~" | "-" | "++" | "--"
 */
 
 tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
@@ -224,13 +257,55 @@ ast_var_decl_t* parse_declaration()
 }
 
 /*
+<function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
+*/
+ast_expression_t* parse_function_call_expr()
+{
+	if (current_is(tok_identifier) && next_is(tok_l_paren))
+	{
+
+	}
+
+	return NULL;
+}
+
+ast_expression_t* parse_factor();
+
+/*
+<postfix-op> ::= <function-call> | <factor> <postfix_op>
+*/
+ast_expression_t* parse_postfix_expr()
+{
+	ast_expression_t* expr = parse_function_call_expr();
+
+	if (!expr)
+	{
+		ast_expression_t* f = parse_factor();
+
+		if (current_is(tok_plusplus))
+		{
+			expr = _alloc_expr();
+			expr->kind = expr_postfix_op;
+			expr->data.unary_op.operation = op_postfix_inc;
+			expr->data.unary_op.expression = f;
+		}
+	}
+	return expr;
+}
+
+/*
 <factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
+<factor> ::= <postfix-op> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 */
 ast_expression_t* parse_factor()
 {
-	ast_expression_t* expr = NULL;
+	ast_expression_t* expr = parse_function_call_expr();
 
-	if (current_is(tok_l_paren))
+	if (expr)
+	{
+
+	}
+	else if (current_is(tok_l_paren))
 	{
 		//<factor ::= "(" <exp> ")"
 		next_tok();
@@ -262,6 +337,18 @@ ast_expression_t* parse_factor()
 		expr->kind = expr_var_ref;
 		tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
 		next_tok();
+
+		if (_is_postfix_op(current()))
+		{
+			expr->tokens.end = current();
+			ast_expression_t* operand = expr;
+			expr = _alloc_expr();
+			expr->tokens = operand->tokens;
+			expr->kind = expr_postfix_op;
+			expr->data.unary_op.operation = _get_postfix_operator(current());
+			expr->data.unary_op.expression = operand; //must be a var ref
+			next_tok();			
+		}
 	}
 	else
 	{
@@ -406,6 +493,7 @@ ast_expression_t* parse_assignment_expression()
 	{
 		expr = _alloc_expr();
 		expr->kind = expr_assign;
+		//parse_var
 		tok_spelling_cpy(current(), expr->data.assignment.name, MAX_LITERAL_NAME);
 		expect_next(tok_equal);
 		next_tok();
@@ -466,7 +554,7 @@ ast_statement_t* parse_statement()
 	result->tokens.start = current();
 	if (current_is(tok_return))
 	{
-		//<statement> :: = "return" < exp > ";"
+		//<statement> ::= "return" < exp > ";"
 		next_tok();
 		result->kind = smnt_return;
 		result->data.expr = parse_expression();
@@ -475,13 +563,19 @@ ast_statement_t* parse_statement()
 	}
 	else if (current_is(tok_continue))
 	{
+		//<statement> ::= "continue" ";"
 		next_tok();
 		result->kind = smnt_continue;
+		expect_cur(tok_semi_colon);
+		next_tok();
 	}
 	else if (current_is(tok_break))
 	{
+		//<statement> ::= "break" ";"
 		next_tok();
 		result->kind = smnt_break;
+		expect_cur(tok_semi_colon);
+		next_tok();
 	}
 	else if (current_is(tok_for))
 	{
@@ -613,7 +707,29 @@ ast_block_item_t* parse_block_item()
 }
 
 /*
+<function_params> ::= [ "int" <id> { "," "int" <id> } ]
+*/
+void parse_function_parameters(ast_function_decl_t* func)
+{
+	while (current_is(tok_int))
+	{
+		expect_next(tok_identifier);
+
+		ast_function_param_t* param = (ast_function_param_t*)malloc(sizeof(ast_function_param_t));
+		tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
+		param->next = func->params;
+		func->params = param;
+		next_tok();
+		if (!current_is(tok_comma))
+			break;
+		expect_next(tok_int);
+	}
+}
+
+/*
 <function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
+
+<function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 */
 ast_function_decl_t* parse_function_decl()
 {
@@ -630,9 +746,12 @@ ast_function_decl_t* parse_function_decl()
 
 	/*(*/
 	expect_next(tok_l_paren);
+	next_tok();
+
+	parse_function_parameters(result);
 
 	/*)*/
-	expect_next(tok_r_paren);
+	expect_cur(tok_r_paren);
 
 	/*{*/
 	expect_next(tok_l_brace);

@@ -9,7 +9,7 @@
 
 //static const char* _src = "int main() \r\n{return 2;}";
 
-static const char* _src = "int main() { for(;;) ; return a; }";
+static char* _src = "int main(int x, int y) { int x = 0; int y = x++; return a; }";
 
 void print_tokens(token_t* toks)
 {
@@ -66,6 +66,6 @@ int main(int argc, char* argv[])
    // print_tokens(toks);
     ast_trans_unit_t* ast = parse_translation_unit(toks);
    // ast_print(ast);
-    code_gen(ast, &asm_print, &diag_err);
+    code_gen(ast, &asm_print);
 }
 

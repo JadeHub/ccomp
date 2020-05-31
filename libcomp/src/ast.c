@@ -1,5 +1,7 @@
 #include "ast.h"
 
+#include <stdlib.h>
+
 void ast_destroy_statement(ast_statement_t* smnt);
 
 void ast_destroy_expression(ast_expression_t* expr)
@@ -17,6 +19,7 @@ void ast_destroy_expression(ast_expression_t* expr)
 	case expr_int_literal:
 		break;
 	case expr_unary_op:
+	case expr_postfix_op:
 		ast_destroy_expression(expr->data.unary_op.expression);
 		break;
 	case expr_condition:

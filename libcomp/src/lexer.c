@@ -183,8 +183,16 @@ lex_next_tok:
 		result->len = 1;
 		break;
 	case '-':
-		result->kind = tok_minus;
-		result->len = 1;
+		if (pos[1] == '-')
+		{
+			result->kind = tok_minusminus;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_minus;
+			result->len = 1;
+		}
 		break;
 	case '~':
 		result->kind = tok_tilda;
@@ -203,8 +211,21 @@ lex_next_tok:
 		}
 		break;
 	case '+':
-		result->kind = tok_plus;
-		result->len = 1;
+		if (pos[1] == '+')
+		{
+			result->kind = tok_plusplus;
+			result->len = 2;
+		}
+		else if (pos[1] == '=')
+		{
+			result->kind = tok_plusequal;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_plus;
+			result->len = 1;
+		}
 		break;
 	case '*':
 		result->kind = tok_star;
@@ -228,6 +249,10 @@ lex_next_tok:
 		break;
 	case '?':
 		result->kind = tok_question;
+		result->len = 1;
+		break;
+	case ',':
+		result->kind = tok_comma;
 		result->len = 1;
 		break;
 	case '&':

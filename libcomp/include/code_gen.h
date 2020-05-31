@@ -5,4 +5,4 @@
 
 typedef void (*write_asm_cb)(const char* line);
 
-void code_gen(ast_trans_unit_t*, write_asm_cb, diag_cb);
+void code_gen(ast_trans_unit_t*, write_asm_cb);

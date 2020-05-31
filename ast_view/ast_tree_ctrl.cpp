@@ -8,11 +8,12 @@ int iImgIdx_C;
 
 void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk);
 
-AstTreeItem* AllocTreeItem()
+AstTreeItem* AllocTreeItem(token_range_t tok_range)
 {
     AstTreeItem* result = (AstTreeItem*)malloc(sizeof(AstTreeItem));
     memset(result, 0, sizeof(AstTreeItem));
-
+    result->tokens = tok_range;
+    
     return result;
 }
 
@@ -39,8 +40,7 @@ HTREEITEM TreeInsert(HTREEITEM hParent, AstTreeItem* item)
 
 void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* prefix)
 {
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = expr->tokens;
+    AstTreeItem* item = AllocTreeItem(expr->tokens);
 
     HTREEITEM tree_item;
     switch (expr->kind)
@@ -53,6 +53,11 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         break;
     case expr_unary_op:
         sprintf_s(item->name, "%sUnary Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
+        tree_item = TreeInsert(parent, item);
+        InsertExpression(tree_item, expr->data.unary_op.expression, "expr: ");
+        break;
+    case expr_postfix_op:
+        sprintf_s(item->name, "%sPostfix Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.unary_op.expression, "expr: ");
         break;
@@ -89,8 +94,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
 
 void InsertVariableDefinition(HTREEITEM parent, ast_var_decl_t* var, const char* prefix)
 {
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = var->tokens;
+    AstTreeItem* item = AllocTreeItem(var->tokens);
     sprintf_s(item->name, "%sVar Decl: %s", prefix, var->decl_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
     if (var->expr)
@@ -101,8 +105,7 @@ void InsertVariableDefinition(HTREEITEM parent, ast_var_decl_t* var, const char*
 
 void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix)
 {
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = smnt->tokens;
+    AstTreeItem* item = AllocTreeItem(smnt->tokens);
     HTREEITEM tree_item;
     ast_block_item_t* block;
 
@@ -196,8 +199,7 @@ void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk)
 
 void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
 {
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = func->tokens;
+    AstTreeItem* item = AllocTreeItem(func->tokens);
     sprintf_s(item->name, "Function: %s", func->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
@@ -212,8 +214,7 @@ void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
 
 void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t* tl)
 {
-    AstTreeItem* item = AllocTreeItem();
-    item->tokens = tl->tokens;
+    AstTreeItem* item = AllocTreeItem(tl->tokens);
     sprintf_s(item->name, "TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 

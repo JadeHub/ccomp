@@ -79,7 +79,8 @@ const char* tok_kind_name(tok_kind k)
 		return "tok_break";
 	case tok_continue:
 		return "tok_continue";
-
+	case tok_comma:
+		return "tok_comma";
 	}
 	return "invalid";
 }

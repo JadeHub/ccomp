@@ -4,12 +4,13 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <assert.h>
 
 void gen_expression(ast_expression_t* expr);
 void gen_block_item(ast_block_item_t* bi);
 
 static write_asm_cb _asm_cb;
-static diag_cb _diag_cb;
 
 static var_set_t* _var_set;
 static bool _returned = false;
@@ -72,6 +73,16 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 	}
 }
 
+void gen_assign_expression(token_t* tok, const char* var_name)
+{
+	stack_var_data_t* var = var_find(_var_set, var_name);
+	if (!var)
+	{
+		diag_err(tok, ERR_SYNTAX, "Assignment to unknown variabe %s", var_name);
+	}
+	_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+}
+
 void gen_expression(ast_expression_t* expr)
 {
 	if (expr->kind == expr_null)
@@ -96,20 +107,16 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		stack_var_data_t* var = var_find(_var_set, expr->data.assignment.name);
-		if (!var)
-		{
-			exit(1);
-		}
 		gen_expression(expr->data.assignment.expr);
-		_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+		gen_assign_expression(expr->tokens.start, expr->data.assignment.name);
+		
 	}
 	else if (expr->kind == expr_var_ref)
 	{
-		stack_var_data_t* var = var_find(_var_set, expr->data.assignment.name);
+		stack_var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
 		if (!var)
 		{
-			exit(1);
+			diag_err(expr->tokens.start, ERR_SYNTAX, "Unknown variabe reference %s", expr->data.var_reference.name);
 		}
 		_gen_asm("movl %d(%%ebp), %%eax", var->bsp_offset);
 	}
@@ -119,7 +126,8 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_unary_op)
 	{
-		gen_expression(expr->data.unary_op.expression);
+		ast_expression_t* param = expr->data.unary_op.expression;
+		gen_expression(param);
 		switch (expr->data.unary_op.operation)
 		{
 		case op_negate:
@@ -132,6 +140,43 @@ void gen_expression(ast_expression_t* expr)
 			_gen_asm("cmpl $0, %%eax"); //compare eax to 0
 			_gen_asm("movl $0, %%eax"); //set eax to 0
 			_gen_asm("sete %%al"); //if eax was 0 in cmpl, set al to 1
+			break;
+		case op_prefix_inc:
+			assert(param->kind == expr_var_ref);
+			_gen_asm("incl %%eax");
+			gen_assign_expression(expr->tokens.start, param->data.var_reference.name);
+			break;
+		case op_prefix_dec:
+			assert(expr->data.unary_op.expression->kind == expr_var_ref);
+			_gen_asm("decl %%eax");
+			gen_assign_expression(expr->tokens.start, param->data.var_reference.name);
+			break;
+		}
+	}
+	else if (expr->kind == expr_postfix_op)
+	{
+		assert(expr->data.unary_op.expression->kind == expr_var_ref);
+		ast_expression_t* param = expr->data.unary_op.expression;
+		switch (expr->data.unary_op.operation)
+		{
+		case op_postfix_inc:
+			//get the value of the parameter
+			gen_expression(param);
+			//save the current value
+			_gen_asm("pushl %%eax");
+			//increment
+			_gen_asm("incl %%eax");
+			//assign incremented value back to variable
+			gen_assign_expression(expr->tokens.start, param->data.var_reference.name);
+			//pop the un-incremented value back into eax
+			_gen_asm("popl %%eax");
+			break;
+		case op_postfix_dec:
+			gen_expression(param);
+			_gen_asm("pushl %%eax");
+			_gen_asm("decl %%eax");
+			gen_assign_expression(expr->tokens.start, param->data.var_reference.name);
+			_gen_asm("popl %%eax");
 			break;
 		}
 	}
@@ -325,12 +370,11 @@ void gen_function(ast_function_decl_t* fn)
 	var_leave_function(_var_set);
 }
 
-void code_gen(ast_trans_unit_t* ast, write_asm_cb cb, diag_cb dcb)
+void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
 {
 	_asm_cb = cb;
-	_diag_cb = dcb;
 
-	_var_set = var_init_set(_diag_cb);
+	_var_set = var_init_set();
 
 	gen_function(ast->function);
 

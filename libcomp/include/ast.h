@@ -38,9 +38,18 @@ typedef enum
 	op_greaterthan,
 	op_greaterthanequal,
 
+	op_prefix_inc,
+	op_prefix_dec,
+	op_postfix_inc,
+	op_postfix_dec
+
 }op_kind;
 
-/* Expressions */
+/************************************************/
+/*												*/
+/* Expressions									*/
+/*												*/
+/************************************************/
 
 /*
 Unary operation expression data
@@ -95,6 +104,7 @@ typedef struct
 
 typedef enum
 {
+	expr_postfix_op,
 	expr_unary_op,
 	expr_binary_op,
 	expr_int_literal,
@@ -215,12 +225,20 @@ typedef struct ast_block_item
 
 /* Functions */
 
+typedef struct ast_function_param
+{
+	char name[MAX_LITERAL_NAME];
+	//type etc
+
+	struct ast_function_param* next;
+}ast_function_param_t;
+
 typedef struct ast_function
 {
 	token_range_t tokens;
-	char name[32];
+	char name[MAX_LITERAL_NAME];
 
-	//params
+	ast_function_param_t* params;
 	//return type
 	//static?
 
