@@ -30,21 +30,23 @@ void ast_destroy_expression(ast_expression_t* expr)
 	free(expr);
 }
 
-void ast_destroy_var_def(ast_var_decl_t* v)
+void ast_destroy_var_decl(ast_var_decl_t* v)
 {
+	if (!v) return;
 	ast_destroy_expression(v->expr);
 	free(v);
 }
 
 void ast_destroy_block_item(ast_block_item_t* b)
 {
+	if (!b) return;
 	switch (b->kind)
 	{
 	case blk_smnt:
 		ast_destroy_statement(b->smnt);
 		break;
 	case blk_var_def:
-		ast_destroy_var_def(b->var_decl);
+		ast_destroy_var_decl(b->var_decl);
 	};
 	free(b);
 
@@ -74,6 +76,22 @@ void ast_destroy_statement(ast_statement_t* smnt)
 				ast_destroy_block_item(block);
 				block = next;
 			}
+			break;
+		case smnt_break:
+		case smnt_continue:
+			break;
+		case smnt_while:
+		case smnt_do:
+			ast_destroy_expression(smnt->data.while_smnt.condition);
+			ast_destroy_statement(smnt->data.while_smnt.statement);
+			break;
+		case smnt_for:
+		case smnt_for_decl:
+			ast_destroy_var_decl(smnt->data.for_smnt.init_decl);
+			ast_destroy_expression(smnt->data.for_smnt.init);
+			ast_destroy_expression(smnt->data.for_smnt.condition);
+			ast_destroy_expression(smnt->data.for_smnt.post);
+			ast_destroy_statement(smnt->data.for_smnt.statement);
 			break;
 	}
 	free(smnt);
