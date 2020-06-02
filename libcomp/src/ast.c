@@ -7,10 +7,12 @@ void ast_destroy_statement(ast_statement_t* smnt);
 void ast_destroy_expression(ast_expression_t* expr)
 {
 	if (!expr) return;
+
 	switch (expr->kind)
 	{
-	case expr_assign:
-		ast_destroy_expression(expr->data.assignment.expr);
+	case expr_postfix_op:
+	case expr_unary_op:
+		ast_destroy_expression(expr->data.unary_op.expression);
 		break;
 	case expr_binary_op:
 		ast_destroy_expression(expr->data.binary_op.lhs);
@@ -18,15 +20,22 @@ void ast_destroy_expression(ast_expression_t* expr)
 		break;
 	case expr_int_literal:
 		break;
-	case expr_unary_op:
-	case expr_postfix_op:
-		ast_destroy_expression(expr->data.unary_op.expression);
+	case expr_assign:
+		ast_destroy_expression(expr->data.assignment.expr);
 		break;
+	case expr_var_ref:
+		break;	
 	case expr_condition:
 		ast_destroy_expression(expr->data.condition.cond);
 		ast_destroy_expression(expr->data.condition.true_branch);
 		ast_destroy_expression(expr->data.condition.false_branch);
+		break;
+	case expr_func_call:
+		ast_destroy_expression(expr->data.func_call.params);
+		break;
 	}
+
+	ast_destroy_expression(expr->next);
 	free(expr);
 }
 
@@ -107,12 +116,22 @@ void ast_destroy_function_decl(ast_function_decl_t* fn)
 		ast_destroy_block_item(smnt);
 		smnt = next;
 	}
+
+	ast_function_param_t* param = fn->params;
+
+	while (param)
+	{
+		ast_function_param_t* next = param->next;
+		free(param);
+		param = next;
+	}
+
 	free(fn);
 }
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl)
 {
 	if (!tl) return;
-	ast_destroy_function_decl(tl->function);
+	ast_destroy_function_decl(tl->functions);
 	free(tl);
 }

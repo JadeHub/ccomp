@@ -116,6 +116,6 @@ void ast_print_function(ast_function_decl_t* f)
 void ast_print(ast_trans_unit_t* tl)
 {
 	_cur_indent = 0;
-	ast_print_function(tl->function);
+	ast_print_function(tl->functions);
 
 }

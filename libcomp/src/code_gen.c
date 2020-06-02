@@ -15,6 +15,9 @@ static write_asm_cb _asm_cb;
 static var_set_t* _var_set;
 static bool _returned = false;
 
+static const char* _cur_break_label = NULL;
+static const char* _cur_cont_label = NULL;
+
 static void _gen_asm(const char* format, ...)
 {
 	char buff[256];
@@ -75,12 +78,12 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 
 void gen_assign_expression(token_t* tok, const char* var_name)
 {
-	stack_var_data_t* var = var_find(_var_set, var_name);
-	if (!var)
+	int bsp_offset = var_get_bsp_offset(_var_set, var_name);
+	if (bsp_offset== 0)
 	{
 		diag_err(tok, ERR_SYNTAX, "Assignment to unknown variabe %s", var_name);
 	}
-	_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+	_gen_asm("movl %%eax, %d(%%ebp)", bsp_offset);
 }
 
 void gen_expression(ast_expression_t* expr)
@@ -88,6 +91,19 @@ void gen_expression(ast_expression_t* expr)
 	if (expr->kind == expr_null)
 	{
 		//null
+	}
+	else if (expr->kind == expr_func_call)
+	{
+		ast_expression_t* param = expr->data.func_call.params;
+
+		while (param)
+		{
+			gen_expression(param);
+			_gen_asm("pushl %%eax");
+			param = param->next;
+		}
+		_gen_asm("call %s", expr->data.func_call.name);
+		_gen_asm("addl $%d, %%esp", expr->data.func_call.param_count * 4);
 	}
 	else if (expr->kind == expr_condition)
 	{
@@ -113,12 +129,14 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_var_ref)
 	{
-		stack_var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
-		if (!var)
+		int bsp_offset = var_get_bsp_offset(_var_set, expr->data.var_reference.name);
+		//stack_var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
+		//if (!var)
+		if(bsp_offset == 0)
 		{
 			diag_err(expr->tokens.start, ERR_SYNTAX, "Unknown variabe reference %s", expr->data.var_reference.name);
 		}
-		_gen_asm("movl %d(%%ebp), %%eax", var->bsp_offset);
+		_gen_asm("movl %d(%%ebp), %%eax", bsp_offset);
 	}
 	else if (expr->kind == expr_int_literal)
 	{
@@ -264,8 +282,36 @@ void gen_expression(ast_expression_t* expr)
 	}
 }
 
+void gen_var_decl(ast_var_decl_t* var_decl)
+{
+	stack_var_data_t* var = var_decl_stack_var(_var_set, var_decl);
+	if (var_decl->expr)
+	{
+		gen_expression(var_decl->expr);
+		_gen_asm("pushl %%eax");
+	}
+	else
+	{
+		_gen_asm("pushl $0");
+	}
+}
+
+void gen_scope_block_enter()
+{
+	var_enter_block(_var_set);	
+}
+
+void gen_scope_block_leave()
+{
+	int bsp = var_leave_block(_var_set);
+	_gen_asm("addl $%d, %%esp", bsp);
+}
+
 void gen_statement(ast_statement_t* smnt)
 {
+	const char* cur_break = _cur_break_label;
+	const char* cur_cont = _cur_cont_label;
+
 	if (smnt->kind == smnt_return)
 	{
 		gen_expression(smnt->data.expr);
@@ -300,7 +346,7 @@ void gen_statement(ast_statement_t* smnt)
 	}
 	else if (smnt->kind == smnt_compound)
 	{
-		var_enter_block(_var_set);
+		gen_scope_block_enter();
 
 		ast_block_item_t* blk = smnt->data.compound.blocks;
 		while (blk)
@@ -309,10 +355,125 @@ void gen_statement(ast_statement_t* smnt)
 			blk = blk->next;
 		}
 
-		int bsp = var_leave_block(_var_set);
-		_gen_asm("addl $%d, %%esp", bsp);
+		gen_scope_block_leave();
 	}
-	//if, break, continue, while etc
+	else if (smnt->kind == smnt_while)
+	{
+		char label_start[16];
+		char label_end[16];
+		_make_label_name(label_start);
+		_make_label_name(label_end);
+
+		_cur_break_label = label_end;
+		_cur_cont_label = label_start;
+
+		_gen_asm("%s:", label_start);
+		gen_expression(smnt->data.while_smnt.condition);
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_end);
+		gen_statement(smnt->data.while_smnt.statement);
+		_gen_asm("jmp %s", label_start);
+		_gen_asm("%s:", label_end);
+	}
+	else if (smnt->kind == smnt_do)
+	{
+		char label_start[16];
+		char label_end[16];
+		char label_cont[16];
+		_make_label_name(label_start);
+		_make_label_name(label_end);
+		_make_label_name(label_cont);
+
+		_cur_break_label = label_end;
+		_cur_cont_label = label_cont;
+
+		_gen_asm("%s:", label_start);
+		gen_statement(smnt->data.while_smnt.statement);
+		_gen_asm("%s:", label_cont);
+		gen_expression(smnt->data.while_smnt.condition);
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_end);
+		_gen_asm("jmp %s", label_start);
+		_gen_asm("%s:", label_end);
+	}
+	else if (smnt->kind == smnt_for)
+	{
+		ast_for_smnt_data_t* f_data = &smnt->data.for_smnt;
+
+		char label_start[16];
+		char label_end[16];
+		char label_cont[16];
+		_make_label_name(label_start);
+		_make_label_name(label_end);
+		_make_label_name(label_cont);
+
+		gen_scope_block_enter();
+
+		if (f_data->init)
+			gen_expression(f_data->init);
+
+		_cur_break_label = label_end;
+		_cur_cont_label = label_cont;
+
+		_gen_asm("%s:", label_start);
+		gen_expression(f_data->condition);
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_end);
+		gen_statement(f_data->statement);
+		_gen_asm("%s:", label_cont);
+		if (f_data->post)
+			gen_expression(f_data->post);
+		_gen_asm("jmp %s", label_start);
+		_gen_asm("%s:", label_end);
+		gen_scope_block_leave();
+	}
+	else if (smnt->kind == smnt_for_decl)
+	{
+		ast_for_smnt_data_t* f_data = &smnt->data.for_smnt;
+
+		char label_start[16];
+		char label_end[16];
+		char label_cont[16];
+		_make_label_name(label_start);
+		_make_label_name(label_end);
+		_make_label_name(label_cont);
+
+		gen_scope_block_enter();
+
+		if (f_data->init_decl)
+			gen_var_decl(f_data->init_decl);
+
+		_cur_break_label = label_end;
+		_cur_cont_label = label_cont;
+
+		_gen_asm("%s:", label_start);
+		gen_expression(f_data->condition);
+		_gen_asm("cmpl $0, %%eax"); //was false?
+		_gen_asm("je %s", label_end);
+		gen_statement(f_data->statement);
+		_gen_asm("%s:", label_cont);
+		if (f_data->post)
+			gen_expression(f_data->post);
+		_gen_asm("jmp %s", label_start);
+		_gen_asm("%s:", label_end);
+		gen_scope_block_leave();
+	}
+	else if (smnt->kind == smnt_break)
+	{
+		if (!_cur_break_label)
+			diag_err(smnt->tokens.start, ERR_SYNTAX, "Invalid break");
+		_gen_asm("jmp %s", _cur_break_label);
+	}
+	else if (smnt->kind == smnt_continue)
+	{
+	if (!_cur_cont_label)
+		diag_err(smnt->tokens.start, ERR_SYNTAX, "Invalid continue");
+	_gen_asm("jmp %s", _cur_cont_label);
+	}
+	//if, break, continue,  etc
+
+	_cur_break_label = cur_break;
+	_cur_cont_label = cur_cont;
 }
 
 void gen_block_item(ast_block_item_t* bi)
@@ -323,23 +484,12 @@ void gen_block_item(ast_block_item_t* bi)
 	}
 	else if (bi->kind == blk_var_def)
 	{
-		stack_var_data_t* var = var_decl_stack_var(_var_set, bi->var_decl);
-		if (bi->var_decl->expr)
-		{
-			gen_expression(bi->var_decl->expr);
-			_gen_asm("pushl %%eax");
-		}
-		else
-		{
-			_gen_asm("pushl $0");
-		}
+		gen_var_decl(bi->var_decl);
 	}
 }
 
 void gen_function(ast_function_decl_t* fn)
-{
-	var_enter_function(_var_set, fn);
-
+{	
 	_returned = false;
 
 	_gen_asm(".globl %s", fn->name);
@@ -366,17 +516,22 @@ void gen_function(ast_function_decl_t* fn)
 
 		_gen_asm("ret");
 	}
-
-	var_leave_function(_var_set);
+	_gen_asm("\n");
+	_gen_asm("\n");
 }
 
 void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
 {
 	_asm_cb = cb;
 
-	_var_set = var_init_set();
+	ast_function_decl_t* fn = ast->functions;
 
-	gen_function(ast->function);
-
-	free(_var_set);
+	while (fn)
+	{
+		_var_set = var_init_set(fn);
+		gen_function(fn);
+		var_destory_set(_var_set);
+		_var_set = NULL;
+		fn = fn->next;
+	}
 }

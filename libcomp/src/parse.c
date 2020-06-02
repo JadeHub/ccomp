@@ -156,7 +156,7 @@ static ast_expression_t* _alloc_expr()
 }
 
 /*
-<program> ::= <function>
+<translation_unit> ::= { <function> }
 <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 <statement> ::= "return" <exp> ";"
 			  | <exp> ";"
@@ -261,12 +261,33 @@ ast_var_decl_t* parse_declaration()
 */
 ast_expression_t* parse_function_call_expr()
 {
+	ast_expression_t* expr = NULL;
 	if (current_is(tok_identifier) && next_is(tok_l_paren))
 	{
+		expr = _alloc_expr();
+		expr->kind = expr_func_call;
+		tok_spelling_cpy(current(), expr->data.func_call.name, MAX_LITERAL_NAME);
 
+		next_tok(); //skip id
+		next_tok(); //skip tok_l_paren
+
+		while (!current_is(tok_r_paren))
+		{
+			if (expr->data.func_call.params)
+			{
+				expect_cur(tok_comma);
+				next_tok();
+			}
+			ast_expression_t* param_expr = parse_expression();
+			param_expr->next = expr->data.func_call.params;
+			expr->data.func_call.params = param_expr;
+			expr->data.func_call.param_count++;
+		}		
+		next_tok();
 	}
-
-	return NULL;
+	if (expr)
+		expr->tokens.end = current();
+	return expr;
 }
 
 ast_expression_t* parse_factor();
@@ -364,6 +385,7 @@ ast_expression_t* parse_factor()
 */
 ast_expression_t* parse_term()
 {
+	token_t* start = current();
 	ast_expression_t* expr = parse_factor();
 	while (current()->kind == tok_star || current()->kind == tok_slash || current()->kind == tok_percent)
 	{
@@ -375,6 +397,7 @@ ast_expression_t* parse_term()
 		//build a new binary op expression for expr
 		ast_expression_t* cur_expr = expr;
 		expr = _alloc_expr();		
+		expr->tokens.start = start;
 		expr->kind = expr_binary_op;
 		expr->data.binary_op.operation = op;
 		expr->data.binary_op.lhs = cur_expr;
@@ -719,6 +742,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 		tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
 		param->next = func->params;
 		func->params = param;
+		func->param_count++;
 		next_tok();
 		if (!current_is(tok_comma))
 			break;
@@ -727,8 +751,6 @@ void parse_function_parameters(ast_function_decl_t* func)
 }
 
 /*
-<function> ::= "int" <id> "(" ")" "{" { <block-item> } "}"
-
 <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
 */
 ast_function_decl_t* parse_function_decl()
@@ -752,9 +774,18 @@ ast_function_decl_t* parse_function_decl()
 
 	/*)*/
 	expect_cur(tok_r_paren);
+	next_tok();
+
+	if (current_is(tok_semi_colon))
+	{
+		next_tok();
+		//function decl only
+		ast_destroy_function_decl(result);
+		return NULL;
+	}
 
 	/*{*/
-	expect_next(tok_l_brace);
+	expect_cur(tok_l_brace);
 
 	next_tok();
 
@@ -775,6 +806,7 @@ ast_function_decl_t* parse_function_decl()
 	return result;
 }
 
+//<translation_unit> :: = { <function> }
 ast_trans_unit_t* parse_translation_unit(token_t* tok)
 {
 	_cur_tok = tok;
@@ -782,10 +814,19 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	ast_trans_unit_t* result = (ast_trans_unit_t*)malloc(sizeof(ast_trans_unit_t));
 	memset(result, 0, sizeof(ast_trans_unit_t));
 	result->tokens.start = current();
-	result->function = parse_function_decl();
+
+	while (!current_is(tok_eof))
+	{
+		ast_function_decl_t* fn = parse_function_decl();
+
+		if (fn)
+		{
+			fn->next = result->functions;
+			result->functions = fn;
+		}
+	}
 	result->tokens.end = current();
 
 	expect_cur(tok_eof);
-
 	return result;
 }

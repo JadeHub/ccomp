@@ -102,6 +102,16 @@ typedef struct
 	struct ast_expression* false_branch;
 }var_cond_expr_data_t;
 
+/*
+function call expression data
+*/
+typedef struct
+{
+	char name[MAX_LITERAL_NAME];
+	struct ast_expression* params;
+	uint32_t param_count;
+}func_call_expr_data_t;
+
 typedef enum
 {
 	expr_postfix_op,
@@ -111,6 +121,7 @@ typedef enum
 	expr_assign,
 	expr_var_ref,
 	expr_condition,
+	expr_func_call,
 	expr_null
 }expression_kind;
 
@@ -126,7 +137,9 @@ typedef struct ast_expression
 		assign_expr_data_t assignment;
 		var_ref_expr_data_t var_reference;
 		var_cond_expr_data_t condition;
+		func_call_expr_data_t func_call;
 	}data;
+	struct ast_expression* next; //func call param list
 }ast_expression_t;
 
 /* Declaration */
@@ -239,23 +252,26 @@ typedef struct ast_function
 	char name[MAX_LITERAL_NAME];
 
 	ast_function_param_t* params;
+	uint32_t param_count;
 	//return type
 	//static?
 
 	//ast_statement_t* statements;
 	ast_block_item_t* blocks;
 
+	struct ast_function* next;
 }ast_function_decl_t;
 
 typedef struct
 {
 	token_range_t tokens;
 	char path[256];
-	ast_function_decl_t* function;
+	ast_function_decl_t* functions;
 }ast_trans_unit_t;
 
 void ast_print(ast_trans_unit_t* tl);
 
 const char* ast_op_name(op_kind);
 
+void ast_destroy_function_decl(ast_function_decl_t* fn);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);

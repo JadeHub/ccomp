@@ -43,6 +43,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
     AstTreeItem* item = AllocTreeItem(expr->tokens);
 
     HTREEITEM tree_item;
+    ast_expression_t* sub_expr;
     switch (expr->kind)
     {
     case expr_binary_op:
@@ -81,6 +82,16 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         InsertExpression(tree_item, expr->data.condition.true_branch, "true: ");
         if(expr->data.condition.false_branch)
             InsertExpression(tree_item, expr->data.condition.false_branch, "false: ");
+        break;
+    case expr_func_call:
+        sprintf_s(item->name, "%sFunc Call: %s", prefix, expr->data.func_call.name);
+        tree_item = TreeInsert(parent, item);
+        sub_expr = expr->data.func_call.params;
+        while (sub_expr)
+        {
+            InsertExpression(tree_item, sub_expr, "param ");
+            sub_expr = sub_expr->next;
+        }
         break;
     case expr_null:
         sprintf_s(item->name, "%sNull Expr", prefix);
@@ -218,9 +229,12 @@ void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t
     sprintf_s(item->name, "TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    if (tl->function)
-        InsertFunction(tree_item, tl->function);
-
+    ast_function_decl_t* fn = tl->functions;
+    while (fn)
+    {
+        InsertFunction(tree_item, fn);
+        fn = fn->next;
+    }
 }
 
 void DeleteItem(HTREEITEM item)

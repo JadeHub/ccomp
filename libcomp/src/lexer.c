@@ -44,6 +44,7 @@ static inline bool _is_identifier_body(const char c)
 	return (
 		(c >= 'A' && c <= 'Z') ||
 		(c >= 'a' && c <= 'z') ||
+		(c == '_') ||
 		_is_digit_char(c));
 }
 
@@ -53,7 +54,8 @@ static inline bool _is_identifier_body(const char c)
 static inline bool _is_identifier_start(const char c)
 {
 	return ((c >= 'A' && c <= 'Z') ||
-		(c >= 'a' && c <= 'a'));
+		(c >= 'a' && c <= 'a') ||
+		(c == '_'));
 }
 
 static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result)

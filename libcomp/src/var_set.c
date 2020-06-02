@@ -28,21 +28,29 @@ static stack_var_data_t* _find_in_current_block(var_set_t* vars, const char* nam
 	return NULL;
 }
 
-var_set_t* var_init_set()
+void var_destory_set(var_set_t* vars)
+{
+	stack_var_data_t* var;
+	stack_var_data_t* next;
+
+	var = vars->vars;
+
+	while (var)
+	{
+		next = var->next;
+		free(var);
+		var = next;
+	}
+	free(vars);
+}
+
+var_set_t* var_init_set(ast_function_decl_t* fn)
 {
 	var_set_t* vars = (var_set_t*)malloc(sizeof(var_set_t));
 	memset(vars, 0, sizeof(var_set_t));
-	var_enter_block(vars);
+	vars->current_fn = fn;
+	var_enter_block(vars); //make an initial block marker with bsp_offset of 0
 	return vars;
-}
-
-void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
-{
-}
-
-void var_leave_function(var_set_t* vars)
-{
-
 }
 
 void var_enter_block(var_set_t* vars)
@@ -99,7 +107,32 @@ stack_var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 	return var;
 }
 
-stack_var_data_t* var_find(var_set_t* vars, const char* name)
+int var_get_bsp_offset(var_set_t* vars, const char* name)
+{
+	stack_var_data_t* stack_var = var_stack_find(vars, name);
+
+	if (stack_var)
+		return stack_var->bsp_offset;
+
+	/* Search the function parameters */
+	if (vars->current_fn && vars->current_fn->params)
+	{
+		ast_function_param_t* param = vars->current_fn->params;
+		//params are stored in reverse order so calculate the offset of the
+		//last param and work down from there
+		int offset = 4 + (4 * vars->current_fn->param_count);
+		while (param)
+		{
+			if (strcmp(name, param->name) == 0)
+				return offset;
+			offset -= 4;
+			param = param->next;
+		}
+	}
+	return 0;
+}
+
+stack_var_data_t* var_stack_find(var_set_t* vars, const char* name)
 {
 	stack_var_data_t* var = vars->vars;
 	/* Search from most recently declared variable*/
@@ -112,5 +145,6 @@ stack_var_data_t* var_find(var_set_t* vars, const char* name)
 		}
 		var = var->next;
 	}
+		
 	return NULL;
 }

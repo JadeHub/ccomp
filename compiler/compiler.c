@@ -9,7 +9,7 @@
 
 //static const char* _src = "int main() \r\n{return 2;}";
 
-static char* _src = "int main(int x, int y) { int x = 0; int y = x++; return a; }";
+static char* _src = "int sum(int a, int b) { return a + b;} int main() { int a = 0;  int i; fn(a, i);  return a; }";
 
 void print_tokens(token_t* toks)
 {
