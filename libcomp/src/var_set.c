@@ -7,20 +7,21 @@
 #include <stdbool.h>
 #include <assert.h>
 
-static stack_var_data_t* _make_stack_var(int bsp_offset)
+static stack_var_data_t* _make_stack_var(int bsp_offset, const char* name)
 {
 	stack_var_data_t* var = (stack_var_data_t*)malloc(sizeof(stack_var_data_t));
 	memset(var, 0, sizeof(stack_var_data_t));
 	var->bsp_offset = bsp_offset;
+	strcpy(var->name, name);
 	return var;
 }
 
-static stack_var_data_t* _find_in_current_block(var_set_t* vars, const char* name)
+stack_var_data_t* var_cur_block_find(var_set_t* vars, const char* name)
 {
 	stack_var_data_t* var = vars->vars;
-	while (var && var->decl != NULL)
+	while (var && var->kind != stack_var_block_mark)
 	{
-		if (strcmp(name, var->decl->decl_name) == 0)
+		if (strcmp(name, var->name) == 0)
 			return var;
 
 		var = var->next;
@@ -50,13 +51,33 @@ var_set_t* var_init_set(ast_function_decl_t* fn)
 	memset(vars, 0, sizeof(var_set_t));
 	vars->current_fn = fn;
 	var_enter_block(vars); //make an initial block marker with bsp_offset of 0
+
+	/* add the function parameters to the function's block */
+	if (fn->params)
+	{
+		ast_function_param_t* param = fn->params;
+		//params are stored in reverse order so calculate the offset of the
+		//last param and work down from there
+		int offset = 4 + (4 * fn->param_count);
+		while (param)
+		{
+			stack_var_data_t* var = _make_stack_var(offset, param->name);
+			var->kind = stack_var_param;
+			var->data.param = param;
+			var->next = vars->vars;
+			vars->vars = var;
+			offset -= 4;
+			param = param->next;
+		}
+	}
+
 	return vars;
 }
 
 void var_enter_block(var_set_t* vars)
 {
-	stack_var_data_t* var = _make_stack_var(vars->bsp_offset);
-
+	stack_var_data_t* var = _make_stack_var(vars->bsp_offset, "");
+	var->kind = stack_var_block_mark;
 	/* add to start of list */
 	var->next = vars->vars;
 	vars->vars = var;
@@ -70,13 +91,13 @@ int var_leave_block(var_set_t* vars)
 	stack_var_data_t* var = vars->vars;
 	while (var)
 	{
-		if (var->decl == NULL)
+		if (var->kind == stack_var_block_mark)
 		{
 			int bsp_end = var->bsp_offset;
 			vars->vars = var->next;
 			vars->bsp_offset = bsp_end;
 			free(var);
-			return bsp_end- bsp_start /*- bsp_end*/;
+			return bsp_end - bsp_start;
 		}
 
 		stack_var_data_t* next = var->next;
@@ -89,16 +110,16 @@ int var_leave_block(var_set_t* vars)
 
 stack_var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 {
-	stack_var_data_t* var = _find_in_current_block(vars, var_decl->decl_name);
+	stack_var_data_t* var = var_cur_block_find(vars, var_decl->name);
 	if (var)
 	{
-		diag_err(var_decl->tokens.start, ERR_SYNTAX, "Duplicate var decl %s", var_decl->decl_name);
 		return NULL;
 	}
 	
 	vars->bsp_offset -= 4;
-	var = _make_stack_var(vars->bsp_offset);
-	var->decl = var_decl;
+	var = _make_stack_var(vars->bsp_offset, var_decl->name);
+	var->kind = stack_var_decl;
+	var->data.decl = var_decl;
 	
 	/* add to start of list */
 	var->next = vars->vars;
@@ -110,26 +131,7 @@ stack_var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 int var_get_bsp_offset(var_set_t* vars, const char* name)
 {
 	stack_var_data_t* stack_var = var_stack_find(vars, name);
-
-	if (stack_var)
-		return stack_var->bsp_offset;
-
-	/* Search the function parameters */
-	if (vars->current_fn && vars->current_fn->params)
-	{
-		ast_function_param_t* param = vars->current_fn->params;
-		//params are stored in reverse order so calculate the offset of the
-		//last param and work down from there
-		int offset = 4 + (4 * vars->current_fn->param_count);
-		while (param)
-		{
-			if (strcmp(name, param->name) == 0)
-				return offset;
-			offset -= 4;
-			param = param->next;
-		}
-	}
-	return 0;
+	return stack_var ? stack_var->bsp_offset : 0;
 }
 
 stack_var_data_t* var_stack_find(var_set_t* vars, const char* name)
@@ -138,13 +140,18 @@ stack_var_data_t* var_stack_find(var_set_t* vars, const char* name)
 	/* Search from most recently declared variable*/
 	while (var)
 	{
-		if (var->decl)
-		{
-			if (strcmp(name, var->decl->decl_name) == 0)
-				return var;
-		}
+		if (strcmp(name, var->name) == 0)
+			return var;
 		var = var->next;
 	}
 		
 	return NULL;
+}
+
+token_t* var_get_tok(stack_var_data_t* var)
+{
+	assert(var->kind != stack_var_block_mark);
+	return var->kind == stack_var_decl ?
+		var->data.decl->tokens.start :
+		var->data.param->tokens.start;
 }

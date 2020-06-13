@@ -106,7 +106,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
 void InsertVariableDefinition(HTREEITEM parent, ast_var_decl_t* var, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(var->tokens);
-    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->decl_name);
+    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
     if (var->expr)
     {
@@ -213,6 +213,15 @@ void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
     AstTreeItem* item = AllocTreeItem(func->tokens);
     sprintf_s(item->name, "Function: %s", func->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
+
+    ast_function_param_t* param = func->params;
+    while (param)
+    {
+        AstTreeItem* item = AllocTreeItem(param->tokens);
+        sprintf_s(item->name, "Parameter: %s", param->name);
+        TreeInsert(tree_item, item);
+        param = param->next;
+    }
 
     ast_block_item_t* blk = func->blocks;
 

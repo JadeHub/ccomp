@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
@@ -34,7 +35,10 @@ static inline bool next_is(tok_kind k)
 static void expect_cur(tok_kind k)
 {
 	if (!current_is(k))
-		diag_err(current(), ERR_SYNTAX, "Expected %s", tok_kind_name(k));
+	{
+		diag_err(current(), ERR_EXPECTED_TOK, "syntax error: expected '%s' before '%s'",
+			tok_kind_spelling(k), tok_kind_spelling(current()->kind));
+	}
 }
 
 static void expect_next(tok_kind k)
@@ -78,7 +82,7 @@ static op_kind _get_postfix_operator(token_t* tok)
 		return op_postfix_inc;
 	}
 
-	diag_err(current(), ERR_SYNTAX, "Unknown postfix op %s", tok_kind_name(tok->kind));
+	diag_err(current(), ERR_SYNTAX, "Unknown postfix op %s", tok_kind_spelling(tok->kind));
 	return op_unknown;
 }
 
@@ -98,7 +102,7 @@ static op_kind _get_unary_operator(token_t* tok)
 		return op_prefix_inc;
 	}
 
-	diag_err(current(),	ERR_SYNTAX, "Unknown unary op %s", tok_kind_name(tok->kind));
+	diag_err(current(),	ERR_SYNTAX, "Unknown unary op %s", tok_kind_spelling(tok->kind));
 	return op_unknown;
 }
 
@@ -143,7 +147,7 @@ static op_kind _get_binary_operator(token_t* tok)
 	case tok_percent:
 		return op_mod;
 	}
-	diag_err(current(), ERR_SYNTAX, "Unknown binary op %s", tok_kind_name(tok->kind));
+	diag_err(current(), ERR_SYNTAX, "Unknown binary op %s", tok_kind_spelling(tok->kind));
 	return op_unknown;
 }
 
@@ -243,7 +247,7 @@ ast_var_decl_t* parse_declaration()
 	expect_cur(tok_int);
 	next_tok();
 	expect_cur(tok_identifier);
-	tok_spelling_cpy(current(), result->decl_name, MAX_LITERAL_NAME);
+	tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
 	next_tok();
 	if (current_is(tok_equal))
 	{
@@ -348,7 +352,7 @@ ast_expression_t* parse_factor()
 		//<factor> ::= <int>
 		expr = _alloc_expr();
 		expr->kind = expr_int_literal;
-		expr->data.const_val = (uint32_t)current()->data;
+		expr->data.const_val = (uint32_t)(long)current()->data;
 		next_tok();
 	}
 	else if (current_is(tok_identifier))
@@ -549,10 +553,7 @@ ast_expression_t* parse_optional_expression(tok_kind term_tok)
 	else
 	{
 		result = parse_expression();
-		if (!current_is(term_tok))
-		{
-			diag_err(current(), ERR_SYNTAX, "Expected %s", tok_kind_name(term_tok));
-		}
+		expect_cur(term_tok);
 	}
 	//next_tok();
 	return result;
@@ -736,14 +737,16 @@ void parse_function_parameters(ast_function_decl_t* func)
 {
 	while (current_is(tok_int))
 	{
-		expect_next(tok_identifier);
-
 		ast_function_param_t* param = (ast_function_param_t*)malloc(sizeof(ast_function_param_t));
+		memset(param, 0, sizeof(ast_function_param_t));
+		param->tokens.start = current();
+		expect_next(tok_identifier);
 		tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
 		param->next = func->params;
 		func->params = param;
 		func->param_count++;
 		next_tok();
+		param->tokens.end = current();
 		if (!current_is(tok_comma))
 			break;
 		expect_next(tok_int);
@@ -780,8 +783,7 @@ ast_function_decl_t* parse_function_decl()
 	{
 		next_tok();
 		//function decl only
-		ast_destroy_function_decl(result);
-		return NULL;
+		return result;
 	}
 
 	/*{*/
@@ -815,15 +817,26 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	memset(result, 0, sizeof(ast_trans_unit_t));
 	result->tokens.start = current();
 
+	ast_function_decl_t* last = NULL;
 	while (!current_is(tok_eof))
 	{
 		ast_function_decl_t* fn = parse_function_decl();
 
-		if (fn)
+		if (last)
+		{
+			last->next = fn;
+		}
+		else
+		{
+			result->functions = fn;
+		}
+		last = fn;
+
+		/*if (fn)
 		{
 			fn->next = result->functions;
 			result->functions = fn;
-		}
+		}*/
 	}
 	result->tokens.end = current();
 

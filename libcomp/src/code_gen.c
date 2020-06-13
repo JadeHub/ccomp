@@ -285,6 +285,7 @@ void gen_expression(ast_expression_t* expr)
 void gen_var_decl(ast_var_decl_t* var_decl)
 {
 	stack_var_data_t* var = var_decl_stack_var(_var_set, var_decl);
+	assert(var);
 	if (var_decl->expr)
 	{
 		gen_expression(var_decl->expr);
@@ -528,10 +529,13 @@ void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
 
 	while (fn)
 	{
-		_var_set = var_init_set(fn);
-		gen_function(fn);
-		var_destory_set(_var_set);
-		_var_set = NULL;
+		if (fn->blocks)
+		{
+			_var_set = var_init_set(fn);
+			gen_function(fn);
+			var_destory_set(_var_set);
+			_var_set = NULL;
+		}
 		fn = fn->next;
 	}
 }

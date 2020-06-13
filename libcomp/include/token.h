@@ -1,6 +1,6 @@
 #pragma once
 
-#include "source_range.h"
+#include "source.h"
 
 #include <stdbool.h>
 
@@ -8,7 +8,6 @@ typedef enum
 {
     tok_eof,
     tok_invalid,
-
     //punctuation
     tok_l_brace,            // {
     tok_r_brace,            // }
@@ -78,7 +77,7 @@ typedef struct
 }token_range_t;
 
 
-const char* tok_kind_name(tok_kind);
+const char* tok_kind_spelling(tok_kind);
 
 void tok_printf(token_t* tok);
 

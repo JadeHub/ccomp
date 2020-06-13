@@ -135,3 +135,74 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl)
 	ast_destroy_function_decl(tl->functions);
 	free(tl);
 }
+
+/*bool ast_visit_statement_helper(ast_statement_t* smnt, ast_visitor_cb_t* cb)
+{
+	switch (smnt->kind)
+	{
+	case smnt_return:
+		if (cb->on_return_smnt && !cb->on_return_smnt(smnt, cb))
+			return false;
+		break;
+	case smnt_expr:
+		if (cb->on_expr_smnt && !cb->on_expr_smnt(smnt, cb))
+			return false;
+		break;
+	case smnt_if:
+		if (cb->on_if_smnt && !cb->on_if_smnt(smnt, cb))
+			return false;
+		break;
+
+	};
+}*/
+
+
+/*bool ast_visit_statement_expressions(ast_statement_t* smnt, ast_expr_visitor_cb cb)
+{
+	switch (smnt->kind)
+	{
+	case smnt_expr:
+		return cb(smnt->data.expr);
+		break;
+	case smnt_do:
+	case smnt_while:
+		if (!cb(smnt->data.while_smnt.condition))
+			return false;
+		if (!cb(ast_visit_statement_expressions(smnt->data.while_smnt.statement, cb)))
+			return false;
+		break;
+	case smnt_for:
+
+	}
+	return true;
+}
+*/
+bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb cb)
+{
+	ast_block_item_t* block = blocks;
+	ast_block_item_t* next;
+
+	while (block)
+	{
+		next = block->next;
+		if (!cb(block))
+			return false;
+		block = next;
+	}
+	return true;
+}
+
+bool ast_visit_functions(ast_trans_unit_t* tl, ast_fn_decl_visitor_cb cb)
+{
+	ast_function_decl_t* fn = tl->functions;
+	ast_function_decl_t* next;
+
+	while (fn)
+	{
+		next = fn->next;
+		if (!cb(fn))
+			return false;
+		fn = next;
+	}
+	return true;
+}

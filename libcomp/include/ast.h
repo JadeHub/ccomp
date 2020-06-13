@@ -146,7 +146,7 @@ typedef struct ast_expression
 typedef struct
 {
 	token_range_t tokens;
-	char decl_name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
+	char name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
 	ast_expression_t* expr;
 }ast_var_decl_t;
 
@@ -171,7 +171,6 @@ typedef struct
 	ast_expression_t* condition;
 	struct ast_statement* true_branch;
 	struct ast_statement* false_branch;
-
 }ast_if_smnt_data_t;
 
 typedef struct
@@ -220,7 +219,6 @@ typedef enum
 {
 	blk_smnt,
 	blk_var_def
-
 }ast_block_item_type;
 
 typedef struct ast_block_item
@@ -240,6 +238,7 @@ typedef struct ast_block_item
 
 typedef struct ast_function_param
 {
+	token_range_t tokens;
 	char name[MAX_LITERAL_NAME];
 	//type etc
 
@@ -256,7 +255,6 @@ typedef struct ast_function
 	//return type
 	//static?
 
-	//ast_statement_t* statements;
 	ast_block_item_t* blocks;
 
 	struct ast_function* next;
@@ -275,3 +273,25 @@ const char* ast_op_name(op_kind);
 
 void ast_destroy_function_decl(ast_function_decl_t* fn);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
+
+typedef bool (*ast_fn_decl_visitor_cb)(ast_function_decl_t*);
+typedef bool (*ast_block_item_visitor_cb)(ast_block_item_t*);
+typedef bool (*ast_expr_visitor_cb)(ast_expression_t*);
+//typedef bool (*ast_smnt_visitor_cb)(ast_statement_t*, struct ast_visitor_cb*);
+//typedef bool (*ast_if_smnt_visitor_cb)(ast_statement_t*, struct ast_visitor_cb*);
+
+/*typedef struct ast_visitor_cb
+{
+	ast_fn_decl_visitor_cb on_fn_decl;
+	ast_var_decl_visitor_cb on_var_decl;
+
+	ast_smnt_visitor_cb on_expr_smnt;
+	ast_smnt_visitor_cb on_if_smnt;
+	ast_smnt_visitor_cb on_return_smnt;
+
+}ast_visitor_cb_t;
+*/
+
+bool ast_visit_functions(ast_trans_unit_t*, ast_fn_decl_visitor_cb cb);
+bool ast_visit_block_items(ast_block_item_t*, ast_block_item_visitor_cb cb);
+//bool ast_visit_statement_expressions(ast_statement_t*, ast_expr_visitor_cb cb);

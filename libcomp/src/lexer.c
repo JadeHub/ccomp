@@ -128,7 +128,7 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 			return;
 		}
 	}	
-	result->data = (void*)i;
+	result->data = (void*)(long)i;
 }
 
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
