@@ -143,11 +143,12 @@ typedef struct ast_expression
 }ast_expression_t;
 
 /* Declaration */
-typedef struct
+typedef struct ast_var_decl
 {
 	token_range_t tokens;
 	char name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
 	ast_expression_t* expr;
+	struct ast_var_decl* next;
 }ast_var_decl_t;
 
 /* Statement */
@@ -264,6 +265,7 @@ typedef struct
 {
 	token_range_t tokens;
 	char path[256];
+	ast_var_decl_t* decls; //global vars
 	ast_function_decl_t* functions;
 }ast_trans_unit_t;
 
@@ -294,4 +296,3 @@ typedef bool (*ast_expr_visitor_cb)(ast_expression_t*);
 
 bool ast_visit_functions(ast_trans_unit_t*, ast_fn_decl_visitor_cb cb);
 bool ast_visit_block_items(ast_block_item_t*, ast_block_item_visitor_cb cb);
-//bool ast_visit_statement_expressions(ast_statement_t*, ast_expr_visitor_cb cb);

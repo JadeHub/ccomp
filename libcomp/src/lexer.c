@@ -7,7 +7,7 @@ static token_t _invalid_tok;
 
 static inline bool _get_next_and_adv(source_range_t* sr, const char** pos, char* result)
 {
-	if (*pos < sr->end)
+	if (*pos < sr->end-2) //skip the null and the last char
 	{
 		*result = **pos;
 		(*pos)++;

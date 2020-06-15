@@ -1,74 +1,14 @@
 #include "validate.h"
 #include "diag.h"
 #include "var_set.h"
+#include "nps.h"
 
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 
-/******************************/
-/*       named_ptr_set        */
-/******************************/
-
-typedef struct named_ptr_item
-{
-	const char* name;
-	void* ptr;
-	struct named_ptr_item* next;
-}named_ptr_item_t;
-
-typedef struct
-{
-	named_ptr_item_t* items;
-}named_ptr_set_t;
-
-named_ptr_set_t* nps_create()
-{
-	named_ptr_set_t* set = (named_ptr_set_t*)malloc(sizeof(named_ptr_set_t));
-	memset(set, 0, sizeof(named_ptr_set_t));
-	return set;
-}
-
-void nps_destroy(named_ptr_set_t* set)
-{
-	named_ptr_item_t* item = set->items;
-	named_ptr_item_t* next;
-
-	while (item)
-	{
-		next = item->next;
-		free((void*)item->name);
-		free(item);
-		item = next;
-	}
-	free(set);
-}
-
-void* nps_lookup(named_ptr_set_t* set, const char* name)
-{
-	named_ptr_item_t* item = set->items;
-
-	while (item)
-	{
-		if (strcmp(item->name, name) == 0)
-			return item->ptr;
-		item = item->next;
-	}
-	return NULL;
-}
-
-void nps_insert(named_ptr_set_t* set, const char* name, void* ptr)
-{
-	named_ptr_item_t* item = (named_ptr_item_t*)malloc(sizeof(named_ptr_item_t));
-	memset(item, 0, sizeof(named_ptr_item_t));
-	item->name = strdup(name);
-	item->ptr = ptr;
-	item->next = set->items;
-	set->items = item;
-}
-
-/******************************/
-static named_ptr_set_t* _functions;
+static struct named_ptr_set* _functions;
+static struct named_ptr_set* _globals;
 static var_set_t* _var_set;
 
 bool process_statement(ast_statement_t* smnt);
@@ -83,7 +23,7 @@ bool process_variable_definition(ast_var_decl_t* decl)
 	if (!decl)
 		return true;
 
-	stack_var_data_t* existing = var_cur_block_find(_var_set, decl->name);
+	var_data_t* existing = var_cur_block_find(_var_set, decl->name);
 
 	if (existing)
 	{
@@ -100,7 +40,7 @@ bool process_variable_reference(ast_expression_t* expr)
 	if (!expr)
 		return true;
 
-	stack_var_data_t* existing = var_cur_block_find(_var_set, expr->data.var_reference.name);
+	var_data_t* existing = var_cur_block_find(_var_set, expr->data.var_reference.name);
 	if (!existing)
 	{
 		diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined",expr->data.var_reference.name);
@@ -113,7 +53,7 @@ bool process_variable_assignment(ast_expression_t* expr)
 {
 	if (!expr)
 		return true;
-	stack_var_data_t* existing = var_cur_block_find(_var_set, expr->data.assignment.name);
+	var_data_t* existing = var_cur_block_find(_var_set, expr->data.assignment.name);
 	if (!existing)
 	{
 		diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined", expr->data.assignment.name);
@@ -252,6 +192,15 @@ bool process_statement(ast_statement_t* smnt)
 
 bool process_function_decl(ast_function_decl_t* fn)
 {
+	ast_var_decl_t* var = (ast_var_decl_t*)nps_lookup(_globals, fn->name);
+	if (var)
+	{
+		diag_err(fn->tokens.start, ERR_DUP_SYMBOL,
+			"function declaration of '%s' shadows global var at %s",
+			fn->name, diag_pos_str(var->tokens.start));
+		return false;
+	}
+
 	ast_function_decl_t* existing = (ast_function_decl_t*)nps_lookup(_functions, fn->name);
 	if (existing)
 	{
@@ -281,11 +230,58 @@ bool process_function_decl(ast_function_decl_t* fn)
 	return true;
 }
 
+bool process_global_var(ast_var_decl_t* decl)
+{
+	ast_function_decl_t* fn = (ast_function_decl_t*)nps_lookup(_functions, decl->name);
+	if (fn)
+	{
+		diag_err(fn->tokens.start, ERR_DUP_SYMBOL,
+			"global var declaration of '%s' shadows function at %s",
+			decl->name, diag_pos_str(fn->tokens.start));
+		return false;
+	}
+
+	ast_var_decl_t* existing = (ast_var_decl_t*)nps_lookup(_globals, decl->name);
+	if (existing)
+	{
+		if (existing->expr && decl->expr)
+		{
+			diag_err(decl->tokens.start, ERR_DUP_VAR,
+				"multiple definition of global var '%s'. prev at %s",
+				decl->name,
+				diag_pos_str(existing->tokens.start));
+			return false;
+		}
+		nps_remove(_globals, decl->name);
+	}
+
+	if (decl->expr && decl->expr->kind != expr_int_literal)
+	{
+		diag_err(decl->tokens.start, ERR_INVALID_INIT,
+			"init of global var '%s' with non const value",
+			decl->name);
+		return false;
+	}
+
+	nps_insert(_globals, decl->name, decl);
+
+	return true;
+}
+
 void validate_tl(ast_trans_unit_t* tl)
 {
 	_functions = nps_create();
+	_globals = nps_create();
+
+	ast_var_decl_t* global = tl->decls;
+	while (global)
+	{
+		process_global_var(global);
+		global = global->next;
+	}
 
 	ast_visit_functions(tl, process_function_decl);
 
 	nps_destroy(_functions);
+	nps_destroy(_globals);
 }

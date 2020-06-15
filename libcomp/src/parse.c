@@ -160,8 +160,10 @@ static ast_expression_t* _alloc_expr()
 }
 
 /*
-<translation_unit> ::= { <function> }
+<translation_unit> ::= { <function> | <declaration> }
+<declaration> :: = "int" < id > [= <exp>] ";"
 <function> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")" ( "{" { <block-item> } "}" | ";" )
+<block-item> ::= <statement> | <declaration> 
 <statement> ::= "return" <exp> ";"
 			  | <exp> ";"
 			  | "int" <id> [ = <exp>] ";"
@@ -328,7 +330,7 @@ ast_expression_t* parse_factor()
 
 	if (expr)
 	{
-
+		//parsed as a function call
 	}
 	else if (current_is(tok_l_paren))
 	{
@@ -808,7 +810,7 @@ ast_function_decl_t* parse_function_decl()
 	return result;
 }
 
-//<translation_unit> :: = { <function> }
+//<translation_unit> :: = { <function> | <declaration> }
 ast_trans_unit_t* parse_translation_unit(token_t* tok)
 {
 	_cur_tok = tok;
@@ -817,26 +819,45 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	memset(result, 0, sizeof(ast_trans_unit_t));
 	result->tokens.start = current();
 
-	ast_function_decl_t* last = NULL;
+	ast_function_decl_t* last_fn = NULL;
+	ast_var_decl_t* last_decl = NULL;
 	while (!current_is(tok_eof))
 	{
-		ast_function_decl_t* fn = parse_function_decl();
+		token_t* start = current();
 
-		if (last)
+		//either a global var or a function
+		expect_cur(tok_int);
+		expect_next(tok_identifier);
+
+		if (next_is(tok_l_paren))
 		{
-			last->next = fn;
+			//function
+			_cur_tok = start;
+			ast_function_decl_t* fn = parse_function_decl();
+			if (last_fn)
+			{
+				last_fn->next = fn;
+			}
+			else
+			{
+				result->functions = fn;
+			}
+			last_fn = fn;
 		}
 		else
 		{
-			result->functions = fn;
+			_cur_tok = start;
+			ast_var_decl_t* decl = parse_declaration();
+			if (last_decl)
+			{
+				last_decl->next = decl;
+			}
+			else
+			{
+				result->decls = decl;
+			}
+			last_decl = decl;
 		}
-		last = fn;
-
-		/*if (fn)
-		{
-			fn->next = result->functions;
-			result->functions = fn;
-		}*/
 	}
 	result->tokens.end = current();
 

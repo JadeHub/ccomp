@@ -9,6 +9,10 @@ extern "C"
 #include <libcomp/include/validate.h>
 }
 
+namespace libctest {
+
+using namespace ::testing;
+
 class ValidationTest : public ::testing::Test
 {
 public:
@@ -16,10 +20,11 @@ public:
 	{
 		lex_init();
 
-		std::function<void(token_t*, uint32_t, const char*)> fn = 
+		std::function<void(token_t*, uint32_t, const char*)> fn =
 			[this](token_t* tok, uint32_t err, const char* msg) {};
 
 		diag_set_handler(&diag_cb, this);
+		EXPECT_CALL(*this, on_diag(_, _, _)).Times(0);
 	}
 
 	~ValidationTest()
@@ -31,7 +36,7 @@ public:
 	{
 		source_range_t sr;
 		sr.ptr = src;
-		sr.end = sr.ptr + strlen(src);
+		sr.end = sr.ptr + strlen(src) + 1;
 		toks = lex_source(&sr);
 		ast = parse_translation_unit(toks);
 	}
@@ -46,26 +51,63 @@ public:
 		((ValidationTest*)data)->on_diag(tok, err, msg);
 	}
 
+	void ExpectError(uint32_t err)
+	{
+		EXPECT_CALL(*this, on_diag(_, err, _));
+	}
+
 	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
 
 	token_t* toks = nullptr;
 	ast_trans_unit_t* ast = nullptr;
 };
 
-
-TEST_F(ValidationTest, foo)
+TEST_F(ValidationTest, global_var_shadows_fn)
 {
 	std::string code = R"(
-int foo(int a){
-    return 3 + a;
-}
+	int foo(int a);
+	int foo = 5;	)";
 
-int main(){
-    return foo();
-}
-
-)";
+	ExpectError(ERR_DUP_SYMBOL);
 
 	parse(code.c_str());
 	validate();
+}
+
+TEST_F(ValidationTest, global_var_dup_definition)
+{
+	std::string code = R"(
+	int foo = 4;
+	int foo = 5;	)";
+
+	ExpectError(ERR_DUP_VAR);
+
+	parse(code.c_str());
+	validate();
+}
+
+TEST_F(ValidationTest, global_var_invalid_init)
+{
+	std::string code = R"(
+	int fooA = 4;
+	int foo = fooA;	)";
+
+	ExpectError(ERR_INVALID_INIT);
+
+	parse(code.c_str());
+	validate();
+}
+
+TEST_F(ValidationTest, global_fn_shadows_var)
+{
+	std::string code = R"(
+	int foo = 5;	
+	int foo(int a);)";
+
+	ExpectError(ERR_DUP_SYMBOL);
+
+	parse(code.c_str());
+	validate();
+}
+
 }

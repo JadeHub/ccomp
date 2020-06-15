@@ -16,6 +16,8 @@ extern "C"
 #define ERR_UNKNOWN_VAR 6
 #define ERR_UNKNOWN_FUNC 7
 #define ERR_INVALID_PARAMS 8
+#define ERR_DUP_SYMBOL 9	//either function or global var
+#define ERR_INVALID_INIT 10 //global must have const init
 
 struct token;
 

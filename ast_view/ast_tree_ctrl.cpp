@@ -238,12 +238,20 @@ void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t
     sprintf_s(item->name, "TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
+    ast_var_decl_t* var = tl->decls;
+    while (var)
+    {
+        InsertVariableDefinition(tree_item, var, "global: ");
+        var = var->next;
+    }
+
     ast_function_decl_t* fn = tl->functions;
     while (fn)
     {
         InsertFunction(tree_item, fn);
         fn = fn->next;
     }
+
 }
 
 void DeleteItem(HTREEITEM item)

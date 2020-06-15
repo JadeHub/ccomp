@@ -130,7 +130,6 @@ void gen_expression(ast_expression_t* expr)
 	else if (expr->kind == expr_var_ref)
 	{
 		int bsp_offset = var_get_bsp_offset(_var_set, expr->data.var_reference.name);
-		//stack_var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
 		//if (!var)
 		if(bsp_offset == 0)
 		{
@@ -284,7 +283,7 @@ void gen_expression(ast_expression_t* expr)
 
 void gen_var_decl(ast_var_decl_t* var_decl)
 {
-	stack_var_data_t* var = var_decl_stack_var(_var_set, var_decl);
+	var_data_t* var = var_decl_stack_var(_var_set, var_decl);
 	assert(var);
 	if (var_decl->expr)
 	{
