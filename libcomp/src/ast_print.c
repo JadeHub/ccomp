@@ -2,7 +2,10 @@
 
 #include <stdio.h>
 
+#if 0
+
 static uint32_t _cur_indent = 0;
+
 
 static void _print_indent()
 {
@@ -119,3 +122,64 @@ void ast_print(ast_trans_unit_t* tl)
 	ast_print_function(tl->functions);
 
 }
+
+#endif
+
+const char* ast_op_name(op_kind k)
+{
+	switch (k)
+	{
+	case op_sub:
+		return "[-] Subtraction";
+	case op_negate:
+		return "[-] Negation";
+	case op_compliment:
+		return "[~] Compliment";
+	case op_not:
+		return "[!] Not";
+	case op_add:
+		return "[+] Addition";
+	case op_mul:
+		return "[*] Multiplication";
+	case op_div:
+		return "[/] Division";
+	case op_and:
+		return "[&&] And";
+	case op_or:
+		return "[||] Or";
+	case op_eq:
+		return "[==] Equal";
+	case op_neq:
+		return "[!=] Not equal";
+	case op_lessthan:
+		return "[<] Less than";
+	case op_lessthanequal:
+		return "[<=] Less than or equal";
+	case op_greaterthan:
+		return "[>] Greater than";
+	case op_greaterthanequal:
+		return "[>] Greater than or equal";
+	case op_shiftleft:
+		return "[<<] Shift left";
+	case op_shiftright:
+		return "[>>] Shift right";
+	case op_bitwise_and:
+		return "[&] Bitwise and";
+	case op_bitwise_or:
+		return "[|] Bitwise or";
+	case op_bitwise_xor:
+		return "[^] Bitwise xor";
+	case op_mod:
+		return "[%] Modulo";
+	case op_prefix_inc:
+		return "[++] Prefix inc";
+	case op_prefix_dec:
+		return "[-] Prefix dec";
+	case op_postfix_inc:
+		return "[++] Postfix inc";
+	case op_postfix_dec:
+		return "[--] Postfix inc";
+	}
+	return "ERROR";
+}
+

@@ -103,14 +103,52 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
     }
 }
 
-void InsertVariableDefinition(HTREEITEM parent, ast_var_decl_t* var, const char* prefix)
+void InsertVariableDefinition(HTREEITEM parent, ast_declaration_t* var, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(var->tokens);
-    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->name);
+    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->data.var.name);
     HTREEITEM tree_item = TreeInsert(parent, item);
-    if (var->expr)
+    if (var->data.var.expr)
     {
-        InsertExpression(tree_item, var->expr, "= expr: ");
+        InsertExpression(tree_item, var->data.var.expr, "= expr: ");
+    }
+}
+
+HTREEITEM InsertFunctionDeclaration(HTREEITEM parent, ast_declaration_t* func, const char* prefix)
+{
+    AstTreeItem* item = AllocTreeItem(func->tokens);
+    sprintf_s(item->name, "%sFunction Decl: %s", prefix, func->data.func.name);
+    HTREEITEM tree_item = TreeInsert(parent, item);
+
+    ast_function_param_t* param = func->data.func.params;
+    while (param)
+    {
+        AstTreeItem* item = AllocTreeItem(param->tokens);
+        sprintf_s(item->name, "Parameter: %s", param->name);
+        TreeInsert(tree_item, item);
+        param = param->next;
+    }
+
+    ast_block_item_t* blk = func->data.func.blocks;
+    while (blk)
+    {
+        InsertBlockItem(tree_item, blk);
+        blk = blk->next;
+    }
+
+    return tree_item;
+}
+
+void InsertDeclaration(HTREEITEM parent, ast_declaration_t* decl, const char* prefix)
+{
+    switch (decl->kind)
+    {
+    case decl_var:
+        InsertVariableDefinition(parent, decl, prefix);
+        break;
+    case decl_func:
+        InsertFunctionDeclaration(parent, decl, prefix);
+        break;
     }
 }
 
@@ -163,7 +201,7 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
         if(smnt->data.for_smnt.init)
             InsertExpression(tree_item, smnt->data.for_smnt.init, "init ");
         if (smnt->data.for_smnt.init_decl)
-            InsertVariableDefinition(tree_item, smnt->data.for_smnt.init_decl, "init ");
+            InsertDeclaration(tree_item, smnt->data.for_smnt.init_decl, "init ");
 
         if (smnt->data.for_smnt.condition)
             InsertExpression(tree_item, smnt->data.for_smnt.condition, "cond ");
@@ -202,35 +240,23 @@ void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk)
     {
         InsertStatement(parent, blk->smnt, "");
     }
-    else if (blk->kind == blk_var_def)
+    else if (blk->kind == blk_decl)
     {
-        InsertVariableDefinition(parent, blk->var_decl, "");
+        InsertDeclaration(parent, blk->decl, "");
     }
 }
 
-void InsertFunction(HTREEITEM parent, ast_function_decl_t* func)
+/*void InsertFunction(HTREEITEM parent, ast_function_t* func)
 {
-    AstTreeItem* item = AllocTreeItem(func->tokens);
-    sprintf_s(item->name, "Function: %s", func->name);
-    HTREEITEM tree_item = TreeInsert(parent, item);
-
-    ast_function_param_t* param = func->params;
-    while (param)
-    {
-        AstTreeItem* item = AllocTreeItem(param->tokens);
-        sprintf_s(item->name, "Parameter: %s", param->name);
-        TreeInsert(tree_item, item);
-        param = param->next;
-    }
+    HTREEITEM tree_item = InsertFunctionDeclaration(parent, func->decl, "");
 
     ast_block_item_t* blk = func->blocks;
-
     while (blk)
     {
         InsertBlockItem(tree_item, blk);
         blk = blk->next;
     }
-}
+}*/
 
 void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t* tl)
 {
@@ -238,20 +264,20 @@ void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t
     sprintf_s(item->name, "TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    ast_var_decl_t* var = tl->decls;
-    while (var)
+    ast_declaration_t* decl = tl->decls;
+    while (decl)
     {
-        InsertVariableDefinition(tree_item, var, "global: ");
-        var = var->next;
+        InsertDeclaration(tree_item, decl, "global: ");
+        decl = decl->next;
     }
 
-    ast_function_decl_t* fn = tl->functions;
+   /* ast_function_t* fn = tl->functions;
     while (fn)
     {
         InsertFunction(tree_item, fn);
         fn = fn->next;
     }
-
+    */
 }
 
 void DeleteItem(HTREEITEM item)

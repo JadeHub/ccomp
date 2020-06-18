@@ -39,11 +39,32 @@ void ast_destroy_expression(ast_expression_t* expr)
 	free(expr);
 }
 
-void ast_destroy_var_decl(ast_var_decl_t* v)
+void ast_destroy_param_list(ast_function_param_t* params)
 {
-	if (!v) return;
-	ast_destroy_expression(v->expr);
-	free(v);
+	ast_function_param_t* param = params;
+
+	while (param)
+	{
+		ast_function_param_t* next = param->next;
+		free(param);
+		param = next;
+	}
+}
+
+void ast_destroy_declaration(ast_declaration_t* decl)
+{
+	if (!decl) return;
+
+	switch (decl->kind)
+	{
+	case decl_var:
+		ast_destroy_expression(decl->data.var.expr);
+		break;
+	case decl_func:
+		ast_destroy_param_list(decl->data.func.params);
+		break;
+	}
+	free(decl);
 }
 
 void ast_destroy_block_item(ast_block_item_t* b)
@@ -54,8 +75,8 @@ void ast_destroy_block_item(ast_block_item_t* b)
 	case blk_smnt:
 		ast_destroy_statement(b->smnt);
 		break;
-	case blk_var_def:
-		ast_destroy_var_decl(b->var_decl);
+	case blk_decl:
+		ast_destroy_declaration(b->decl);
 	};
 	free(b);
 
@@ -96,7 +117,7 @@ void ast_destroy_statement(ast_statement_t* smnt)
 			break;
 		case smnt_for:
 		case smnt_for_decl:
-			ast_destroy_var_decl(smnt->data.for_smnt.init_decl);
+			ast_destroy_declaration(smnt->data.for_smnt.init_decl);
 			ast_destroy_expression(smnt->data.for_smnt.init);
 			ast_destroy_expression(smnt->data.for_smnt.condition);
 			ast_destroy_expression(smnt->data.for_smnt.post);
@@ -109,22 +130,22 @@ void ast_destroy_statement(ast_statement_t* smnt)
 void ast_destroy_function_decl(ast_function_decl_t* fn)
 {
 	if (!fn) return;
-	ast_block_item_t* smnt = fn->blocks;
+	/*ast_block_item_t* smnt = fn->blocks;
 	while (smnt)
 	{
 		ast_block_item_t* next = smnt->next;
 		ast_destroy_block_item(smnt);
 		smnt = next;
-	}
+	}*/
 
-	ast_function_param_t* param = fn->params;
+	/*ast_function_param_t* param = fn->params;
 
 	while (param)
 	{
 		ast_function_param_t* next = param->next;
 		free(param);
 		param = next;
-	}
+	}*/
 
 	free(fn);
 }
@@ -132,7 +153,7 @@ void ast_destroy_function_decl(ast_function_decl_t* fn)
 void ast_destory_translation_unit(ast_trans_unit_t* tl)
 {
 	if (!tl) return;
-	ast_destroy_function_decl(tl->functions);
+	//ast_destroy_function_decl(tl->functions);
 	free(tl);
 }
 
@@ -188,21 +209,6 @@ bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb c
 		if (!cb(block))
 			return false;
 		block = next;
-	}
-	return true;
-}
-
-bool ast_visit_functions(ast_trans_unit_t* tl, ast_fn_decl_visitor_cb cb)
-{
-	ast_function_decl_t* fn = tl->functions;
-	ast_function_decl_t* next;
-
-	while (fn)
-	{
-		next = fn->next;
-		if (!cb(fn))
-			return false;
-		fn = next;
 	}
 	return true;
 }

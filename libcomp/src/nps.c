@@ -63,7 +63,7 @@ void nps_insert(named_ptr_set_t* set, const char* name, void* ptr)
 
 bool nps_remove(named_ptr_set_t* set, const char* name)
 {
-	if (!set->items) return;
+	if (!set->items) return false;
 
 	if (strcmp(set->items->name, name) == 0)
 	{

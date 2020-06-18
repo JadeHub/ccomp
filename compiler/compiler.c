@@ -75,10 +75,9 @@ int main(int argc, char* argv[])
         toks = lex_source(&sr);
     }
 
-   // print_tokens(toks);
+  
     ast_trans_unit_t* ast = parse_translation_unit(toks);
-    validate_tl(ast);
-   // ast_print(ast);
+    validate_tl(ast);  
     code_gen(ast, &asm_print);
 }
 

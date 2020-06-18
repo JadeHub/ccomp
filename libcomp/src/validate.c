@@ -12,26 +12,40 @@ static struct named_ptr_set* _globals;
 static var_set_t* _var_set;
 
 bool process_statement(ast_statement_t* smnt);
+bool process_function_decl(ast_declaration_t* fn);
 
 static bool comp_func_decl_params(ast_function_decl_t* fn1, ast_function_decl_t* fn2)
 {
 	return fn1->param_count == fn2->param_count;
 }
 
-bool process_variable_definition(ast_var_decl_t* decl)
+bool process_variable_declaration(ast_declaration_t* decl)
 {
-	if (!decl)
+	ast_var_decl_t* var = &decl->data.var;
+	if (!var)
 		return true;
 
-	var_data_t* existing = var_cur_block_find(_var_set, decl->name);
+	var_data_t* existing = var_cur_block_find(_var_set, var->name);
 
 	if (existing)
 	{
-		diag_err(decl->tokens.start, ERR_DUP_VAR, "var %s already declared at %s",
-			decl->name, diag_pos_str(var_get_tok(existing)));
+		diag_err(decl->tokens.start, ERR_DUP_VAR, "var %s already declared at",
+			var->name);
 		return false;
 	}
-	var_decl_stack_var(_var_set, decl);
+	var_decl_stack_var(_var_set, var);
+	return true;
+}
+
+bool process_declaration(ast_declaration_t* var)
+{
+	switch (var->kind)
+	{
+	case decl_var:
+		return process_variable_declaration(var);
+	case decl_func:
+		return process_function_decl(var);
+	}
 	return true;
 }
 
@@ -40,7 +54,7 @@ bool process_variable_reference(ast_expression_t* expr)
 	if (!expr)
 		return true;
 
-	var_data_t* existing = var_cur_block_find(_var_set, expr->data.var_reference.name);
+	var_data_t* existing = var_find(_var_set, expr->data.var_reference.name);
 	if (!existing)
 	{
 		diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined",expr->data.var_reference.name);
@@ -53,7 +67,7 @@ bool process_variable_assignment(ast_expression_t* expr)
 {
 	if (!expr)
 		return true;
-	var_data_t* existing = var_cur_block_find(_var_set, expr->data.assignment.name);
+	var_data_t* existing = var_find(_var_set, expr->data.assignment.name);
 	if (!existing)
 	{
 		diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined", expr->data.assignment.name);
@@ -135,9 +149,9 @@ bool process_block_item(ast_block_item_t* block)
 	{
 		return process_statement(block->smnt);
 	}
-	else if (block->kind == blk_var_def)
+	else if (block->kind == blk_decl)
 	{
-		return process_variable_definition(block->var_decl);
+		process_declaration(block->decl);
 	}	
 	return false;
 }
@@ -161,7 +175,7 @@ bool process_statement(ast_statement_t* smnt)
 		break;
 	case smnt_for:
 	case smnt_for_decl:
-		if (!process_variable_definition(smnt->data.for_smnt.init_decl))
+		if (!process_declaration(smnt->data.for_smnt.init_decl))
 			return false;
 		if (!process_expression(smnt->data.for_smnt.init))
 			return false;
@@ -190,14 +204,15 @@ bool process_statement(ast_statement_t* smnt)
 	return true;
 }
 
-bool process_function_decl(ast_function_decl_t* fn)
+bool process_function_decl(ast_declaration_t* decl)
 {
+	ast_function_decl_t* fn = &decl->data.func;
 	ast_var_decl_t* var = (ast_var_decl_t*)nps_lookup(_globals, fn->name);
 	if (var)
 	{
-		diag_err(fn->tokens.start, ERR_DUP_SYMBOL,
-			"function declaration of '%s' shadows global var at %s",
-			fn->name, diag_pos_str(var->tokens.start));
+		diag_err(decl->tokens.start, ERR_DUP_SYMBOL,
+			"function declaration of '%s' shadows global var at",
+			fn->name);
 		return false;
 	}
 
@@ -207,13 +222,13 @@ bool process_function_decl(ast_function_decl_t* fn)
 		if (existing->blocks && fn->blocks)
 		{
 			//There can only be one definition of a function
-			diag_err(fn->tokens.start, ERR_FUNC_DUP_BODY, 
+			diag_err(decl->tokens.start, ERR_FUNC_DUP_BODY,
 				"function '%s' already has a body", fn->name);
 			return false;
 		}
 		if (!comp_func_decl_params(existing, fn))
 		{
-			diag_err(fn->tokens.start, ERR_FUNC_DIFF_PARAMS,
+			diag_err(decl->tokens.start, ERR_FUNC_DIFF_PARAMS,
 				"duplicate declarations of function '%s' have different parameter lists",
 				fn->name);
 			return false;
@@ -224,46 +239,51 @@ bool process_function_decl(ast_function_decl_t* fn)
 		nps_insert(_functions, fn->name, fn);
 	}
 
-	_var_set = var_init_set(fn);
-	ast_visit_block_items(fn->blocks, process_block_item);
-	var_destory_set(_var_set);
+	if (fn->blocks)
+	{
+		var_enter_function(_var_set, &decl->data.func);
+		ast_visit_block_items(fn->blocks, process_block_item);
+		var_leave_function(_var_set);
+	}
 	return true;
 }
 
-bool process_global_var(ast_var_decl_t* decl)
+bool process_global_var(ast_declaration_t* decl)
 {
-	ast_function_decl_t* fn = (ast_function_decl_t*)nps_lookup(_functions, decl->name);
+	ast_var_decl_t* var = &decl->data.var;
+	ast_function_decl_t* fn = (ast_function_decl_t*)nps_lookup(_functions, var->name);
 	if (fn)
 	{
-		diag_err(fn->tokens.start, ERR_DUP_SYMBOL,
-			"global var declaration of '%s' shadows function at %s",
-			decl->name, diag_pos_str(fn->tokens.start));
+		diag_err(decl->tokens.start, ERR_DUP_SYMBOL,
+			"global var declaration of '%s' shadows function at",
+			var->name);
 		return false;
 	}
 
-	ast_var_decl_t* existing = (ast_var_decl_t*)nps_lookup(_globals, decl->name);
+	ast_var_decl_t* existing = (ast_var_decl_t*)nps_lookup(_globals, var->name);
 	if (existing)
 	{
-		if (existing->expr && decl->expr)
+		if (existing->expr && var->expr)
 		{
 			diag_err(decl->tokens.start, ERR_DUP_VAR,
-				"multiple definition of global var '%s'. prev at %s",
-				decl->name,
-				diag_pos_str(existing->tokens.start));
+				"multiple definition of global var '%s'. prev at",
+				var->name);
 			return false;
 		}
-		nps_remove(_globals, decl->name);
+		nps_remove(_globals, var->name);
 	}
 
-	if (decl->expr && decl->expr->kind != expr_int_literal)
+	if (var->expr && var->expr->kind != expr_int_literal)
 	{
 		diag_err(decl->tokens.start, ERR_INVALID_INIT,
 			"init of global var '%s' with non const value",
-			decl->name);
+			var->name);
 		return false;
 	}
 
-	nps_insert(_globals, decl->name, decl);
+	var_decl_global_var(_var_set, var);
+
+	nps_insert(_globals, var->name, var);
 
 	return true;
 }
@@ -273,14 +293,19 @@ void validate_tl(ast_trans_unit_t* tl)
 	_functions = nps_create();
 	_globals = nps_create();
 
-	ast_var_decl_t* global = tl->decls;
-	while (global)
+	_var_set = var_init_set();
+
+	ast_declaration_t* decl = tl->decls;
+	while (decl)
 	{
-		process_global_var(global);
-		global = global->next;
+		if(decl->kind == decl_var)
+			process_global_var(decl);
+		else if (decl->kind == decl_func)
+			process_function_decl(decl);
+		decl = decl->next;
 	}
 
-	ast_visit_functions(tl, process_function_decl);
+	var_destory_set(_var_set);
 
 	nps_destroy(_functions);
 	nps_destroy(_globals);

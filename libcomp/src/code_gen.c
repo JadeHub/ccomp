@@ -78,12 +78,16 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 
 void gen_assign_expression(token_t* tok, const char* var_name)
 {
-	int bsp_offset = var_get_bsp_offset(_var_set, var_name);
-	if (bsp_offset== 0)
+	var_data_t* var = var_find(_var_set, var_name);
+	if(!var)
 	{
-		diag_err(tok, ERR_SYNTAX, "Assignment to unknown variabe %s", var_name);
+		diag_err(tok, ERR_UNKNOWN_VAR, "assignment to unknown variabe %s", var_name);
+		return;
 	}
-	_gen_asm("movl %%eax, %d(%%ebp)", bsp_offset);
+	if (var->bsp_offset != 0)
+		_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+	else //global
+		_gen_asm("movl %%eax, _var_%s", var->name);
 }
 
 void gen_expression(ast_expression_t* expr)
@@ -129,13 +133,18 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_var_ref)
 	{
-		int bsp_offset = var_get_bsp_offset(_var_set, expr->data.var_reference.name);
-		//if (!var)
-		if(bsp_offset == 0)
+		var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
+		
+		if (!var)
 		{
-			diag_err(expr->tokens.start, ERR_SYNTAX, "Unknown variabe reference %s", expr->data.var_reference.name);
+			diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown variabe reference %s", expr->data.var_reference.name);
+			return;
 		}
-		_gen_asm("movl %d(%%ebp), %%eax", bsp_offset);
+
+		if (var->bsp_offset != 0)
+			_gen_asm("movl %d(%%ebp), %%eax", var->bsp_offset);
+		else //global
+			_gen_asm("movl _var_%s, %%eax", var->name);
 	}
 	else if (expr->kind == expr_int_literal)
 	{
@@ -441,7 +450,7 @@ void gen_statement(ast_statement_t* smnt)
 		gen_scope_block_enter();
 
 		if (f_data->init_decl)
-			gen_var_decl(f_data->init_decl);
+			gen_var_decl(&f_data->init_decl->data.var);
 
 		_cur_break_label = label_end;
 		_cur_cont_label = label_cont;
@@ -482,9 +491,10 @@ void gen_block_item(ast_block_item_t* bi)
 	{
 		gen_statement(bi->smnt);
 	}
-	else if (bi->kind == blk_var_def)
+	else if (bi->kind == blk_decl)
 	{
-		gen_var_decl(bi->var_decl);
+		if(bi->decl->kind == decl_var)
+			gen_var_decl(&bi->decl->data.var);
 	}
 }
 
@@ -520,21 +530,50 @@ void gen_function(ast_function_decl_t* fn)
 	_gen_asm("\n");
 }
 
+void gen_global_var(ast_var_decl_t* var)
+{
+	_gen_asm(".globl _var_%s", var->name); //export symbol
+	if (var->expr && var->expr->data.const_val != 0)
+	{
+		//initialised var goes in .data section
+		_gen_asm(".data"); //data section
+		_gen_asm(".align 4");
+		_gen_asm("_var_%s:", var->name); //label
+		_gen_asm(".long %d", var->expr->data.const_val); //data and init value
+	}
+	else
+	{
+		//0 or uninitialised var goes in .BSS section
+		_gen_asm(".bss"); //bss section
+		_gen_asm(".align 4");
+		_gen_asm("_var_%s:", var->name); //label
+		_gen_asm(".zero 4"); //data length		
+	}
+	_gen_asm(".text"); //back to text section
+	_gen_asm("\n");
+}
+
 void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
 {
 	_asm_cb = cb;
+	_var_set = var_init_set();
 
-	ast_function_decl_t* fn = ast->functions;
+	ast_declaration_t* decl = ast->decls;
 
-	while (fn)
+	while (decl)
 	{
-		if (fn->blocks)
+		if (decl->kind == decl_func && decl->data.func.blocks)
 		{
-			_var_set = var_init_set(fn);
-			gen_function(fn);
-			var_destory_set(_var_set);
-			_var_set = NULL;
+			var_enter_function(_var_set, &decl->data.func);
+			gen_function(&decl->data.func);
+			var_leave_function(_var_set);
 		}
-		fn = fn->next;
+		else if (decl->kind == decl_var)
+		{
+			var_decl_global_var(_var_set, &decl->data.var);
+			gen_global_var(&decl->data.var);
+		}
+		decl = decl->next;
 	}
+	var_destory_set(_var_set);
 }

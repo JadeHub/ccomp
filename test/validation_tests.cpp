@@ -110,4 +110,19 @@ TEST_F(ValidationTest, global_fn_shadows_var)
 	validate();
 }
 
+TEST_F(ValidationTest, fn_decl_in_fn_definition)
+{
+	std::string code = R"(
+
+	int main()
+	{
+		int foo();
+		return 2;
+	}
+
+	)";
+
+	parse(code.c_str());
+	validate();
+}
 }

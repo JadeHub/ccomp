@@ -143,13 +143,55 @@ typedef struct ast_expression
 }ast_expression_t;
 
 /* Declaration */
+
 typedef struct ast_var_decl
 {
-	token_range_t tokens;
-	char name[MAX_LITERAL_NAME]; //if kind == smnt_var_decl
+	char name[MAX_LITERAL_NAME];
 	ast_expression_t* expr;
-	struct ast_var_decl* next;
 }ast_var_decl_t;
+
+typedef struct ast_function_param
+{
+	token_range_t tokens;
+	char name[MAX_LITERAL_NAME];
+	//type etc
+
+	struct ast_function_param* next;
+}ast_function_param_t;
+
+typedef struct ast_func_decl
+{
+	char name[MAX_LITERAL_NAME];
+
+	ast_function_param_t* params;
+	uint32_t param_count;
+	//return type
+	//static?
+
+	//Definitions will have a list of blocks
+	struct ast_block_item* blocks;
+
+}ast_function_decl_t;
+
+typedef enum
+{
+	decl_var,
+	decl_func
+}ast_decl_type;
+
+typedef struct ast_declaration
+{
+	token_range_t tokens;
+	ast_decl_type kind;
+
+	union
+	{
+		ast_var_decl_t var;
+		ast_function_decl_t func;
+	}data;
+
+	struct ast_declaration* next;
+}ast_declaration_t;
 
 /* Statement */
 typedef enum
@@ -192,7 +234,7 @@ for(i=0;i<10;i++)
 */
 typedef struct
 {
-	ast_var_decl_t* init_decl; //for(int i = 0;...
+	ast_declaration_t* init_decl; //for(int i = 0;...
 	ast_expression_t* init; //for(i = 0;...
 	ast_expression_t* condition;
 	ast_expression_t* post;
@@ -219,7 +261,7 @@ typedef struct ast_statement
 typedef enum
 {
 	blk_smnt,
-	blk_var_def
+	blk_decl
 }ast_block_item_type;
 
 typedef struct ast_block_item
@@ -230,69 +272,26 @@ typedef struct ast_block_item
 	union
 	{
 		ast_statement_t* smnt;
-		ast_var_decl_t* var_decl;
+		ast_declaration_t* decl;
 	};
 	struct ast_block_item* next;
 }ast_block_item_t;
-
-/* Functions */
-
-typedef struct ast_function_param
-{
-	token_range_t tokens;
-	char name[MAX_LITERAL_NAME];
-	//type etc
-
-	struct ast_function_param* next;
-}ast_function_param_t;
-
-typedef struct ast_function
-{
-	token_range_t tokens;
-	char name[MAX_LITERAL_NAME];
-
-	ast_function_param_t* params;
-	uint32_t param_count;
-	//return type
-	//static?
-
-	ast_block_item_t* blocks;
-
-	struct ast_function* next;
-}ast_function_decl_t;
 
 typedef struct
 {
 	token_range_t tokens;
 	char path[256];
-	ast_var_decl_t* decls; //global vars
-	ast_function_decl_t* functions;
+	ast_declaration_t* decls;
 }ast_trans_unit_t;
 
 void ast_print(ast_trans_unit_t* tl);
 
 const char* ast_op_name(op_kind);
 
-void ast_destroy_function_decl(ast_function_decl_t* fn);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 
 typedef bool (*ast_fn_decl_visitor_cb)(ast_function_decl_t*);
 typedef bool (*ast_block_item_visitor_cb)(ast_block_item_t*);
 typedef bool (*ast_expr_visitor_cb)(ast_expression_t*);
-//typedef bool (*ast_smnt_visitor_cb)(ast_statement_t*, struct ast_visitor_cb*);
-//typedef bool (*ast_if_smnt_visitor_cb)(ast_statement_t*, struct ast_visitor_cb*);
 
-/*typedef struct ast_visitor_cb
-{
-	ast_fn_decl_visitor_cb on_fn_decl;
-	ast_var_decl_visitor_cb on_var_decl;
-
-	ast_smnt_visitor_cb on_expr_smnt;
-	ast_smnt_visitor_cb on_if_smnt;
-	ast_smnt_visitor_cb on_return_smnt;
-
-}ast_visitor_cb_t;
-*/
-
-bool ast_visit_functions(ast_trans_unit_t*, ast_fn_decl_visitor_cb cb);
 bool ast_visit_block_items(ast_block_item_t*, ast_block_item_visitor_cb cb);
