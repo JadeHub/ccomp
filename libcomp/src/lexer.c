@@ -7,7 +7,7 @@ static token_t _invalid_tok;
 
 static inline bool _get_next_and_adv(source_range_t* sr, const char** pos, char* result)
 {
-	if (*pos < sr->end-2) //skip the null and the last char
+	if (*pos < sr->end) //skip the null and the last char
 	{
 		*result = **pos;
 		(*pos)++;
@@ -109,7 +109,7 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 	result->len = 0;
 	result->kind = tok_num_literal;
 
-	char ch;
+	char ch = *pos;
 
 	if (!_get_next_and_adv(sr, &pos, &ch))
 	{

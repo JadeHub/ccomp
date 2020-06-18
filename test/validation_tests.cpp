@@ -9,8 +9,6 @@ extern "C"
 #include <libcomp/include/validate.h>
 }
 
-namespace libctest {
-
 using namespace ::testing;
 
 class ValidationTest : public ::testing::Test
@@ -124,5 +122,4 @@ TEST_F(ValidationTest, fn_decl_in_fn_definition)
 
 	parse(code.c_str());
 	validate();
-}
 }
