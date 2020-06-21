@@ -79,8 +79,16 @@ const char* tok_kind_spelling(tok_kind k)
 		return "break";
 	case tok_continue:
 		return "continue";
+	case tok_struct:
+		return "struct";
+	case tok_union:
+		return "union";
 	case tok_comma:
 		return ",";
+	case tok_void:
+		return "void";
+	case tok_fullstop:
+		return ".";
 	}
 	return "invalid";
 }

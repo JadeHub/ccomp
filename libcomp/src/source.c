@@ -5,13 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-int foo(int x) {
-	{
-		int x = 3;
-	}
-}
-
-
 typedef struct
 {
 	source_range_t range;

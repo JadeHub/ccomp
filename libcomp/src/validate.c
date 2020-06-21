@@ -65,14 +65,14 @@ bool process_variable_reference(ast_expression_t* expr)
 
 bool process_variable_assignment(ast_expression_t* expr)
 {
-	if (!expr)
+	/*if (!expr)
 		return true;
 	var_data_t* existing = var_find(_var_set, expr->data.assignment.name);
 	if (!existing)
 	{
 		diag_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined", expr->data.assignment.name);
 		return false;
-	}
+	}*/
 
 	return true;
 }

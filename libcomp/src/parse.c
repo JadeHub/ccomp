@@ -5,9 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
+ast_type_spec_t* try_parse_type_spec();
 
 static token_t* _cur_tok = NULL;
 
@@ -47,7 +49,7 @@ static void expect_next(tok_kind k)
 	expect_cur(k);
 }
 
-static bool _is_postfix_op(token_t* tok)
+static bool _is_postfix_unary_op(token_t* tok)
 {
 	switch (tok->kind)
 	{
@@ -70,6 +72,32 @@ static bool _is_unary_op(token_t* tok)
 		return true;
 	}
 	return false;
+}
+
+static bool _is_builtin_type(token_t* tok)
+{
+	return tok->kind == tok_int ||
+		tok->kind == tok_void;
+}
+
+static uint32_t _get_builtin_type_size(token_t* tok)
+{
+	if (tok->kind == tok_int)
+		return 4;
+	return 0;
+}
+
+static type_kind _get_builtin_type_kind(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_int:
+		return type_int;
+	case tok_void:
+		return type_void;
+	}
+	diag_err(tok, ERR_SYNTAX, "unknown type %s", tok_kind_spelling(tok->kind));
+	return type_void;
 }
 
 static op_kind _get_postfix_operator(token_t* tok)
@@ -160,36 +188,76 @@ static ast_expression_t* _alloc_expr()
 }
 
 /*
-<translation_unit> ::= { <function> | <declaration> }
-<declaration> :: = <var_declaration> | <function_declaration> ";"
-<var_declaration> ::= "int" < id > [= <exp>] ";"
-<function_declaration> ::= "int" <id> "(" [ "int" <id> { "," "int" <id> } ] ")"
+<translation_unit> ::= { <function> 
+				| <declaration> }
+<declaration> :: = <var_declaration> ";"
+				| <type-specifier> ";"
+				| <function_declaration> ";"
+<var_declaration> ::= <type_specifier> <id> [=<exp>]
+<function_declaration> ::= <type_specifier> <id> "(" [ <type_specifier> <id> { "," <type_specifier> <id> } ] ")"
 <function> ::= <function_declaration> "{" { <block-item> } "}"
-<block-item> ::= <statement> | <declaration> 
+<block-item> ::= [ <statement> | <declaration> ]
 <statement> ::= "return" <exp> ";"
-			  | <exp> ";"
-			  | "int" <id> [ = <exp>] ";"
-<exp> ::= <assignment_exp>
-<assignment_exp> ::= <id> "=" <exp> | <conditional-exp>
-
+			  | <exp-option> ";"
+			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+			  | "{" { <block-item> } "}
+			  | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+			  | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+			  | "while" "(" <exp> ")" <statement>
+			  | "do" <statement> "while" <exp> ";"
+			  | "break" ";"
+			  | "continue" ";"
+			  | <var_declaration> ";"
+<exp> ::= <assignment-exp>
+<assignment-exp> ::= <unary-exp> "=" <assignment-exp>
+				| <conditional-exp>
 <conditional-exp> ::= <logical-or-exp> "?" <exp> ":" <conditional-exp>
-
 <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 <logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
-
-<bitwise-or> :: = <bitwise-xor> { ("|") <bitwise-xor> }
-<bitwise-xor> :: = <bitwise-and> { ("^") <bitwise-and> }
-<bitwise-and> :: = <equality-exp> { ("&") <equality-exp> }
-
+<bitwise-or> ::= <bitwise-xor> { ("|") <bitwise-xor> }
+<bitwise-xor> ::= <bitwise-and> { ("^") <bitwise-and> }
+<bitwise-and> ::= <equality-exp> { ("&") <equality-exp> }
 <equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
 <relational-exp> ::= <bitshift-exp> { ("<" | ">" | "<=" | ">=") <bitshift-exp> }
 <bitshift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
-<additive-exp> ::= <term> { ("+" | "-") <term> }
+<additive-exp> ::= <multiplacative-exp> { ("+" | "-") <multiplacative-exp> }
+<multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
+<cast-exp> ::= <unary-exp>
+<unary-exp> ::= <postfix_op>
+				| <unary-op> <cast-exp>
+
+<temp-exp> ::= <primary-exp> { ("." || "++" || "--") <primary-exp> }
+
+<function-call-exp> ::= id "(" [ <exp> { "," <exp> } ] ")"
+<member-access-exp> ::= id "." id
+
+<postfix-exp> ::= <primary-exp> 
+				| <postfix-exp> "(" [ <exp> { "," <exp> } ] ")"
+				| <postfix-exp> "." <id>
+				| <postfix-exp> ("++" || "--")
+				
+				| <postfix-exp> "[" <exp> "]"
+				| <postfix-exp> "->" <id>
+<primary-exp> ::= <id> | <literal> | "(" <exp> ")"
+
+
+
 <term> ::= <factor> { ("*" | "/") <factor> }
-<factor> ::= <function-call> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id> [ <postfix_op> ]
+<factor> ::= <function-call>
+				| "(" <exp> ")"
+				| <unary_op> <factor>
+				| <int>
+				| <id> [ <postfix_op> ]
 <function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
 <postfix_op> ::= "++" | "--"
+
+
 <unary_op> ::= "!" | "~" | "-" | "++" | "--"
+<type_specifier> ::= "int"
+				| <struct_specifier>
+<struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
+<struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
+<struct_decl> ::= <type_specifier> [ <id> ] [ ":" <int> ]
 */
 
 tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
@@ -201,6 +269,7 @@ tok_kind equality_ops[] = { tok_equalequal, tok_exclaimequal, tok_invalid };
 tok_kind relational_ops[] = { tok_lesser, tok_lesserequal, tok_greater, tok_greaterequal, tok_invalid };
 tok_kind bitshift_ops[] = { tok_lesserlesser, tok_greatergreater, tok_invalid };
 tok_kind additive_ops[] = { tok_plus, tok_minus, tok_invalid };
+tok_kind multiplacative_ops[] = { tok_star, tok_slash, tok_percent, tok_invalid };
 
 static bool tok_in_set(tok_kind kind, tok_kind* set)
 {
@@ -220,13 +289,12 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 	token_t* start = current();
 	ast_expression_t* expr = sub_parse();
 	while (tok_in_set(current()->kind, op_set))
-	{
-		
+	{		
 		op_kind op = _get_binary_operator(current());
 		next_tok();
 		ast_expression_t* rhs_expr = sub_parse();
 
-		//our two factors are now expr and rhs_expr
+		//our two sides are now expr and rhs_expr
 		//build a new binary op expression for expr
 		ast_expression_t* cur_expr = expr;
 		expr = _alloc_expr();
@@ -241,56 +309,103 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 }
 
 /*
-<function_params> ::= [ "int" <id> { "," "int" <id> } ]
+<struct_decl> :: = <type_specifier>[<id>][":" <int> ] ";"
 */
-void parse_function_parameters(ast_function_decl_t* func)
+ast_struct_member_t* parse_struct_member()
 {
-	while (current_is(tok_int))
+	ast_struct_member_t* result = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
+	memset(result, 0, sizeof(ast_struct_member_t));
+	result->tokens.start = current();
+	result->type = try_parse_type_spec();
+	if (!result->type)
 	{
-		ast_function_param_t* param = (ast_function_param_t*)malloc(sizeof(ast_function_param_t));
-		memset(param, 0, sizeof(ast_function_param_t));
-		param->tokens.start = current();
-		expect_next(tok_identifier);
-		tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
-		param->next = func->params;
-		func->params = param;
-		func->param_count++;
-		next_tok();
-		param->tokens.end = current();
-		if (!current_is(tok_comma))
-			break;
-		expect_next(tok_int);
+		diag_err(current(), ERR_SYNTAX, "expected type specification");
 	}
+
+	if (current_is(tok_identifier))
+	{
+		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
+		next_tok();
+	}
+
+	if (current_is(tok_colon))
+	{
+		next_tok();
+		expect_cur(tok_num_literal);
+		result->bit_size = current()->data;
+		next_tok();
+	}
+
+	expect_cur(tok_semi_colon);
+	next_tok();
+	result->tokens.end = current();
+	return result;
 }
 
 /*
-<function_declaration> ::= "int" <id> "(" [ <function_params ] ")"
+<struct_specifier> :: = ("struct" | "union") [<id>] ["{" < struct_decl_list > "}"]
 */
-ast_declaration_t* try_parse_func_decl()
+ast_struct_spec_t* parse_struct_spec()
+{
+	ast_struct_spec_t* result = (ast_struct_spec_t*)malloc(sizeof(ast_struct_spec_t));
+	memset(result, 0, sizeof(ast_struct_spec_t));
+	result->kind = current_is(tok_struct) ? struct_struct : struct_union;
+	next_tok();
+
+	if (current_is(tok_identifier))
+	{
+		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
+		next_tok();
+	}
+
+	if (current_is(tok_l_brace))
+	{
+		next_tok();
+		uint32_t offset = 0;
+		while (!current_is(tok_r_brace))
+		{
+			ast_struct_member_t* member = parse_struct_member();
+			member->offset = offset;
+			member->next = result->members;
+			result->members = member;
+			offset += member->type->size;
+		}
+		next_tok();
+	}
+
+	return result;
+}
+
+/*
+<type_specifier> :: = "int" | <struct_specifier>
+*/
+ast_type_spec_t* try_parse_type_spec()
 {
 	token_t* start = current();
-
-	if (current_is(tok_int) &&
-		current()->next->kind == tok_identifier &&
-		current()->next->next->kind == tok_l_paren)
+	if(_is_builtin_type(current()))
 	{
-		ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-		memset(result, 0, sizeof(ast_declaration_t));
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = current();
-		result->kind = decl_func;
+		result->kind = _get_builtin_type_kind(current());
+		result->size = _get_builtin_type_size(current());
 		next_tok();
-		expect_cur(tok_identifier);
-		tok_spelling_cpy(current(), result->data.func.name, MAX_LITERAL_NAME);
-		next_tok();
-		/*(*/		
-		expect_cur(tok_l_paren);
-		next_tok();
-
-		parse_function_parameters(&result->data.func);
-
-		/*)*/
-		expect_cur(tok_r_paren);
-		next_tok();
+		result->tokens.end = current();
+		return result;
+	}
+	else if (current_is(tok_struct) || current_is(tok_union))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = current();
+		result->kind = type_struct;
+		result->struct_spec = parse_struct_spec();
+		ast_struct_member_t* member = result->struct_spec->members;
+		while (member)
+		{
+			result->size += member->type->size;
+			member = member->next;
+		}
 		result->tokens.end = current();
 		return result;
 	}
@@ -299,7 +414,36 @@ ast_declaration_t* try_parse_func_decl()
 }
 
 /*
-<var_declaration> ::= "int" < id > [= <exp>]
+<function_params> ::= [ <type-specifier> [<id>] { "," <type-specifier> [<id>] } ]
+*/
+void parse_function_parameters(ast_function_decl_t* func)
+{
+	ast_type_spec_t* type;
+
+	while ((type = try_parse_type_spec()))
+	{
+		ast_function_param_t* param = (ast_function_param_t*)malloc(sizeof(ast_function_param_t));
+		memset(param, 0, sizeof(ast_function_param_t));
+		param->tokens.start = current();
+		param->type = type;
+		if (current_is(tok_identifier))
+		{
+			tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
+			next_tok();
+		}
+
+		param->next = func->params;
+		func->params = param;
+		func->param_count++;
+		param->tokens.end = current();
+		if (!current_is(tok_comma))
+			break;
+		next_tok();
+	}
+}
+
+/*
+<var_declaration> ::= <type_specifier> <id> [=<exp>] ";"
 */
 ast_declaration_t* parse_var_decl()
 {
@@ -307,8 +451,13 @@ ast_declaration_t* parse_var_decl()
 	memset(result, 0, sizeof(ast_declaration_t));
 	result->tokens.start = current();
 	result->kind = decl_var;
-	expect_cur(tok_int);
-	next_tok();
+
+	result->data.var.type = try_parse_type_spec();
+	if (!result->data.var.type)
+	{
+		diag_err(current(), ERR_SYNTAX, "expected type spec");
+	}
+
 	expect_cur(tok_identifier);
 	tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
 	next_tok();
@@ -317,50 +466,101 @@ ast_declaration_t* parse_var_decl()
 		next_tok();
 		result->data.var.expr = parse_expression();
 	}
-	//expect_cur(tok_semi_colon);
-	//next_tok();
 	result->tokens.end = current();
 	return result;
 }
 
-ast_declaration_t* try_parse_var_decl()
+/*
+<declaration> :: = <var_declaration> ";"
+				| <type-specifier> ";"
+				| <function_declaration> ";"
+
+<var_declaration> ::= <type_specifier> <id> [=<exp>]
+<function_declaration> ::= <type-specifier> <id> "(" [ <function_params ] ")"
+<type_specifier> ::= "int" | <struct_specifier>
+*/
+ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 {
-	if (try_parse_func_decl())
+	token_t* start = current();
+
+	ast_type_spec_t* type = try_parse_type_spec();
+
+	if (!type)
 		return NULL;
 
-	if (current_is(tok_int) &&
-		current()->next->kind == tok_identifier)
+	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
+	memset(result, 0, sizeof(ast_declaration_t));
+	result->tokens.start = current();
+
+	if (current_is(tok_identifier))
 	{
-		return parse_var_decl();
+		if (next_is(tok_l_paren))
+		{
+			//function			
+			result->kind = decl_func;
+			result->data.func.return_type = type;
+			expect_cur(tok_identifier);
+			tok_spelling_cpy(current(), result->data.func.name, MAX_LITERAL_NAME);
+			next_tok();
+			/*(*/
+			expect_cur(tok_l_paren);
+			next_tok();
+			parse_function_parameters(&result->data.func);
+			/*)*/
+			expect_cur(tok_r_paren);
+			next_tok();			
+		}
+		else
+		{
+			//variable 
+			result->kind = decl_var;
+			result->data.var.type = type;
+			tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
+			next_tok();
+			if (current_is(tok_equal))
+			{
+				next_tok();
+				result->data.var.expr = parse_expression();
+			}
+		}
 	}
-	return NULL;
-}
+	else
+	{
+		//type-spec
+		result->kind = decl_type;
+		result->data.type = *type;
+	}
 
-/*
-<declaration> :: = <var_declaration> | <function_declaration> ";"
-*/
-ast_declaration_t* parse_declaration()
-{
-	ast_declaration_t* result = try_parse_func_decl();
-
-	if(!result)
-		result = parse_var_decl();
-
-	expect_cur(tok_semi_colon);
-	next_tok();
+	if (found_semi)
+		*found_semi = current_is(tok_semi_colon);
+	if (current_is(tok_semi_colon))
+		next_tok();
+	
+	result->tokens.end = current();
 	return result;
 }
 
 ast_declaration_t* try_parse_declaration()
 {
-	ast_declaration_t* result = try_parse_func_decl();
-	if (!result)
-		result = try_parse_var_decl();
+	bool found_semi;
+	ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
 
-	if (result)
+	if (decl && !found_semi)
 	{
-		expect_cur(tok_semi_colon);
-		next_tok();
+		diag_err(current(), ERR_SYNTAX, "expected ';' after declaration of %s", ast_get_decl_name(decl));
+	}
+	return decl;
+}
+
+/*
+<declaration> :: = <var_declaration> | <function_declaration> | <type-specifier> ";"
+*/
+ast_declaration_t* parse_declaration()
+{
+	ast_declaration_t* result = try_parse_declaration();
+	if (!result)
+	{
+		diag_err(current(), ERR_SYNTAX, "expected identifier");
 	}
 	return result;
 }
@@ -368,6 +568,7 @@ ast_declaration_t* try_parse_declaration()
 /*
 <function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
 */
+/*
 ast_expression_t* parse_function_call_expr()
 {
 	ast_expression_t* expr = NULL;
@@ -397,14 +598,14 @@ ast_expression_t* parse_function_call_expr()
 	if (expr)
 		expr->tokens.end = current();
 	return expr;
-}
+}*/
 
-ast_expression_t* parse_factor();
+//ast_expression_t* parse_factor();
 
 /*
 <postfix-op> ::= <function-call> | <factor> <postfix_op>
 */
-ast_expression_t* parse_postfix_expr()
+/*ast_expression_t* parse_postfix_expr()
 {
 	ast_expression_t* expr = parse_function_call_expr();
 
@@ -421,12 +622,12 @@ ast_expression_t* parse_postfix_expr()
 		}
 	}
 	return expr;
-}
+}*/
 
 /*
-<factor> ::= "(" <exp> ")" | <unary_op> <factor> | <int>
 <factor> ::= <postfix-op> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
 */
+/*
 ast_expression_t* parse_factor()
 {
 	ast_expression_t* expr = parse_function_call_expr();
@@ -468,16 +669,31 @@ ast_expression_t* parse_factor()
 		tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
 		next_tok();
 
-		if (_is_postfix_op(current()))
+		if (_is_postfix_unary_op(current()))
 		{
-			expr->tokens.end = current();
+			//postfix ++ or --
 			ast_expression_t* operand = expr;
+			operand->tokens.end = current();
 			expr = _alloc_expr();
 			expr->tokens = operand->tokens;
 			expr->kind = expr_postfix_op;
 			expr->data.unary_op.operation = _get_postfix_operator(current());
 			expr->data.unary_op.expression = operand; //must be a var ref
 			next_tok();			
+		}
+		else if (current_is(tok_fullstop))
+		{
+			// . member access
+			ast_expression_t* operand = expr;
+			operand->tokens.end = current();
+			expr = _alloc_expr();
+			expr->tokens = operand->tokens;
+			expr->kind = expr_binary_op;
+			expr->data.binary_op.lhs = operand;
+			expr->data.binary_op.operation = op_member_access;
+			next_tok();
+			expect_cur(tok_identifier);
+			expr->data.binary_op.rhs = parse_factor();
 		}
 	}
 	else
@@ -487,11 +703,12 @@ ast_expression_t* parse_factor()
 	if(expr)
 		expr->tokens.end = current();
 	return expr;
-}
+}*/
 
 /*
 <term> ::= <factor> { ("*" | "/" | "%") <factor> }
 */
+/*
 ast_expression_t* parse_term()
 {
 	token_t* start = current();
@@ -514,6 +731,176 @@ ast_expression_t* parse_term()
 	}
 	expr->tokens.end = current();
 	return expr;
+}*/
+
+ast_expression_t* parse_identifier()
+{
+	expect_cur(tok_identifier);
+	//<factor> ::= <id>
+	ast_expression_t* expr = _alloc_expr();
+	expr->kind = expr_var_ref;
+	tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
+	next_tok();
+	expr->tokens.end = current();
+	return expr;
+}
+
+/*
+<primary-exp> ::= <id> | <literal> | "(" <exp> ")"
+*/
+ast_expression_t* try_parse_primary_expr()
+{
+	ast_expression_t* expr = NULL;
+
+	if (current_is(tok_identifier))
+	{
+		//<factor> ::= <id>
+		expr = parse_identifier();
+	}
+	else if (current_is(tok_num_literal))
+	{
+		//<factor> ::= <int>
+		expr = _alloc_expr();
+		expr->kind = expr_int_literal;
+		expr->data.const_val = (uint32_t)(long)current()->data;
+		next_tok();
+	}
+	else if (current_is(tok_l_paren))
+	{
+		//<factor ::= "(" <exp> ")"
+		next_tok();
+		expr = parse_expression();
+		expect_cur(tok_r_paren);
+		next_tok();
+	}
+	if(expr)
+		expr->tokens.end = current();
+	return expr;
+}
+
+/*
+<postfix-exp> ::= <primary-exp>
+				| <primary-exp> "(" [ <exp> { "," <exp> } ] ")"
+				| <primary-exp> "." <id>
+				| <primary-exp> ("++" || "--")
+
+				| <primary-exp> "[" <exp> "]"
+				| <primary-exp> "->" <id>
+*/
+
+static bool _is_postfix_op(token_t* tok)
+{
+	return tok->kind == tok_l_paren ||
+		tok->kind == tok_fullstop ||
+		tok->kind == tok_plusplus ||
+		tok->kind == tok_minusminus;
+}
+
+ast_expression_t* try_parse_postfix_expr()
+{
+	ast_expression_t* primary = try_parse_primary_expr();
+
+	if (!primary)
+		return NULL;
+
+	while (_is_postfix_op(current()))
+	{
+		ast_expression_t* expr = _alloc_expr();
+		if (current_is(tok_l_paren))
+		{
+			//function call
+			expr->kind = expr_func_call;
+			expr->data.func_call.target = primary;
+			//todo - remove name and handle target as possible function ptr
+			strcpy(expr->data.func_call.name, primary->data.var_reference.name);
+			next_tok(); //skip tok_l_paren
+
+			while (!current_is(tok_r_paren))
+			{
+				if (expr->data.func_call.params)
+				{
+					expect_cur(tok_comma);
+					next_tok();
+				}
+				ast_expression_t* param_expr = parse_expression();
+				param_expr->next = expr->data.func_call.params;
+				expr->data.func_call.params = param_expr;
+				expr->data.func_call.param_count++;
+			}
+			next_tok();
+			expr->tokens.end = current();
+		}
+		else if (current_is(tok_fullstop))
+		{
+			//member access
+			next_tok();
+			//expect_cur(tok_identifier);
+
+			expr->tokens = primary->tokens;
+			expr->kind = expr_binary_op;
+			expr->data.binary_op.lhs = try_parse_primary_expr();
+			expr->data.binary_op.operation = op_member_access;
+			expr->data.binary_op.rhs = primary;
+			expr->tokens.end = current();
+		}
+		else if (current_is(tok_plusplus) || current_is(tok_minusminus))
+		{
+			//postfix inc/dec
+			expr->tokens = primary->tokens;
+			expr->kind = expr_postfix_op;
+			expr->data.unary_op.operation = _get_postfix_operator(current());
+			expr->data.unary_op.expression = primary;
+			next_tok();
+			expr->tokens.end = current();
+		}
+		primary = expr;
+	}
+	return primary;
+}
+
+ast_expression_t* parse_cast_expr();
+
+/*
+<unary-exp> ::= <postfix-exp>
+				| <unary-op> <cast-exp>
+*/
+ast_expression_t* try_parse_unary_expr()
+{
+	if (_is_unary_op(current()))
+	{
+		ast_expression_t* expr = _alloc_expr();
+		expr->kind = expr_unary_op;
+		expr->data.unary_op.operation = _get_unary_operator(current());
+		next_tok();
+		expr->data.unary_op.expression = parse_cast_expr();
+		expr->tokens.end = current();
+		return expr;
+	}
+	return try_parse_postfix_expr();
+}
+
+ast_expression_t* parse_unary_expr()
+{
+	ast_expression_t* expr = try_parse_unary_expr();
+	if (!expr)
+		diag_err(current(), ERR_SYNTAX, "failed to parse expression");
+	return expr;
+}
+
+/*
+<cast-exp> ::= <unary-exp>
+*/
+ast_expression_t* parse_cast_expr()
+{
+	return parse_unary_expr();
+}
+
+/*
+<multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
+*/
+ast_expression_t* parse_multiplacative_expr()
+{
+	return parse_binary_expression(multiplacative_ops, parse_cast_expr);
 }
 
 /*
@@ -521,7 +908,7 @@ ast_expression_t* parse_term()
 */
 ast_expression_t* parse_additive_expr()
 {
-	return parse_binary_expression(additive_ops, parse_term);
+	return parse_binary_expression(additive_ops, parse_multiplacative_expr);
 }
 
 /*
@@ -616,25 +1003,35 @@ ast_expression_t* parse_conditional_expression()
 
 /*
 <assignment-exp> ::= <id> "=" <exp> | <conditional-or-exp>
+<assignment-exp> ::= <unary-exp> "=" <assignment-exp>
+				| <conditional-exp>
 */
 ast_expression_t* parse_assignment_expression()
 {
 	ast_expression_t* expr;
+	token_t* start = _cur_tok;
 
-	if (current_is(tok_identifier) && _cur_tok->next->kind == tok_equal)
+	expr = try_parse_unary_expr();
+
+	if (expr && current_is(tok_equal))
 	{
-		expr = _alloc_expr();
-		expr->kind = expr_assign;
-		//parse_var
-		tok_spelling_cpy(current(), expr->data.assignment.name, MAX_LITERAL_NAME);
-		expect_next(tok_equal);
+		ast_expression_t* assignment = _alloc_expr();
+		assignment->tokens = expr->tokens;
+		assignment->kind = expr_assign;
+		assignment->data.assignment.target = expr;
+	//	assert(expr->kind == expr_var_ref);
+		//strcpy(assignment->data.assignment.name, expr->data.var_reference.name);
 		next_tok();
-		expr->data.assignment.expr = parse_expression();
+		assignment->data.assignment.expr = parse_assignment_expression();
+		assignment->tokens.end = current();
+		return assignment;
 	}
 	else
 	{
+		_cur_tok = start;
 		expr = parse_conditional_expression();
 	}
+
 	expr->tokens.end = current();
 	return expr;
 }
@@ -713,28 +1110,21 @@ ast_statement_t* parse_statement()
 		expect_next(tok_l_paren);
 		next_tok();
 		
-		if (current_is(tok_int) && next_is(tok_identifier))
+		//<statement> ::= "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+		//<statement> ::= "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+		result->data.for_smnt.init_decl = try_parse_declaration();
+		result->kind = smnt_for_decl;
+		if (!result->data.for_smnt.init_decl)
 		{
-			//<statement> ::= "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
-			result->kind = smnt_for_decl;
-			result->data.for_smnt.init_decl = parse_declaration();
-			result->data.for_smnt.condition = parse_optional_expression(tok_semi_colon);
-			expect_cur(tok_semi_colon);
-			next_tok();
-			result->data.for_smnt.post = parse_optional_expression(tok_r_paren);
-		}
-		else
-		{
-			//<statement> ::= "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
 			result->kind = smnt_for;
 			result->data.for_smnt.init = parse_optional_expression(tok_semi_colon);
 			expect_cur(tok_semi_colon);
 			next_tok();
-			result->data.for_smnt.condition = parse_optional_expression(tok_semi_colon);
-			expect_cur(tok_semi_colon);
-			next_tok();
-			result->data.for_smnt.post = parse_optional_expression(tok_r_paren);
 		}
+		result->data.for_smnt.condition = parse_optional_expression(tok_semi_colon);
+		expect_cur(tok_semi_colon);
+		next_tok();
+		result->data.for_smnt.post = parse_optional_expression(tok_r_paren);
 		expect_cur(tok_r_paren);
 		next_tok();
 		result->data.for_smnt.statement = parse_statement();
@@ -793,8 +1183,8 @@ ast_statement_t* parse_statement()
 		result->kind = smnt_compound;
 		ast_block_item_t* block;
 		ast_block_item_t* last_block = NULL;
-		do
-		{			
+		while (!current_is(tok_r_brace))
+		{
 			block = parse_block_item();
 
 			if (last_block)
@@ -802,8 +1192,7 @@ ast_statement_t* parse_statement()
 			else
 				result->data.compound.blocks = block;
 			last_block = block;
-		
-		} while (!current_is(tok_r_brace));
+		}
 		next_tok();
 	}
 	else
@@ -871,44 +1260,35 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	result->tokens.start = current();
 
 	while (!current_is(tok_eof))
-	{		
-		ast_declaration_t* decl = try_parse_func_decl();
-		if (decl)
-		{
-			//a function decl may actually be a function definition
-			if (current_is(tok_l_brace))
-			{
-				next_tok();
-				//function definition
-				ast_function_decl_t* func = &decl->data.func;
+	{
+		bool found_semi;
+		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
 
-				ast_block_item_t* last_blk = NULL;
-				while (!current_is(tok_r_brace))
-				{
-					ast_block_item_t* blk = parse_block_item();
-					if (last_blk)
-						last_blk->next = blk;
-					else
-						func->blocks = blk;
-					last_blk = blk;
-					last_blk->next = NULL;
-				}
-				next_tok();
-			}
-			else
-			{
-				expect_cur(tok_semi_colon);
-				next_tok();
-			}
-		}
-		else
+		if (decl->kind == decl_func && !found_semi)
 		{
-			decl = parse_var_decl();
-			expect_cur(tok_semi_colon);
+			expect_cur(tok_l_brace);
+			next_tok();
+			//function definition
+			ast_function_decl_t* func = &decl->data.func;
+
+			ast_block_item_t* last_blk = NULL;
+			while (!current_is(tok_r_brace))
+			{
+				ast_block_item_t* blk = parse_block_item();
+				if (last_blk)
+					last_blk->next = blk;
+				else
+					func->blocks = blk;
+				last_blk = blk;
+				last_blk->next = NULL;
+			}
 			next_tok();
 		}
-		
-		_add_decl_to_tl(result, decl);
+		else if(!found_semi)
+		{
+			diag_err(current(), ERR_SYNTAX, "expected ';' after declaration of %s", ast_get_decl_name(decl));
+		}
+		_add_decl_to_tl(result, decl);		
 	}
 	result->tokens.end = current();
 

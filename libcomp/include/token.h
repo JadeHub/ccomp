@@ -43,10 +43,10 @@ typedef enum
     tok_colon,              // :
     tok_question,           // ?
     tok_comma,              // ,
+    tok_fullstop,           // .
 
     //keywords
     tok_return,
-    tok_int,
     tok_if,
     tok_else,
     tok_for,
@@ -54,6 +54,12 @@ typedef enum
     tok_do,
     tok_break,
     tok_continue,
+    tok_struct,
+    tok_union,
+
+    //types
+    tok_int,
+    tok_void,
 
     tok_identifier,         // main
     tok_num_literal         // 1234

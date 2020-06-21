@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <vector>
+
 extern "C"
 {
 #include <libcomp/include/diag.h>
@@ -34,8 +36,18 @@ public:
 	{
 		source_range_t sr;
 		sr.ptr = src;
-		sr.end = sr.ptr + strlen(src) + 1;
-		toks = lex_source(&sr);
+		sr.end = sr.ptr + strlen(src);
+		token_t* toks = lex_source(&sr);
+
+		token_t* tok = toks;
+		while (tok)
+		{
+			tokens.push_back(*tok);
+			token_t* next = tok->next;
+			//free(tok);
+			tok = next;
+		}
+
 		ast = parse_translation_unit(toks);
 	}
 
@@ -56,7 +68,7 @@ public:
 
 	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
 
-	token_t* toks = nullptr;
+	std::vector<token_t> tokens;
 	ast_trans_unit_t* ast = nullptr;
 };
 
@@ -111,15 +123,26 @@ TEST_F(ValidationTest, global_fn_shadows_var)
 TEST_F(ValidationTest, fn_decl_in_fn_definition)
 {
 	std::string code = R"(
-
 	int main()
 	{
 		int foo();
 		return 2;
 	}
-
 	)";
 
 	parse(code.c_str());
 	validate();
+}
+
+TEST_F(ValidationTest, foo)
+{
+	std::string code = R"(
+
+	struct B {
+		int a;
+		int b;
+	} v;
+
+	)";
+	parse(code.c_str());
 }

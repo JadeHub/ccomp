@@ -212,3 +212,28 @@ bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb c
 	}
 	return true;
 }
+
+const char* ast_builtin_type_name(type_kind k)
+{
+	switch (k)
+	{
+	case type_void:
+		return "void";
+	case type_int:
+		return "int";
+	}
+	return "unknown type";
+}
+
+const char* ast_get_decl_name(ast_declaration_t* decl)
+{
+	switch (decl->kind)
+	{
+	case decl_var:
+		return decl->data.var.name;
+	case decl_func:
+		return decl->data.func.name;
+	}
+	return NULL;
+}
+

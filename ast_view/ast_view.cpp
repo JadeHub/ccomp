@@ -4,6 +4,7 @@
 #include "pch.h"
 #include "ast_view.h"
 
+#include "diag.h"
 #include "lexer.h"
 #include "parse.h"
 
@@ -53,9 +54,9 @@ char* OpenFile(LPTSTR path)
     return buff;
 }
 
-void diag_err(token_t* tok, uint32_t err, const char* msg)
+void diag_err(token_t* tok, uint32_t err, const char* msg, void* data)
 {
-
+    MessageBox(hMainWnd, msg, "Error", MB_ICONERROR);
 }
 
 void DestroySourceFile(SourceFile* sf)
@@ -77,6 +78,8 @@ SourceFile* LoadSourceFile(LPTSTR path)
     memset(sf, 0, sizeof(SourceFile));
     sf->SourceRange = sr;
     strcpy_s(sf->szFileName, PathFindFileName(path));
+
+    diag_set_handler(diag_err, NULL);
 
     sf->pTokens = lex_source(&sr);
     sf->pAst = parse_translation_unit(sf->pTokens);

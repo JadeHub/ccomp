@@ -28,6 +28,8 @@ typedef enum
 	op_bitwise_xor,
 	op_bitwise_and,
 
+	op_member_access,
+
 	//logical operators
 	op_and,
 	op_or,
@@ -78,7 +80,8 @@ eg x = 5
 */
 typedef struct
 {
-	char name[MAX_LITERAL_NAME];
+	//char name[MAX_LITERAL_NAME];
+	struct ast_expression* target;
 	struct ast_expression* expr;
 }assign_expr_data_t;
 
@@ -108,6 +111,7 @@ function call expression data
 typedef struct
 {
 	char name[MAX_LITERAL_NAME];
+	struct ast_expression* target;
 	struct ast_expression* params;
 	uint32_t param_count;
 }func_call_expr_data_t;
@@ -142,10 +146,60 @@ typedef struct ast_expression
 	struct ast_expression* next; //func call param list
 }ast_expression_t;
 
+/* Type */
+typedef enum
+{	
+	type_void,
+	/*type_char,
+	type_short,*/
+	type_int,
+	/*type_long,
+	type_float,
+	type_double,*/
+	type_struct
+}type_kind;
+
+struct ast_struct_spec;
+
+typedef struct ast_struct_member
+{
+	token_range_t tokens;
+	struct ast_type_spec* type;
+	char name[MAX_LITERAL_NAME]; //name is optional
+	uint32_t bit_size; //eg, the 1 in 'int p : 1'
+
+	uint32_t offset;
+
+	struct ast_struct_member* next;
+}ast_struct_member_t;
+
+typedef struct ast_struct_spec
+{
+	char name[MAX_LITERAL_NAME]; //name is optional
+	enum
+	{
+		struct_struct,
+		struct_union
+	}kind;
+
+	ast_struct_member_t* members;
+}ast_struct_spec_t;
+
+typedef struct ast_type_spec
+{
+	token_range_t tokens;
+	type_kind kind;
+
+	uint32_t size;
+	
+	ast_struct_spec_t* struct_spec;
+}ast_type_spec_t;
+
 /* Declaration */
 
 typedef struct ast_var_decl
 {
+	ast_type_spec_t* type;
 	char name[MAX_LITERAL_NAME];
 	ast_expression_t* expr;
 }ast_var_decl_t;
@@ -154,7 +208,7 @@ typedef struct ast_function_param
 {
 	token_range_t tokens;
 	char name[MAX_LITERAL_NAME];
-	//type etc
+	ast_type_spec_t* type;
 
 	struct ast_function_param* next;
 }ast_function_param_t;
@@ -165,6 +219,9 @@ typedef struct ast_func_decl
 
 	ast_function_param_t* params;
 	uint32_t param_count;
+
+	ast_type_spec_t* return_type;
+
 	//return type
 	//static?
 
@@ -176,7 +233,8 @@ typedef struct ast_func_decl
 typedef enum
 {
 	decl_var,
-	decl_func
+	decl_func,
+	decl_type
 }ast_decl_type;
 
 typedef struct ast_declaration
@@ -188,6 +246,7 @@ typedef struct ast_declaration
 	{
 		ast_var_decl_t var;
 		ast_function_decl_t func;
+		ast_type_spec_t type;
 	}data;
 
 	struct ast_declaration* next;
@@ -287,6 +346,8 @@ typedef struct
 void ast_print(ast_trans_unit_t* tl);
 
 const char* ast_op_name(op_kind);
+const char* ast_get_decl_name(ast_declaration_t* decl);
+const char* ast_builtin_type_name(type_kind k);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 

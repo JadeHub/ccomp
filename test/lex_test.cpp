@@ -13,11 +13,11 @@ class LexTest : public Test
 {
 public:
 
-	void Lex(const char* src)
+	void Lex(const std::string& src)
 	{
 		source_range_t sr;
-		sr.ptr = src;
-		sr.end = src + strlen(src);
+		sr.ptr = src.c_str();
+		sr.end = sr.ptr + src.length();
 
 		token_t* toks = lex_source(&sr);
 
@@ -38,4 +38,13 @@ TEST_F(LexTest, foo)
 {
 	//Lex(R"(int main() {})");
 	Lex(R"(int foo = 0;)");
+}
+
+TEST_F(LexTest, Eof)
+{
+	std::string code = R"(
+	int foo(int a);
+	int foo = 5;	)";
+
+	Lex(code);
 }

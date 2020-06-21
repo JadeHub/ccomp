@@ -85,6 +85,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	//Keywords
 	if (tok_spelling_cmp(result, "int"))
 		result->kind = tok_int;
+	else if (tok_spelling_cmp(result, "void"))
+		result->kind = tok_void;
 	else if (tok_spelling_cmp(result, "return"))
 		result->kind = tok_return;
 	else if (tok_spelling_cmp(result, "if"))
@@ -101,6 +103,10 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_break;
 	else if (tok_spelling_cmp(result, "continue"))
 		result->kind = tok_continue;
+	else if (tok_spelling_cmp(result, "struct"))
+		result->kind = tok_struct;
+	else if (tok_spelling_cmp(result, "union"))
+		result->kind = tok_union;
 }
 
 static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -139,6 +145,12 @@ bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
 
 lex_next_tok:
 
+	//Skip any white space
+	while(*pos == ' ' || *pos == '\t')
+	{
+		if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
+	};
+
 	if (*pos == '\0')
 	{
 		result->loc = pos;
@@ -146,12 +158,6 @@ lex_next_tok:
 		result->len = 0;
 		return true;
 	}
-
-	//Skip any white space
-	while(*pos == ' ' || *pos == '\t')
-	{
-		if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
-	};
 
 	result->loc = pos;
 	result->len = 0;
@@ -255,6 +261,10 @@ lex_next_tok:
 		break;
 	case ',':
 		result->kind = tok_comma;
+		result->len = 1;
+		break;
+	case '.':
+		result->kind = tok_fullstop;
 		result->len = 1;
 		break;
 	case '&':

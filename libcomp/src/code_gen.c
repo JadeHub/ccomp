@@ -127,9 +127,11 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		gen_expression(expr->data.assignment.expr);
-		gen_assign_expression(expr->tokens.start, expr->data.assignment.name);
-		
+		if (expr->data.assignment.target->kind == expr_var_ref)
+		{
+			gen_expression(expr->data.assignment.expr);
+			gen_assign_expression(expr->tokens.start, expr->data.assignment.target->data.var_reference.name);
+		}
 	}
 	else if (expr->kind == expr_var_ref)
 	{

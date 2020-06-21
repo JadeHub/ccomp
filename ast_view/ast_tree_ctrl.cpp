@@ -7,6 +7,7 @@ HWND hWndTree;
 int iImgIdx_C;
 
 void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk);
+void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix);
 
 AstTreeItem* AllocTreeItem(token_range_t tok_range)
 {
@@ -67,8 +68,9 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         tree_item = TreeInsert(parent, item);
         break;
     case expr_assign:
-        sprintf_s(item->name, "%sAssignment to %s", prefix, expr->data.assignment.name);
+        sprintf_s(item->name, "%sAssignment", prefix);
         tree_item = TreeInsert(parent, item);
+        InsertExpression(tree_item, expr->data.assignment.target, "target: ");
         InsertExpression(tree_item, expr->data.assignment.expr, "expr: ");
         break;
     case expr_var_ref:
@@ -86,6 +88,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
     case expr_func_call:
         sprintf_s(item->name, "%sFunc Call: %s", prefix, expr->data.func_call.name);
         tree_item = TreeInsert(parent, item);
+        InsertExpression(tree_item, expr->data.func_call.target, "target: ");
         sub_expr = expr->data.func_call.params;
         while (sub_expr)
         {
@@ -103,6 +106,44 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
     }
 }
 
+void InsertStructDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char* prefix)
+{
+    AstTreeItem* item = AllocTreeItem(spec->tokens);
+    sprintf_s(item->name, "%s%s Decl: %s", prefix, 
+        spec->struct_spec->kind == ast_struct_spec_t::struct_struct ? "struct" : "union",
+        spec->struct_spec->name);
+    HTREEITEM tree_item = TreeInsert(parent, item);
+
+    ast_struct_member_t* member = spec->struct_spec->members;
+
+    while (member)
+    {
+        AstTreeItem* item = AllocTreeItem(member->tokens);
+        if(member->bit_size)
+            sprintf_s(item->name, "member: %s bits: %d", member->name, member->bit_size);
+        else
+            sprintf_s(item->name, "member: %s", member->name);
+        HTREEITEM mh = TreeInsert(tree_item, item);
+        InsertTypeSpec(mh, member->type, "");
+                
+        member = member->next;
+    }
+}
+
+void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix)
+{
+    if (type->kind == type_struct)
+    {
+        InsertStructDefinition(parent, type, prefix);
+    }
+    else
+    {
+        AstTreeItem* item = AllocTreeItem(type->tokens);
+        sprintf_s(item->name, "%stype: %s", prefix, ast_builtin_type_name(type->kind));
+        HTREEITEM tree_item = TreeInsert(parent, item);
+    }
+}
+
 void InsertVariableDefinition(HTREEITEM parent, ast_declaration_t* var, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(var->tokens);
@@ -112,6 +153,8 @@ void InsertVariableDefinition(HTREEITEM parent, ast_declaration_t* var, const ch
     {
         InsertExpression(tree_item, var->data.var.expr, "= expr: ");
     }
+
+    InsertTypeSpec(tree_item, var->data.var.type, "");
 }
 
 HTREEITEM InsertFunctionDeclaration(HTREEITEM parent, ast_declaration_t* func, const char* prefix)
@@ -120,12 +163,15 @@ HTREEITEM InsertFunctionDeclaration(HTREEITEM parent, ast_declaration_t* func, c
     sprintf_s(item->name, "%sFunction Decl: %s", prefix, func->data.func.name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
+    InsertTypeSpec(tree_item, func->data.func.return_type, "return ");
+
     ast_function_param_t* param = func->data.func.params;
     while (param)
     {
         AstTreeItem* item = AllocTreeItem(param->tokens);
-        sprintf_s(item->name, "Parameter: %s", param->name);
-        TreeInsert(tree_item, item);
+        sprintf_s(item->name, "param: %s", param->name);
+        HTREEITEM hp = TreeInsert(tree_item, item);
+        InsertTypeSpec(hp, param->type, "");
         param = param->next;
     }
 
@@ -148,6 +194,9 @@ void InsertDeclaration(HTREEITEM parent, ast_declaration_t* decl, const char* pr
         break;
     case decl_func:
         InsertFunctionDeclaration(parent, decl, prefix);
+        break;
+    case decl_type:
+        InsertTypeSpec(parent, &decl->data.type, prefix);
         break;
     }
 }

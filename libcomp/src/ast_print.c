@@ -179,6 +179,8 @@ const char* ast_op_name(op_kind k)
 		return "[++] Postfix inc";
 	case op_postfix_dec:
 		return "[--] Postfix inc";
+	case op_member_access:
+		return "[.] Member access";
 	}
 	return "ERROR";
 }

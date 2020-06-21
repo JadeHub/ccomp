@@ -9,9 +9,7 @@
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/validate.h>
 
-//static const char* _src = "int main() \r\n{return 2;}";
-
-static char* _src = "int sum(int a, int b) { return a + b;} int main() { int a = 0;  int i; fn(a, i);  return a; }";
+static const char* _src = "int main() { return a.b.c();}";
 
 void print_tokens(token_t* toks)
 {
@@ -77,7 +75,7 @@ int main(int argc, char* argv[])
 
   
     ast_trans_unit_t* ast = parse_translation_unit(toks);
-    validate_tl(ast);  
+  //  validate_tl(ast);  
     code_gen(ast, &asm_print);
 }
 
