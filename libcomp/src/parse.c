@@ -226,18 +226,13 @@ static ast_expression_t* _alloc_expr()
 <unary-exp> ::= <postfix_op>
 				| <unary-op> <cast-exp>
 
-<temp-exp> ::= <primary-exp> { ("." || "++" || "--") <primary-exp> }
-
-<function-call-exp> ::= id "(" [ <exp> { "," <exp> } ] ")"
-<member-access-exp> ::= id "." id
-
-<postfix-exp> ::= <primary-exp> 
-				| <postfix-exp> "(" [ <exp> { "," <exp> } ] ")"
-				| <postfix-exp> "." <id>
-				| <postfix-exp> ("++" || "--")
+<postfix-exp> ::= <primary-exp> {
+				| "(" [ <exp> { "," <exp> } ] ")"
+				| "." <id>
+				| ("++" || "--")
 				
-				| <postfix-exp> "[" <exp> "]"
-				| <postfix-exp> "->" <id>
+				| "[" <exp> "]"
+				| "->" <id> }
 <primary-exp> ::= <id> | <literal> | "(" <exp> ")"
 
 
@@ -419,6 +414,7 @@ ast_type_spec_t* try_parse_type_spec()
 void parse_function_parameters(ast_function_decl_t* func)
 {
 	ast_type_spec_t* type;
+	ast_function_param_t* last_param = NULL;
 
 	while ((type = try_parse_type_spec()))
 	{
@@ -431,11 +427,14 @@ void parse_function_parameters(ast_function_decl_t* func)
 			tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
 			next_tok();
 		}
-
-		param->next = func->params;
-		func->params = param;
-		func->param_count++;
 		param->tokens.end = current();
+		if (last_param)
+			last_param->next = param;
+		else
+			func->params = param;
+		last_param = param;
+		func->param_count++;
+		
 		if (!current_is(tok_comma))
 			break;
 		next_tok();
@@ -566,173 +565,8 @@ ast_declaration_t* parse_declaration()
 }
 
 /*
-<function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
+<identifier> ::= <id>
 */
-/*
-ast_expression_t* parse_function_call_expr()
-{
-	ast_expression_t* expr = NULL;
-	if (current_is(tok_identifier) && next_is(tok_l_paren))
-	{
-		expr = _alloc_expr();
-		expr->kind = expr_func_call;
-		tok_spelling_cpy(current(), expr->data.func_call.name, MAX_LITERAL_NAME);
-
-		next_tok(); //skip id
-		next_tok(); //skip tok_l_paren
-
-		while (!current_is(tok_r_paren))
-		{
-			if (expr->data.func_call.params)
-			{
-				expect_cur(tok_comma);
-				next_tok();
-			}
-			ast_expression_t* param_expr = parse_expression();
-			param_expr->next = expr->data.func_call.params;
-			expr->data.func_call.params = param_expr;
-			expr->data.func_call.param_count++;
-		}		
-		next_tok();
-	}
-	if (expr)
-		expr->tokens.end = current();
-	return expr;
-}*/
-
-//ast_expression_t* parse_factor();
-
-/*
-<postfix-op> ::= <function-call> | <factor> <postfix_op>
-*/
-/*ast_expression_t* parse_postfix_expr()
-{
-	ast_expression_t* expr = parse_function_call_expr();
-
-	if (!expr)
-	{
-		ast_expression_t* f = parse_factor();
-
-		if (current_is(tok_plusplus))
-		{
-			expr = _alloc_expr();
-			expr->kind = expr_postfix_op;
-			expr->data.unary_op.operation = op_postfix_inc;
-			expr->data.unary_op.expression = f;
-		}
-	}
-	return expr;
-}*/
-
-/*
-<factor> ::= <postfix-op> | "(" <exp> ")" | <unary_op> <factor> | <int> | <id>
-*/
-/*
-ast_expression_t* parse_factor()
-{
-	ast_expression_t* expr = parse_function_call_expr();
-
-	if (expr)
-	{
-		//parsed as a function call
-	}
-	else if (current_is(tok_l_paren))
-	{
-		//<factor ::= "(" <exp> ")"
-		next_tok();
-		expr = parse_expression();
-		expect_cur(tok_r_paren);
-		next_tok();
-	}
-	else if (_is_unary_op(current()))
-	{
-		//<factor> ::= <unary_op> <factor>
-		expr = _alloc_expr();
-		expr->kind = expr_unary_op;
-		expr->data.unary_op.operation = _get_unary_operator(current());
-		next_tok();
-		expr->data.unary_op.expression = parse_factor();
-	}
-	else if (current_is(tok_num_literal))
-	{
-		//<factor> ::= <int>
-		expr = _alloc_expr();
-		expr->kind = expr_int_literal;
-		expr->data.const_val = (uint32_t)(long)current()->data;
-		next_tok();
-	}
-	else if (current_is(tok_identifier))
-	{
-		//<factor> ::= <id>
-		expr = _alloc_expr();
-		expr->kind = expr_var_ref;
-		tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
-		next_tok();
-
-		if (_is_postfix_unary_op(current()))
-		{
-			//postfix ++ or --
-			ast_expression_t* operand = expr;
-			operand->tokens.end = current();
-			expr = _alloc_expr();
-			expr->tokens = operand->tokens;
-			expr->kind = expr_postfix_op;
-			expr->data.unary_op.operation = _get_postfix_operator(current());
-			expr->data.unary_op.expression = operand; //must be a var ref
-			next_tok();			
-		}
-		else if (current_is(tok_fullstop))
-		{
-			// . member access
-			ast_expression_t* operand = expr;
-			operand->tokens.end = current();
-			expr = _alloc_expr();
-			expr->tokens = operand->tokens;
-			expr->kind = expr_binary_op;
-			expr->data.binary_op.lhs = operand;
-			expr->data.binary_op.operation = op_member_access;
-			next_tok();
-			expect_cur(tok_identifier);
-			expr->data.binary_op.rhs = parse_factor();
-		}
-	}
-	else
-	{
-		diag_err(current(), ERR_SYNTAX, "parse_factor failed");
-	}
-	if(expr)
-		expr->tokens.end = current();
-	return expr;
-}*/
-
-/*
-<term> ::= <factor> { ("*" | "/" | "%") <factor> }
-*/
-/*
-ast_expression_t* parse_term()
-{
-	token_t* start = current();
-	ast_expression_t* expr = parse_factor();
-	while (current()->kind == tok_star || current()->kind == tok_slash || current()->kind == tok_percent)
-	{
-		op_kind op = _get_binary_operator(current());
-		next_tok();
-		ast_expression_t* rhs_expr = parse_factor();
-
-		//our two factors are now expr and rhs_expr
-		//build a new binary op expression for expr
-		ast_expression_t* cur_expr = expr;
-		expr = _alloc_expr();		
-		expr->tokens.start = start;
-		expr->kind = expr_binary_op;
-		expr->data.binary_op.operation = op;
-		expr->data.binary_op.lhs = cur_expr;
-		expr->data.binary_op.rhs = rhs_expr;
-	}
-	expr->tokens.end = current();
-	return expr;
-}*/
-
 ast_expression_t* parse_identifier()
 {
 	expect_cur(tok_identifier);
@@ -787,7 +621,6 @@ ast_expression_t* try_parse_primary_expr()
 				| <primary-exp> "[" <exp> "]"
 				| <primary-exp> "->" <id>
 */
-
 static bool _is_postfix_op(token_t* tok)
 {
 	return tok->kind == tok_l_paren ||
@@ -834,13 +667,12 @@ ast_expression_t* try_parse_postfix_expr()
 		{
 			//member access
 			next_tok();
-			//expect_cur(tok_identifier);
 
 			expr->tokens = primary->tokens;
 			expr->kind = expr_binary_op;
-			expr->data.binary_op.lhs = try_parse_primary_expr();
+			expr->data.binary_op.lhs = primary;
+			expr->data.binary_op.rhs = parse_identifier();
 			expr->data.binary_op.operation = op_member_access;
-			expr->data.binary_op.rhs = primary;
 			expr->tokens.end = current();
 		}
 		else if (current_is(tok_plusplus) || current_is(tok_minusminus))

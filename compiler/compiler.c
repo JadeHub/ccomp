@@ -9,7 +9,7 @@
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/validate.h>
 
-static const char* _src = "int main() { return a.b.c();}";
+static const char* _src = "int main() { struct A {int b; int c; }a; a.c = 5; return a.c;}";
 
 void print_tokens(token_t* toks)
 {

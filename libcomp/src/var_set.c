@@ -60,17 +60,18 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 	if (fn->params)
 	{
 		ast_function_param_t* param = fn->params;
-		//params are stored in reverse order so calculate the offset of the
-		//last param and work down from there
-		int offset = 4 + (4 * fn->param_count); //4 for the return value and 4 per param
+		//skip 4 bytes of stack for the return value
+		//int offset = 4 + (4 * fn->param_count); //4 for the return value and 4 per param
+		int offset = 4;
 		while (param)
 		{
+			offset += param->type->size;
 			var_data_t* var = _make_stack_var(offset, param->name);
 			var->kind = var_param;
 			var->data.param = param;
 			var->next = vars->vars;
 			vars->vars = var;
-			offset -= 4; //sizeof last var
+			
 			param = param->next;
 		}
 	}
@@ -139,7 +140,7 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 		return NULL;
 	}
 	
-	vars->bsp_offset -= 4;
+	vars->bsp_offset -= var_decl->type->size;
 	var = _make_stack_var(vars->bsp_offset, var_decl->name);
 	var->kind = var_stack;
 	var->data.decl = var_decl;

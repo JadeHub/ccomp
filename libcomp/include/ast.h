@@ -61,7 +61,7 @@ typedef struct
 {
 	op_kind operation;
 	struct ast_expression* expression;
-}unary_op_expr_data_t;
+}ast_expr_unary_op_t;
 
 /*
 Binary operation expression data
@@ -72,7 +72,7 @@ typedef struct
 	op_kind operation;
 	struct ast_expression* lhs;
 	struct ast_expression* rhs;
-}binary_op_expr_data_t;
+}ast_expr_binary_op_t;
 
 /*
 assignment expression data
@@ -83,7 +83,7 @@ typedef struct
 	//char name[MAX_LITERAL_NAME];
 	struct ast_expression* target;
 	struct ast_expression* expr;
-}assign_expr_data_t;
+}ast_expr_assign_t;
 
 /*
 variable reference data
@@ -92,7 +92,7 @@ eg x in x = y + 5;
 typedef struct
 {
 	char name[MAX_LITERAL_NAME];
-}var_ref_expr_data_t;
+}ast_expr_identifier_t;
 
 /*
 conditional expression
@@ -103,7 +103,7 @@ typedef struct
 	struct ast_expression* cond;
 	struct ast_expression* true_branch;
 	struct ast_expression* false_branch;
-}var_cond_expr_data_t;
+}ast_cond_expr_data_t;
 
 /*
 function call expression data
@@ -114,7 +114,7 @@ typedef struct
 	struct ast_expression* target;
 	struct ast_expression* params;
 	uint32_t param_count;
-}func_call_expr_data_t;
+}ast_expr_func_call_t;
 
 typedef enum
 {
@@ -135,13 +135,13 @@ typedef struct ast_expression
 	expression_kind kind;
 	union
 	{
-		unary_op_expr_data_t unary_op;
-		binary_op_expr_data_t binary_op;
+		ast_expr_unary_op_t unary_op;
+		ast_expr_binary_op_t binary_op;
 		uint32_t const_val;
-		assign_expr_data_t assignment;
-		var_ref_expr_data_t var_reference;
-		var_cond_expr_data_t condition;
-		func_call_expr_data_t func_call;
+		ast_expr_assign_t assignment;
+		ast_expr_identifier_t var_reference;
+		ast_cond_expr_data_t condition;
+		ast_expr_func_call_t func_call;
 	}data;
 	struct ast_expression* next; //func call param list
 }ast_expression_t;
