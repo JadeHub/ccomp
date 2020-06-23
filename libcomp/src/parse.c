@@ -235,17 +235,7 @@ static ast_expression_t* _alloc_expr()
 				| "->" <id> }
 <primary-exp> ::= <id> | <literal> | "(" <exp> ")"
 
-
-
-<term> ::= <factor> { ("*" | "/") <factor> }
-<factor> ::= <function-call>
-				| "(" <exp> ")"
-				| <unary_op> <factor>
-				| <int>
-				| <id> [ <postfix_op> ]
-<function-call> ::= id "(" [ <exp> { "," <exp> } ] ")"
-<postfix_op> ::= "++" | "--"
-
+<literal> ::= <int>
 
 <unary_op> ::= "!" | "~" | "-" | "++" | "--"
 <type_specifier> ::= "int"
