@@ -1,124 +1,45 @@
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include "validation_fixture.h"
 
-#include <vector>
-
-extern "C"
+TEST_F(ValidationTest, fn_missing_r_brace)
 {
-#include <libcomp/include/diag.h>
-#include <libcomp/include/lexer.h>
-#include <libcomp/include/parse.h>
-#include <libcomp/include/validate.h>
+	ExpectSyntaxErrors("int main() {return 7;");
 }
 
-using namespace ::testing;
-
-class ValidationTest : public ::testing::Test
+TEST_F(ValidationTest, fn_missing_r_paren)
 {
-public:
-	ValidationTest()
-	{
-		lex_init();
-
-		std::function<void(token_t*, uint32_t, const char*)> fn =
-			[this](token_t* tok, uint32_t err, const char* msg) {};
-
-		diag_set_handler(&diag_cb, this);
-		EXPECT_CALL(*this, on_diag(_, _, _)).Times(0);
-	}
-
-	~ValidationTest()
-	{
-		diag_set_handler(NULL, NULL);
-	}
-
-	void parse(const char* src)
-	{
-		source_range_t sr;
-		sr.ptr = src;
-		sr.end = sr.ptr + strlen(src);
-		token_t* toks = lex_source(&sr);
-
-		token_t* tok = toks;
-		while (tok)
-		{
-			tokens.push_back(*tok);
-			token_t* next = tok->next;
-			//free(tok);
-			tok = next;
-		}
-
-		ast = parse_translation_unit(toks);
-	}
-
-	void validate()
-	{
-		validate_tl(ast);
-	}
-
-	static void diag_cb(token_t* tok, uint32_t err, const char* msg, void* data)
-	{
-		((ValidationTest*)data)->on_diag(tok, err, msg);
-	}
-
-	void ExpectError(uint32_t err)
-	{
-		EXPECT_CALL(*this, on_diag(_, err, _));
-	}
-
-	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
-
-	std::vector<token_t> tokens;
-	ast_trans_unit_t* ast = nullptr;
-};
-
-TEST_F(ValidationTest, global_var_shadows_fn)
-{
-	std::string code = R"(
-	int foo(int a);
-	int foo = 5;	)";
-
-	ExpectError(ERR_DUP_SYMBOL);
-
-	parse(code.c_str());
-	validate();
+	ExpectSyntaxErrors("int main( {return 7;}");
 }
 
-TEST_F(ValidationTest, global_var_dup_definition)
+TEST_F(ValidationTest, fn_missing_ret_val)
 {
-	std::string code = R"(
-	int foo = 4;
-	int foo = 5;	)";
-
-	ExpectError(ERR_DUP_VAR);
-
-	parse(code.c_str());
-	validate();
+	ExpectSyntaxErrors("int main() {return;}");
 }
 
-TEST_F(ValidationTest, global_var_invalid_init)
+TEST_F(ValidationTest, fn_missing_semi)
 {
-	std::string code = R"(
-	int fooA = 4;
-	int foo = fooA;	)";
-
-	ExpectError(ERR_INVALID_INIT);
-
-	parse(code.c_str());
-	validate();
+	ExpectSyntaxErrors("int main() {return 7}");
 }
 
-TEST_F(ValidationTest, global_fn_shadows_var)
+TEST_F(ValidationTest, fn_ret_misspelt)
 {
-	std::string code = R"(
-	int foo = 5;	
-	int foo(int a);)";
-
-	ExpectError(ERR_DUP_SYMBOL);
-
-	parse(code.c_str());
-	validate();
+	ExpectSyntaxErrors("int main() {retrn 7}");
 }
+
+TEST_F(ValidationTest, unary_missing_val)
+{
+	ExpectSyntaxErrors("int main() {return !;}");
+}
+
+TEST_F(ValidationTest, unary_nested_missing_val)
+{
+	ExpectSyntaxErrors("int main() {return !~;}");
+}
+
+TEST_F(ValidationTest, unary_missing_semi)
+{
+	ExpectSyntaxErrors("int main() {return !7}");
+}
+
 
 TEST_F(ValidationTest, fn_decl_in_fn_definition)
 {
@@ -130,7 +51,7 @@ TEST_F(ValidationTest, fn_decl_in_fn_definition)
 	}
 	)";
 
-	parse(code.c_str());
+	parse(code);
 	validate();
 }
 
@@ -144,5 +65,5 @@ TEST_F(ValidationTest, foo)
 	} v;
 
 	)";
-	parse(code.c_str());
+	parse(code);
 }

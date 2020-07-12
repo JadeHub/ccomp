@@ -80,7 +80,7 @@ eg x = 5
 */
 typedef struct
 {
-	//char name[MAX_LITERAL_NAME];
+	char name[MAX_LITERAL_NAME];
 	struct ast_expression* target;
 	struct ast_expression* expr;
 }ast_expr_assign_t;
@@ -123,7 +123,7 @@ typedef enum
 	expr_binary_op,
 	expr_int_literal,
 	expr_assign,
-	expr_var_ref,
+	expr_identifier,
 	expr_condition,
 	expr_func_call,
 	expr_null
@@ -159,8 +159,6 @@ typedef enum
 	type_struct
 }type_kind;
 
-struct ast_struct_spec;
-
 typedef struct ast_struct_member
 {
 	token_range_t tokens;
@@ -189,9 +187,7 @@ typedef struct ast_type_spec
 {
 	token_range_t tokens;
 	type_kind kind;
-
-	uint32_t size;
-	
+	uint32_t size;	
 	ast_struct_spec_t* struct_spec;
 }ast_type_spec_t;
 
@@ -204,25 +200,23 @@ typedef struct ast_var_decl
 	ast_expression_t* expr;
 }ast_var_decl_t;
 
-typedef struct ast_function_param
+/*typedef struct ast_function_param
 {
 	token_range_t tokens;
 	char name[MAX_LITERAL_NAME];
 	ast_type_spec_t* type;
 
 	struct ast_function_param* next;
-}ast_function_param_t;
+}ast_function_param_t;*/
 
 typedef struct ast_func_decl
 {
 	char name[MAX_LITERAL_NAME];
-
-	ast_function_param_t* params;
+	//ast_function_param_t* params;
+	struct ast_declaration* params;
 	uint32_t param_count;
-
 	ast_type_spec_t* return_type;
 
-	//return type
 	//static?
 
 	//Definitions will have a list of blocks
@@ -346,10 +340,13 @@ typedef struct
 void ast_print(ast_trans_unit_t* tl);
 
 const char* ast_op_name(op_kind);
-const char* ast_get_decl_name(ast_declaration_t* decl);
-const char* ast_builtin_type_name(type_kind k);
+const char* ast_declaration_name(ast_declaration_t* decl);
+const char* ast_type_name(ast_type_spec_t* type);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
+void ast_destroy_statement(ast_statement_t*);
+void ast_destroy_expression(ast_expression_t*);
+void ast_destroy_declaration(ast_declaration_t*);
 
 typedef bool (*ast_fn_decl_visitor_cb)(ast_function_decl_t*);
 typedef bool (*ast_block_item_visitor_cb)(ast_block_item_t*);

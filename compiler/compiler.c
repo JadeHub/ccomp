@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
 
   
     ast_trans_unit_t* ast = parse_translation_unit(toks);
-  //  validate_tl(ast);  
-    code_gen(ast, &asm_print);
+    valid_trans_unit_t* tl = validate_tl(ast);
+    code_gen(tl, &asm_print);
 }
 

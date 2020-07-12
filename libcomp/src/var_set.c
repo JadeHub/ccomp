@@ -59,16 +59,17 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 	/* add the function parameters */
 	if (fn->params)
 	{
-		ast_function_param_t* param = fn->params;
+		//ast_function_param_t* param = fn->params;
+		ast_declaration_t* param = fn->params;
 		//skip 4 bytes of stack for the return value
 		//int offset = 4 + (4 * fn->param_count); //4 for the return value and 4 per param
 		int offset = 4;
 		while (param)
 		{
-			offset += param->type->size;
-			var_data_t* var = _make_stack_var(offset, param->name);
+			offset += param->data.var.type->size;
+			var_data_t* var = _make_stack_var(offset, param->data.var.name);
 			var->kind = var_param;
-			var->data.param = param;
+			var->data.decl = &param->data.var;
 			var->next = vars->vars;
 			vars->vars = var;
 			
@@ -155,7 +156,7 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 var_data_t* var_decl_global_var(var_set_t* vars, ast_var_decl_t* decl)
 {
 	var_data_t* var = _make_stack_var(vars->bsp_offset, decl->name);
-	var->kind = var_stack;
+	var->kind = var_global;
 	var->data.decl = decl;
 
 	//insert after global marker

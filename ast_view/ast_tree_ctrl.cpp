@@ -73,8 +73,8 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         InsertExpression(tree_item, expr->data.assignment.target, "target: ");
         InsertExpression(tree_item, expr->data.assignment.expr, "expr: ");
         break;
-    case expr_var_ref:
-        sprintf_s(item->name, "%sVar Ref: %s", prefix, expr->data.var_reference.name);
+    case expr_identifier:
+        sprintf_s(item->name, "%sID: %s", prefix, expr->data.var_reference.name);
         tree_item = TreeInsert(parent, item);
         break;
     case expr_condition:
@@ -139,7 +139,7 @@ void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix)
     else
     {
         AstTreeItem* item = AllocTreeItem(type->tokens);
-        sprintf_s(item->name, "%stype: %s", prefix, ast_builtin_type_name(type->kind));
+        sprintf_s(item->name, "%stype: %s", prefix, ast_type_name(type));
         HTREEITEM tree_item = TreeInsert(parent, item);
     }
 }
@@ -165,13 +165,13 @@ HTREEITEM InsertFunctionDeclaration(HTREEITEM parent, ast_declaration_t* func, c
 
     InsertTypeSpec(tree_item, func->data.func.return_type, "return ");
 
-    ast_function_param_t* param = func->data.func.params;
+    ast_declaration_t* param = func->data.func.params;
     while (param)
     {
         AstTreeItem* item = AllocTreeItem(param->tokens);
-        sprintf_s(item->name, "param: %s", param->name);
+        sprintf_s(item->name, "param: %s", param->data.var.name);
         HTREEITEM hp = TreeInsert(tree_item, item);
-        InsertTypeSpec(hp, param->type, "");
+        InsertTypeSpec(hp, param->data.var.type, "");
         param = param->next;
     }
 

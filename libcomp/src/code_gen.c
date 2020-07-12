@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 void gen_expression(ast_expression_t* expr);
 void gen_block_item(ast_block_item_t* bi);
@@ -94,27 +95,37 @@ int _get_struct_member_offset(ast_type_spec_t* type, ast_expr_identifier_t* var_
 
 typedef struct
 {
+	char name[128];
 	ast_type_spec_t* type;
 	int stack_offset;
 }lval_data_t;
 
 lval_data_t _get_lvalue_addr(ast_expression_t* target)
 {
-	lval_data_t result = { NULL, 0 };
-	if (target->kind == expr_var_ref)
+	lval_data_t result = {"", NULL, 0 };
+	if (target->kind == expr_identifier)
 	{
 		var_data_t* var = var_find(_var_set, target->data.var_reference.name);
 		if (!var)
 		{
 			diag_err(target->tokens.start, ERR_UNKNOWN_VAR,
-				"assignment to unknown variabe %s",
+				"reference to unknown variabe %s",
 				target->data.var_reference.name);
 
 			return result;
 		}
 
 		result.type = var->data.decl->type;
-		result.stack_offset = var->bsp_offset;
+
+		if (var->kind == var_global)
+		{
+			result.stack_offset = 0;
+			sprintf(result.name, "_var_%s", var->name);
+		}
+		else
+		{
+			result.stack_offset = var->bsp_offset;
+		}
 		return result;
 	}
 	else if (target->kind == expr_binary_op &&
@@ -125,7 +136,7 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 		lval_data_t a = _get_lvalue_addr(target->data.binary_op.lhs);
 		if (a.type)
 		{
-			assert(target->data.binary_op.rhs->kind == expr_var_ref);
+			assert(target->data.binary_op.rhs->kind == expr_identifier);
 			a.stack_offset += _get_struct_member_offset(a.type, &target->data.binary_op.rhs->data.var_reference);
 			return a;
 		}
@@ -133,11 +144,22 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 	return result;
 }
 
-//move the value in eax to 
+//move the value in eax to target
 void gen_assign_expr(token_t* tok, ast_expression_t* target)
 {
 	lval_data_t lval = _get_lvalue_addr(target);
-	_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
+
+	if (!lval.type)
+		return;
+
+	if (strlen(lval.name))
+	{
+		_gen_asm("movl %%eax, %s", lval.name);
+	}
+	else
+	{
+		_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
+	}
 }
 
 void gen_assign_expression(token_t* tok, const char* var_name)
@@ -145,7 +167,7 @@ void gen_assign_expression(token_t* tok, const char* var_name)
 	var_data_t* var = var_find(_var_set, var_name);
 	if(!var)
 	{
-		diag_err(tok, ERR_UNKNOWN_VAR, "assignment to unknown variabe %s", var_name);
+		diag_err(tok, ERR_UNKNOWN_VAR, "assignment to unknown variable %s", var_name);
 		return;
 	}
 	if (var->bsp_offset != 0)
@@ -191,22 +213,25 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		if (expr->data.assignment.target->kind == expr_var_ref)
-		{
-			gen_expression(expr->data.assignment.expr);
-			gen_assign_expression(expr->tokens.start, expr->data.assignment.target->data.var_reference.name);
-			
-		}
-		else
-		{
-			gen_expression(expr->data.assignment.expr);
-			gen_assign_expr(expr->tokens.start, expr->data.assignment.target);
-		}
+		gen_expression(expr->data.assignment.expr);
+		gen_assign_expr(expr->tokens.start, expr->data.assignment.target);
+		
 	}
-	else if (expr->kind == expr_var_ref)
+	else if (expr->kind == expr_identifier)
 	{
+		//var ref
 		lval_data_t lval = _get_lvalue_addr(expr);
-		_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
+		if (lval.type)
+		{
+			if (strlen(lval.name))
+			{
+				_gen_asm("movl %s, %%eax", lval.name);
+			}
+			else
+			{
+				_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
+			}
+		}
 	}
 	else if (expr->kind == expr_int_literal)
 	{
@@ -230,12 +255,12 @@ void gen_expression(ast_expression_t* expr)
 			_gen_asm("sete %%al"); //if eax was 0 in cmpl, set al to 1
 			break;
 		case op_prefix_inc:
-			assert(param->kind == expr_var_ref);
+			assert(param->kind == expr_identifier);
 			_gen_asm("incl %%eax");
 			gen_assign_expr(expr->tokens.start, param);
 			break;
 		case op_prefix_dec:
-			assert(expr->data.unary_op.expression->kind == expr_var_ref);
+			assert(expr->data.unary_op.expression->kind == expr_identifier);
 			_gen_asm("decl %%eax");
 			gen_assign_expr(expr->tokens.start, param);
 			break;
@@ -243,7 +268,7 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_postfix_op)
 	{
-		assert(expr->data.unary_op.expression->kind == expr_var_ref);
+		assert(expr->data.unary_op.expression->kind == expr_identifier);
 		ast_expression_t* param = expr->data.unary_op.expression;
 		switch (expr->data.unary_op.operation)
 		{
@@ -370,7 +395,7 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	}
 	else
 	{
-		for(int i=0; i<var_decl->type->size / 4; i++)
+		for(uint32_t i=0; i<var_decl->type->size / 4; i++)
 			_gen_asm("pushl $0");
 	}
 }
@@ -601,7 +626,7 @@ void gen_function(ast_function_decl_t* fn)
 }
 
 void gen_global_var(ast_var_decl_t* var)
-{
+{	
 	_gen_asm(".globl _var_%s", var->name); //export symbol
 	if (var->expr && var->expr->data.const_val != 0)
 	{
@@ -623,12 +648,33 @@ void gen_global_var(ast_var_decl_t* var)
 	_gen_asm("\n");
 }
 
-void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
+void code_gen(valid_trans_unit_t* tl, write_asm_cb cb)
 {
 	_asm_cb = cb;
 	_var_set = var_init_set();
 
-	ast_declaration_t* decl = ast->decls;
+	ast_declaration_t* var = tl->variables;
+	while (var)
+	{
+		var_decl_global_var(_var_set, &var->data.var);
+		gen_global_var(&var->data.var);
+		var = var->next;
+	}
+
+	ast_declaration_t* fn = tl->functions;
+	while(fn)
+	{ 
+		if (fn->data.func.blocks)
+		{
+			var_enter_function(_var_set, &fn->data.func);
+			gen_function(&fn->data.func);
+			var_leave_function(_var_set);
+		}
+
+		fn = fn->next;
+	}
+
+	/*ast_declaration_t* decl = ast->decls;
 
 	while (decl)
 	{
@@ -644,6 +690,7 @@ void code_gen(ast_trans_unit_t* ast, write_asm_cb cb)
 			gen_global_var(&decl->data.var);
 		}
 		decl = decl->next;
-	}
+	}*/
+
 	var_destory_set(_var_set);
 }

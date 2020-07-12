@@ -4,9 +4,15 @@
 #include "pch.h"
 #include "ast_view.h"
 
+extern "C"
+{
+
 #include "diag.h"
 #include "lexer.h"
 #include "parse.h"
+#include "code_gen.h"
+
+}
 
 #define MAX_LOADSTRING 100
 
@@ -252,6 +258,12 @@ void HighlightTextRange(AstTreeItem* ast)
     SendMessage(hText, WM_SETFOCUS, 0, 0);
 }
 
+void asm_print(const char* line)
+{
+//    printf("%s\n", line);
+}
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
@@ -263,8 +275,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             switch (wmId)
             {
             case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+                //DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+            {
+                valid_trans_unit_t* tl = validate_tl(theSourceFile->pAst);
+                code_gen(tl, &asm_print);
                 break;
+            }
             case IDM_EXIT:
                 DestroyWindow(hWnd);
                 break;

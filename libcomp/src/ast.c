@@ -23,7 +23,7 @@ void ast_destroy_expression(ast_expression_t* expr)
 	case expr_assign:
 		ast_destroy_expression(expr->data.assignment.expr);
 		break;
-	case expr_var_ref:
+	case expr_identifier:
 		break;	
 	case expr_condition:
 		ast_destroy_expression(expr->data.condition.cond);
@@ -39,18 +39,6 @@ void ast_destroy_expression(ast_expression_t* expr)
 	free(expr);
 }
 
-void ast_destroy_param_list(ast_function_param_t* params)
-{
-	ast_function_param_t* param = params;
-
-	while (param)
-	{
-		ast_function_param_t* next = param->next;
-		free(param);
-		param = next;
-	}
-}
-
 void ast_destroy_declaration(ast_declaration_t* decl)
 {
 	if (!decl) return;
@@ -61,7 +49,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 		ast_destroy_expression(decl->data.var.expr);
 		break;
 	case decl_func:
-		ast_destroy_param_list(decl->data.func.params);
+		//ast_destroy_expression(decl->data.func.params);
 		break;
 	}
 	free(decl);
@@ -149,7 +137,6 @@ void ast_destroy_function_decl(ast_function_decl_t* fn)
 
 	free(fn);
 }
-
 void ast_destory_translation_unit(ast_trans_unit_t* tl)
 {
 	if (!tl) return;
@@ -213,19 +200,21 @@ bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb c
 	return true;
 }
 
-const char* ast_builtin_type_name(type_kind k)
+const char* ast_type_name(ast_type_spec_t* type)
 {
-	switch (k)
+	switch (type->kind)
 	{
 	case type_void:
 		return "void";
 	case type_int:
 		return "int";
+	case type_struct:
+		return type->struct_spec->name;
 	}
 	return "unknown type";
 }
 
-const char* ast_get_decl_name(ast_declaration_t* decl)
+const char* ast_declaration_name(ast_declaration_t* decl)
 {
 	switch (decl->kind)
 	{
@@ -233,6 +222,8 @@ const char* ast_get_decl_name(ast_declaration_t* decl)
 		return decl->data.var.name;
 	case decl_func:
 		return decl->data.func.name;
+	case decl_type:
+		return ast_type_name(&decl->data.type);
 	}
 	return NULL;
 }

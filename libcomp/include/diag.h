@@ -9,7 +9,7 @@ extern "C"
 #include <stdarg.h>
 
 #define ERR_SYNTAX 1
-#define ERR_EXPECTED_TOK 2
+#define ERR_UNKNOWN_TYPE 2
 #define ERR_FUNC_DUP_BODY 3			//Multiple definitions of the same function
 #define ERR_FUNC_DIFF_PARAMS 4		//Multiple declarations with different param lists
 #define ERR_DUP_VAR 5
@@ -18,6 +18,8 @@ extern "C"
 #define ERR_INVALID_PARAMS 8
 #define ERR_DUP_SYMBOL 9	//either function or global var
 #define ERR_INVALID_INIT 10 //global must have const init
+#define ERR_TYPE_DUP 11	//Multipple definitions of the same struct
+#define ERR_TYPE_INCOMPLETE 11	//Type not defined
 
 struct token;
 
