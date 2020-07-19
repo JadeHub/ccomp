@@ -277,8 +277,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_ABOUT:
                 //DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
             {
-                valid_trans_unit_t* tl = validate_tl(theSourceFile->pAst);
+                valid_trans_unit_t* tl = tl_validate(theSourceFile->pAst);
                 code_gen(tl, &asm_print);
+                tl_destroy(tl);
                 break;
             }
             case IDM_EXIT:

@@ -57,7 +57,8 @@ public:
 
 	void validate()
 	{
-		validate_tl(ast);
+		valid_trans_unit_t* tl = tl_validate(ast);
+		tl_destroy(tl);
 	}
 
 	static void diag_cb(token_t* tok, uint32_t err, const char* msg, void* data)

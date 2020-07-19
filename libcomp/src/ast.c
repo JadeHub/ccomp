@@ -39,6 +39,27 @@ void ast_destroy_expression(ast_expression_t* expr)
 	free(expr);
 }
 
+void ast_destroy_type_spec(ast_type_spec_t* type)
+{
+//	if (!type)
+		return;
+
+	/*if (type->kind == type_struct)
+	{
+		ast_struct_member_t* member = type->struct_spec->members;
+
+		while (member)
+		{
+			ast_struct_member_t* next = member->next;
+			ast_destroy_type_spec(member->type);
+			free(member);
+			member = next;
+		}
+		free(type->struct_spec);
+	}*/
+	free(type);
+}
+
 void ast_destroy_declaration(ast_declaration_t* decl)
 {
 	if (!decl) return;
@@ -227,4 +248,3 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 	}
 	return NULL;
 }
-

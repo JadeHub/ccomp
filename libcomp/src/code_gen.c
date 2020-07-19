@@ -11,10 +11,21 @@
 void gen_expression(ast_expression_t* expr);
 void gen_block_item(ast_block_item_t* bi);
 
+typedef struct
+{
+	char name[128]; //set if global var
+	ast_type_spec_t* type; //target value type
+	int stack_offset;
+}lval_data_t;
+
+
 static write_asm_cb _asm_cb;
 
 static var_set_t* _var_set;
 static bool _returned = false;
+static ast_function_decl_t* _cur_fun = NULL;
+static valid_trans_unit_t* _cur_tl = NULL;
+static lval_data_t* _cur_assign_target = NULL;
 
 static const char* _cur_break_label = NULL;
 static const char* _cur_cont_label = NULL;
@@ -77,7 +88,7 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 	}
 }
 
-int _get_struct_member_offset(ast_type_spec_t* type, ast_expr_identifier_t* var_ref)
+ast_struct_member_t* _get_struct_member(ast_type_spec_t* type, ast_expr_identifier_t* var_ref)
 {
 	assert(type->kind == type_struct);
 
@@ -86,20 +97,18 @@ int _get_struct_member_offset(ast_type_spec_t* type, ast_expr_identifier_t* var_
 	{
 		if (strcmp(member->name, var_ref->name) == 0)
 		{
-			return member->offset;
+			//return member->offset;
+			return member;
 		}
 		member = member->next;
 	}
 	return 0;
 }
 
-typedef struct
-{
-	char name[128];
-	ast_type_spec_t* type;
-	int stack_offset;
-}lval_data_t;
 
+/*
+
+*/
 lval_data_t _get_lvalue_addr(ast_expression_t* target)
 {
 	lval_data_t result = {"", NULL, 0 };
@@ -131,13 +140,15 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 	else if (target->kind == expr_binary_op &&
 		target->data.binary_op.operation == op_member_access)
 	{
-
 		// a.b
 		lval_data_t a = _get_lvalue_addr(target->data.binary_op.lhs);
 		if (a.type)
 		{
 			assert(target->data.binary_op.rhs->kind == expr_identifier);
-			a.stack_offset += _get_struct_member_offset(a.type, &target->data.binary_op.rhs->data.var_reference);
+			ast_struct_member_t* member = _get_struct_member(a.type, &target->data.binary_op.rhs->data.var_reference);
+			assert(member);
+			a.stack_offset += member->offset;
+			a.type = member->type;
 			return a;
 		}
 	}
@@ -162,20 +173,6 @@ void gen_assign_expr(token_t* tok, ast_expression_t* target)
 	}
 }
 
-void gen_assign_expression(token_t* tok, const char* var_name)
-{
-	var_data_t* var = var_find(_var_set, var_name);
-	if(!var)
-	{
-		diag_err(tok, ERR_UNKNOWN_VAR, "assignment to unknown variable %s", var_name);
-		return;
-	}
-	if (var->bsp_offset != 0)
-		_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
-	else //global
-		_gen_asm("movl %%eax, _var_%s", var->name);
-}
-
 void gen_expression(ast_expression_t* expr)
 {
 	if (expr->kind == expr_null)
@@ -184,16 +181,31 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_func_call)
 	{
-		ast_expression_t* param = expr->data.func_call.params;
+		ast_declaration_t* decl = idm_find_decl(_cur_tl->identifiers, expr->data.func_call.name, decl_func);
+		assert(decl);
+		if (!decl)
+			return;
 
+		ast_expression_t* param = expr->data.func_call.params;
 		while (param)
 		{
 			gen_expression(param);
 			_gen_asm("pushl %%eax");
 			param = param->next;
 		}
+
+		if (decl->data.func.return_type->size > 4)
+		{
+			//put the address of the target in eax
+			_gen_asm("leal %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
+			//push eax
+			_gen_asm("pushl %%eax");
+		}
 		_gen_asm("call %s", expr->data.func_call.name);
-		_gen_asm("addl $%d, %%esp", expr->data.func_call.param_count * 4);
+		if (expr->data.func_call.param_count)
+		{
+			_gen_asm("addl $%d, %%esp", expr->data.func_call.param_count * 4);
+		}
 	}
 	else if (expr->kind == expr_condition)
 	{
@@ -213,23 +225,85 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		gen_expression(expr->data.assignment.expr);
-		gen_assign_expr(expr->tokens.start, expr->data.assignment.target);
+		/*gen_expression(expr->data.assignment.expr);
+		gen_assign_expr(expr->tokens.start, expr->data.assignment.target);*/
+
+		lval_data_t lval = _get_lvalue_addr(expr->data.assignment.target);
 		
-	}
-	else if (expr->kind == expr_identifier)
-	{
-		//var ref
-		lval_data_t lval = _get_lvalue_addr(expr);
-		if (lval.type)
+		if (!lval.type)
 		{
+		//	gen_expression(expr->data.assignment.expr);
+			return;
+		}
+		lval_data_t* prev_target = _cur_assign_target;
+		_cur_assign_target = &lval;
+
+		if (lval.type->size > 4)
+		{
+		/*	//put the address of the target in eax
+			_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
+			//push eax
+			_gen_asm("pushl %%eax");*/
+
+			gen_expression(expr->data.assignment.expr);
+
+
+		}
+		else if (lval.type->size == 4)
+		{
+			gen_expression(expr->data.assignment.expr);
+			
+			//copy eax into the target
 			if (strlen(lval.name))
 			{
-				_gen_asm("movl %s, %%eax", lval.name);
+				_gen_asm("movl %%eax, %s", lval.name);
 			}
 			else
 			{
-				_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
+				_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
+			}
+		}
+		else
+		{
+			assert(false);
+		}
+		_cur_assign_target = prev_target;
+	}
+	else if (expr->kind == expr_identifier)
+	{
+		/*
+		Variable reference		
+		*/
+		lval_data_t lval = _get_lvalue_addr(expr);
+		if (lval.type)
+		{
+			if (lval.type->size == 4)
+			{
+				// code: move the value of the(global or stack) variable to eax
+				if (strlen(lval.name))
+				{
+					_gen_asm("movl %s, %%eax", lval.name);
+				}
+				else
+				{
+					_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
+				}
+			}
+			else if (lval.type->size > 4)
+			{
+				// code: copy the bytes from source to the address in %%eax
+				size_t sz = lval.type->size;
+
+				int source_stack = lval.stack_offset;
+				uint32_t dest_off = 0;
+				while (sz > 0)
+				{					
+					_gen_asm("movl %d(%%ebp), %%edx", source_stack);
+					_gen_asm("movl %%edx, %d(%%eax)", dest_off);
+					source_stack += 4;
+					dest_off += 4;
+					sz -= 4;
+				}
 			}
 		}
 	}
@@ -411,6 +485,30 @@ void gen_scope_block_leave()
 	_gen_asm("addl $%d, %%esp", bsp);
 }
 
+void gen_return_statement(ast_statement_t* smnt)
+{
+	if (_cur_fun->return_type->size > 4)
+	{
+		_gen_asm("movl 8(%%ebp), %%eax"); //return value address in eax
+	}
+
+	gen_expression(smnt->data.expr);
+
+	//function epilogue
+	if (_cur_fun->return_type->size > 4)
+	{
+		_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
+		_gen_asm("leave");
+		_gen_asm("ret $4");
+	}
+	else
+	{
+		_gen_asm("leave");
+		_gen_asm("ret");
+	}
+	_returned = true;
+}
+
 void gen_statement(ast_statement_t* smnt)
 {
 	const char* cur_break = _cur_break_label;
@@ -418,14 +516,7 @@ void gen_statement(ast_statement_t* smnt)
 
 	if (smnt->kind == smnt_return)
 	{
-		gen_expression(smnt->data.expr);
-
-		//function epilogue
-		_gen_asm("movl %%ebp, %%esp");
-		_gen_asm("pop %%ebp");
-
-		_gen_asm("ret");		
-		_returned = true;
+		gen_return_statement(smnt);
 	}
 	else if (smnt->kind == smnt_expr)
 	{
@@ -596,6 +687,7 @@ void gen_block_item(ast_block_item_t* bi)
 void gen_function(ast_function_decl_t* fn)
 {	
 	_returned = false;
+	_cur_fun = fn;
 
 	_gen_asm(".globl %s", fn->name);
 	_gen_asm("%s:", fn->name);
@@ -616,13 +708,14 @@ void gen_function(ast_function_decl_t* fn)
 	{
 		//function epilogue
 		_gen_asm("movl $0, %%eax");
-		_gen_asm("movl %%ebp, %%esp");
-		_gen_asm("pop %%ebp");
+		_gen_asm("leave");
 
 		_gen_asm("ret");
 	}
 	_gen_asm("\n");
 	_gen_asm("\n");
+
+	_cur_fun = NULL;
 }
 
 void gen_global_var(ast_var_decl_t* var)
@@ -651,6 +744,7 @@ void gen_global_var(ast_var_decl_t* var)
 void code_gen(valid_trans_unit_t* tl, write_asm_cb cb)
 {
 	_asm_cb = cb;
+	_cur_tl = tl;
 	_var_set = var_init_set();
 
 	ast_declaration_t* var = tl->variables;
@@ -673,24 +767,7 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb)
 
 		fn = fn->next;
 	}
-
-	/*ast_declaration_t* decl = ast->decls;
-
-	while (decl)
-	{
-		if (decl->kind == decl_func && decl->data.func.blocks)
-		{
-			var_enter_function(_var_set, &decl->data.func);
-			gen_function(&decl->data.func);
-			var_leave_function(_var_set);
-		}
-		else if (decl->kind == decl_var)
-		{
-			var_decl_global_var(_var_set, &decl->data.var);
-			gen_global_var(&decl->data.var);
-		}
-		decl = decl->next;
-	}*/
-
 	var_destory_set(_var_set);
+	_cur_tl = NULL;
+	_var_set = NULL;
 }

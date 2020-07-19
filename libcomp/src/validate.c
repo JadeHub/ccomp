@@ -46,11 +46,12 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	switch (typeref->kind)
 	{
 	case type_void:
+		ast_destroy_type_spec(typeref);
 		return &_void_type;
 	case type_int:
+		ast_destroy_type_spec(typeref);
 		return &_int_type;
 	case type_struct:
-
 		break;
 	}
 
@@ -70,10 +71,11 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		{
 			//update definition
 			exist->struct_spec->members = typeref->struct_spec->members;
+			typeref->struct_spec->members = NULL;
 		}
+		ast_destroy_type_spec(typeref);
 		return exist;
 	}
-
 	idm_add_tag(_id_map, typeref);
 	return typeref;
 }
@@ -92,21 +94,15 @@ bool process_variable_declaration(ast_declaration_t* decl)
 		return false;
 	}
 
-	idm_add_id(_id_map, decl);
-
-/*	ast_var_decl_t* var = &decl->data.var;
-	if (!var)
-		return true;
-
-	var_data_t* existing = var_cur_block_find(_var_set, var->name);
-
-	if (existing)
+	ast_type_spec_t* type = _resolve_type(var->type);
+	if (!type)
 	{
-		_report_err(decl->tokens.start, ERR_DUP_VAR, "var %s already declared at",
-			var->name);
 		return false;
 	}
-	var_decl_stack_var(_var_set, var);*/
+	var->type = type;
+
+	idm_add_id(_id_map, decl);
+
 	return true;
 }
 
@@ -126,10 +122,12 @@ bool process_declaration(ast_declaration_t* var)
 
 bool process_variable_reference(ast_expression_t* expr)
 {
-	/*if (!expr)
+	if (!expr)
 		return true;
 
-	var_data_t* existing = var_find(_var_set, expr->data.var_reference.name);
+	
+
+	/*var_data_t* existing = var_find(_var_set, expr->data.var_reference.name);
 	if (!existing)
 	{
 		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined",expr->data.var_reference.name);
@@ -412,9 +410,10 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	//return type
 	ast_type_spec_t* ret_type = _resolve_type(func->return_type);
 	if (!ret_type)
-	{
 		return false;
-	}
+	
+	func->return_type = ret_type;
+	
 	if (_is_fn_definition(decl) && 
 		ret_type->kind != type_void && 
 		ret_type->size == 0)
@@ -424,8 +423,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			func->name, ret_type->struct_spec->name);
 		return false;
 	}
-	func->return_type = ret_type;
-
+	
 	//parameter types
 	ast_declaration_t* param = func->params;
 	while (param)
@@ -441,7 +439,8 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		ast_type_spec_t* param_type = _resolve_type(param->data.var.type);
 		if (!param_type)
 			return false;
-		
+		param->data.var.type = param_type;
+
 		if (_is_fn_definition(decl) && 
 			param_type->kind != type_void &&
 			param_type->size == 0)
@@ -452,7 +451,6 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			return false;
 		}
 		
-		param->data.var.type = param_type;
 		param = param->next;
 	}
 	return true;
@@ -536,7 +534,6 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 
 			idm_update_decl(_id_map, decl);
 		}
-		//return proc_decl_ignore;
 	}
 	else
 	{
@@ -592,6 +589,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		{
 			//update definition
 			exist->data.var.expr = decl->data.var.expr;
+			decl->data.var.expr = NULL;
 		}
 		return proc_decl_ignore;
 	}
@@ -615,14 +613,14 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 	return proc_decl_new_def;
 }
 
-valid_trans_unit_t* validate_tl(ast_trans_unit_t* tl)
+valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 {
 	_id_map = idm_create();
 
 	ast_declaration_t* vars = NULL;
 	ast_declaration_t* fns = NULL;
 	
-	ast_declaration_t* decl = tl->decls;
+	ast_declaration_t* decl = ast->decls;
 	while (decl)
 	{
 		ast_declaration_t* next = decl->next;
@@ -647,13 +645,12 @@ valid_trans_unit_t* validate_tl(ast_trans_unit_t* tl)
 			{
 				decl->next = fns;
 				fns = decl;
-			}
-
-			if (decl->data.func.blocks)
-			{
-				idm_enter_function(_id_map, &decl->data.func);
-				process_function_definition(&decl->data.func);
-				idm_leave_function(_id_map);
+				if (decl->data.func.blocks)
+				{
+					idm_enter_function(_id_map, &decl->data.func);
+					process_function_definition(&decl->data.func);
+					idm_leave_function(_id_map);
+				}
 			}
 		}
 		else if (decl->kind == decl_type)
@@ -665,10 +662,20 @@ valid_trans_unit_t* validate_tl(ast_trans_unit_t* tl)
 
 	valid_trans_unit_t* result = (valid_trans_unit_t*)malloc(sizeof(valid_trans_unit_t));
 	memset(result, 0, sizeof(valid_trans_unit_t));
-	result->ast = tl;
+	result->ast = ast;
 	result->functions = fns;
 	result->variables = vars;
-	idm_destroy(_id_map);
+	result->identifiers = _id_map;
+	_id_map = NULL;
 
 	return result;
+}
+
+void tl_destroy(valid_trans_unit_t* tl)
+{
+	if (!tl)
+		return;
+	idm_destroy(tl->identifiers);
+	ast_destory_translation_unit(tl->ast);
+	free(tl);
 }

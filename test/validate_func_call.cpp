@@ -2,25 +2,6 @@
 
 class FnCallValidationTest : public ValidationTest {};
 
-TEST_F(FnCallValidationTest, foo)
-{
-	std::string code = R"(
-	int foo(int x) 
-	{
-		return x + 1;
-	}
-
-	int main() 
-	{
-		int a = 1;
-		return foo(a);
-	}
-
-	)";
-
-	ExpectError(code, ERR_UNKNOWN_FUNC);
-}
-
 TEST_F(FnCallValidationTest, err_undefined)
 {
 	std::string code = R"(

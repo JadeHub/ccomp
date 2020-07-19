@@ -126,12 +126,15 @@ void idm_leave_function(identfier_map_t* map)
 
 void idm_enter_block(identfier_map_t* map)
 {
+	//add block marker to identifier stack
 	identifier_t* id = (identifier_t*)malloc(sizeof(identifier_t));
 	memset(id, 0, sizeof(identifier_t));
 
 	id->decl = NULL;
 	id->next = map->identifiers;
 	map->identifiers = id;
+
+	//add block market to type stacl
 }
 
 void idm_leave_block(identfier_map_t* map)

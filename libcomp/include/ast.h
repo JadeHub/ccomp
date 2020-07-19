@@ -111,7 +111,7 @@ function call expression data
 typedef struct
 {
 	char name[MAX_LITERAL_NAME];
-	struct ast_expression* target;
+	struct ast_expression* target; //todo - unused
 	struct ast_expression* params;
 	uint32_t param_count;
 }ast_expr_func_call_t;
@@ -200,19 +200,9 @@ typedef struct ast_var_decl
 	ast_expression_t* expr;
 }ast_var_decl_t;
 
-/*typedef struct ast_function_param
-{
-	token_range_t tokens;
-	char name[MAX_LITERAL_NAME];
-	ast_type_spec_t* type;
-
-	struct ast_function_param* next;
-}ast_function_param_t;*/
-
 typedef struct ast_func_decl
 {
 	char name[MAX_LITERAL_NAME];
-	//ast_function_param_t* params;
 	struct ast_declaration* params;
 	uint32_t param_count;
 	ast_type_spec_t* return_type;
@@ -347,6 +337,9 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);
 void ast_destroy_expression(ast_expression_t*);
 void ast_destroy_declaration(ast_declaration_t*);
+void ast_destroy_type_spec(ast_type_spec_t*);
+
+
 
 typedef bool (*ast_fn_decl_visitor_cb)(ast_function_decl_t*);
 typedef bool (*ast_block_item_visitor_cb)(ast_block_item_t*);

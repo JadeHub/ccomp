@@ -10,8 +10,6 @@ local variables
 glocal variables
 */
 
-
-
 typedef struct identifier
 {
 	ast_declaration_t* decl;
