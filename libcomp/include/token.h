@@ -23,6 +23,7 @@ typedef enum
     tok_plusequal,          // +=
     tok_star,               // *
     tok_slash,              // /
+    tok_slashslash,         // //
 
     tok_amp,                // &
     tok_ampamp,             // &&

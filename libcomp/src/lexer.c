@@ -240,8 +240,16 @@ lex_next_tok:
 		result->len = 1;
 		break;
 	case '/':
-		result->kind = tok_slash;
-		result->len = 1;
+		if (pos[1] == '/')
+		{
+			result->kind = tok_slashslash;
+			result->len = 2;
+		}
+		else
+		{
+			result->kind = tok_slash;
+			result->len = 1;
+		}
 		break;
 	case '%':
 		result->kind = tok_percent;
@@ -354,7 +362,18 @@ lex_next_tok:
 	case '_':
 		_lex_identifier(src, pos, result);
 		break;
-	};	
+	};
+
+	if (result->kind == tok_slashslash)
+	{
+		//Skip up to eol
+		while (*pos != '\n')
+		{
+			if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
+		};
+		goto lex_next_tok;
+	}
+
 	return result->kind != tok_invalid;
 
 _hit_end:

@@ -48,3 +48,21 @@ TEST_F(LexTest, Eof)
 
 	Lex(code);
 }
+
+TEST_F(LexTest, Comment)
+{
+	std::string code = R"(
+	int foo //(int a);
+	int foo2 = 5;	)";
+
+	Lex(code);
+	EXPECT_EQ(tokens[0].kind, tok_int);
+	EXPECT_EQ(tokens[1].kind, tok_identifier);
+	EXPECT_TRUE(tok_spelling_cmp(&tokens[1], "foo"));
+
+	EXPECT_EQ(tokens[2].kind, tok_int);
+	EXPECT_EQ(tokens[3].kind, tok_identifier);
+	EXPECT_TRUE(tok_spelling_cmp(&tokens[3], "foo2"));
+	EXPECT_EQ(tokens[4].kind, tok_equal);
+	EXPECT_EQ(tokens[5].kind, tok_num_literal);
+}

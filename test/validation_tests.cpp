@@ -40,6 +40,10 @@ TEST_F(ValidationTest, unary_missing_semi)
 	ExpectSyntaxErrors("int main() {return !7}");
 }
 
+TEST_F(ValidationTest, unary_missing_space)
+{
+	ExpectSyntaxErrors("int main() {return7}");
+}
 
 TEST_F(ValidationTest, fn_decl_in_fn_definition)
 {
@@ -51,19 +55,55 @@ TEST_F(ValidationTest, fn_decl_in_fn_definition)
 	}
 	)";
 
-	parse(code);
-	validate();
+	ExpectNoError(code);
 }
 
-TEST_F(ValidationTest, foo)
+TEST_F(ValidationTest, unary_wrong_order)
 {
-	std::string code = R"(
+	ExpectSyntaxErrors("int main() {return 4-;}");
+}
 
-	struct B {
-		int a;
-		int b;
-	} v;
+TEST_F(ValidationTest, unary_missing_const)
+{
+	ExpectSyntaxErrors("int main() {return ~;}");
+}
 
-	)";
-	parse(code);
+TEST_F(ValidationTest, unary_nested_missing_const)
+{
+	ExpectSyntaxErrors("int main() {return !~;}");
+}
+
+TEST_F(ValidationTest, unary_nested_missing_semi)
+{
+	ExpectSyntaxErrors("int main() {return !5}");
+}
+
+TEST_F(ValidationTest, binary_malformed_paran)
+{
+	ExpectSyntaxErrors("int main() {return 2 (- 3);}");
+}
+
+TEST_F(ValidationTest, binary_missing_semi)
+{
+	ExpectSyntaxErrors("int main() {return 2*2}");
+}
+
+TEST_F(ValidationTest, binary_missing_rhs)
+{
+	ExpectSyntaxErrors("int main() {return 2 + ;}");
+}
+
+TEST_F(ValidationTest, binary_missing_lhs)
+{
+	ExpectSyntaxErrors("int main() {return / 3;}");
+}
+
+TEST_F(ValidationTest, boolean_missing_rhs)
+{
+	ExpectSyntaxErrors("int main() {return 2 &&;}");
+}
+
+TEST_F(ValidationTest, boolean_missing_lhs)
+{
+	ExpectSyntaxErrors("int main() {return <= 3;}");
 }

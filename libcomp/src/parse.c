@@ -691,6 +691,13 @@ ast_expression_t* try_parse_postfix_expr()
 		ast_expression_t* expr = _alloc_expr();
 		if (current_is(tok_l_paren))
 		{
+			if (primary->kind != expr_identifier)
+			{
+				report_err(ERR_SYNTAX, "identifier must proceed function call");
+				ast_destroy_expression(primary);
+				return NULL;
+			}
+
 			//function call
 			expr->kind = expr_func_call;
 			expr->data.func_call.target = primary;

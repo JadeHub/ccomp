@@ -15,7 +15,9 @@ typedef struct
 {
 	char name[128]; //set if global var
 	ast_type_spec_t* type; //target value type
-	int stack_offset;
+	int32_t stack_offset;
+
+	bool deref;
 }lval_data_t;
 
 
@@ -111,7 +113,7 @@ ast_struct_member_t* _get_struct_member(ast_type_spec_t* type, ast_expr_identifi
 */
 lval_data_t _get_lvalue_addr(ast_expression_t* target)
 {
-	lval_data_t result = {"", NULL, 0 };
+	lval_data_t result = {"", NULL, 0 , false};
 	if (target->kind == expr_identifier)
 	{
 		var_data_t* var = var_find(_var_set, target->data.var_reference.name);
@@ -197,7 +199,10 @@ void gen_expression(ast_expression_t* expr)
 		if (decl->data.func.return_type->size > 4)
 		{
 			//put the address of the target in eax
-			_gen_asm("leal %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
+			if(_cur_assign_target->deref)
+				_gen_asm("movl %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
+			else
+				_gen_asm("leal %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
 			//push eax
 			_gen_asm("pushl %%eax");
 		}
@@ -225,9 +230,6 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		/*gen_expression(expr->data.assignment.expr);
-		gen_assign_expr(expr->tokens.start, expr->data.assignment.target);*/
-
 		lval_data_t lval = _get_lvalue_addr(expr->data.assignment.target);
 		
 		if (!lval.type)
@@ -240,14 +242,7 @@ void gen_expression(ast_expression_t* expr)
 
 		if (lval.type->size > 4)
 		{
-		/*	//put the address of the target in eax
-			_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
-			//push eax
-			_gen_asm("pushl %%eax");*/
-
 			gen_expression(expr->data.assignment.expr);
-
-
 		}
 		else if (lval.type->size == 4)
 		{
@@ -262,12 +257,15 @@ void gen_expression(ast_expression_t* expr)
 			{
 				_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
 			}
+			//_gen_asm("movl $0, %%eax"); //todo remove
 		}
 		else
 		{
 			assert(false);
-		}
+		}		
 		_cur_assign_target = prev_target;
+		if(_cur_assign_target)
+			gen_expression(expr->data.assignment.target);		
 	}
 	else if (expr->kind == expr_identifier)
 	{
@@ -291,18 +289,41 @@ void gen_expression(ast_expression_t* expr)
 			}
 			else if (lval.type->size > 4)
 			{
-				// code: copy the bytes from source to the address in %%eax
-				size_t sz = lval.type->size;
+				if (_cur_assign_target->deref)
+				{
+					_gen_asm("#Here");
+					//the destination address is in the stack at stack_offset
+					//load the address into eax
+					_gen_asm("movl %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
 
-				int source_stack = lval.stack_offset;
-				uint32_t dest_off = 0;
-				while (sz > 0)
-				{					
-					_gen_asm("movl %d(%%ebp), %%edx", source_stack);
-					_gen_asm("movl %%edx, %d(%%eax)", dest_off);
-					source_stack += 4;
-					dest_off += 4;
-					sz -= 4;
+					// code: copy the bytes from source to the address in eax
+					size_t sz = lval.type->size;
+					int source_stack = lval.stack_offset;
+					uint32_t dest_off = 0;
+					while (sz > 0)
+					{
+						_gen_asm("movl %d(%%ebp), %%edx", source_stack);
+						_gen_asm("movl %%edx, %d(%%eax)", dest_off);
+						source_stack += 4;
+						dest_off += 4;
+						sz -= 4;
+					}
+				}
+				else
+				{
+					//the destination is a stack offset
+
+					size_t sz = lval.type->size;
+					int source_stack = lval.stack_offset;
+					int32_t dest_off = _cur_assign_target->stack_offset;
+					while (sz > 0)
+					{
+						_gen_asm("movl %d(%%ebp), %%edx", source_stack);
+						_gen_asm("movl %%edx, %d(%%ebp)", dest_off);
+						source_stack += 4;
+						dest_off += 4;
+						sz -= 4;
+					}
 				}
 			}
 		}
@@ -489,10 +510,24 @@ void gen_return_statement(ast_statement_t* smnt)
 {
 	if (_cur_fun->return_type->size > 4)
 	{
-		_gen_asm("movl 8(%%ebp), %%eax"); //return value address in eax
-	}
+		lval_data_t* prev = _cur_assign_target;
+		lval_data_t ret_val;
+		ret_val.name[0] = NULL;
+		ret_val.stack_offset = 8;
+		ret_val.deref = true;
+		ret_val.type = _cur_fun->return_type;
+		
+		_cur_assign_target = &ret_val;
+		
+		//_gen_asm("movl 8(%%ebp), %%eax"); //return value address in eax
 
-	gen_expression(smnt->data.expr);
+		gen_expression(smnt->data.expr);
+		_cur_assign_target = prev;		
+	}
+	else
+	{
+		gen_expression(smnt->data.expr);
+	}
 
 	//function epilogue
 	if (_cur_fun->return_type->size > 4)
