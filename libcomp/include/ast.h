@@ -332,6 +332,7 @@ void ast_print(ast_trans_unit_t* tl);
 const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
 const char* ast_type_name(ast_type_spec_t* type);
+ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, const char* name);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);

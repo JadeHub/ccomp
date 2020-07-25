@@ -17,6 +17,7 @@ static ast_type_spec_t _int_type = { {NULL, NULL}, type_int, 4, NULL };
 
 
 static identfier_map_t* _id_map;
+static ast_function_decl_t* _cur_func = NULL;
 
 typedef enum
 {
@@ -56,6 +57,8 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	}
 
 	ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->struct_spec->name);
+	if (typeref == exist)
+		return exist;
 	if (exist)
 	{
 		if (exist->struct_spec->members && typeref->struct_spec->members)
@@ -162,6 +165,14 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		return _resolve_expr_type(expr->data.unary_op.expression);
 	case expr_binary_op:
 	{
+		if (expr->data.binary_op.operation == op_member_access)
+		{
+			// a.b (lhs.rhs)
+			ast_type_spec_t* struct_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+			assert(struct_spec);
+			ast_type_spec_t* member_spec = ast_find_struct_member(struct_spec->struct_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
+			return _resolve_type(member_spec);
+		}
 		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
 		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
 		if (l == r)
@@ -349,6 +360,38 @@ bool process_for_statement(ast_statement_t* smnt)
 	return true;
 }
 
+bool process_return_statement(ast_statement_t* smnt)
+{
+	assert(_cur_func);
+	if (smnt->data.expr)
+	{
+		/*if (_cur_func->return_type->kind == type_void)
+		{
+			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+				"return value type does not match function declaration");
+			return false;
+		}*/
+
+		if (_resolve_expr_type(smnt->data.expr) != _cur_func->return_type)
+		{
+			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+				"return value type does not match function declaration");
+			return false;
+		}
+	}
+	else
+	{
+		if (_cur_func->return_type->kind != type_void)
+		{
+			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+				"function must return a value");
+			return false;
+		}
+	}
+
+	return process_expression(smnt->data.expr);
+}
+
 bool process_statement(ast_statement_t* smnt)
 {
 	if (!smnt)
@@ -386,7 +429,7 @@ bool process_statement(ast_statement_t* smnt)
 		return process_block_list(smnt->data.compound.blocks);
 		break;
 	case smnt_return:
-		return process_expression(smnt->data.expr);
+		return process_return_statement(smnt);
 	}
 
 	return true;
@@ -394,7 +437,10 @@ bool process_statement(ast_statement_t* smnt)
 
 bool process_function_definition(ast_function_decl_t* decl)
 {
-	return process_block_list(decl->blocks);
+	_cur_func = decl;
+	bool ret = process_block_list(decl->blocks);
+	_cur_func = NULL;
+	return ret;
 }
 
 static bool _is_fn_definition(ast_declaration_t* decl)
@@ -648,7 +694,10 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 				if (decl->data.func.blocks)
 				{
 					idm_enter_function(_id_map, &decl->data.func);
-					process_function_definition(&decl->data.func);
+					if (!process_function_definition(&decl->data.func))
+					{
+						return NULL;
+					}
 					idm_leave_function(_id_map);
 				}
 			}

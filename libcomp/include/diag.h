@@ -20,6 +20,7 @@ extern "C"
 #define ERR_INVALID_INIT 10 //global must have const init
 #define ERR_TYPE_DUP 11	//Multipple definitions of the same struct
 #define ERR_TYPE_INCOMPLETE 11	//Type not defined
+#define ERR_INVALID_RETURN 12 //return statmement is not valid
 
 struct token;
 

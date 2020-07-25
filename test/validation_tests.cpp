@@ -10,11 +10,6 @@ TEST_F(ValidationTest, fn_missing_r_paren)
 	ExpectSyntaxErrors("int main( {return 7;}");
 }
 
-TEST_F(ValidationTest, fn_missing_ret_val)
-{
-	ExpectSyntaxErrors("int main() {return;}");
-}
-
 TEST_F(ValidationTest, fn_missing_semi)
 {
 	ExpectSyntaxErrors("int main() {return 7}");

@@ -1,6 +1,7 @@
 #include "ast.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 void ast_destroy_statement(ast_statement_t* smnt);
 
@@ -245,6 +246,21 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 		return decl->data.func.name;
 	case decl_type:
 		return ast_type_name(&decl->data.type);
+	}
+	return NULL;
+}
+
+ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, const char* name)
+{
+	ast_struct_member_t* member = struct_spec->members;
+	while (member)
+	{
+		if (strcmp(member->name, name) == 0)
+		{
+			//return member->offset;
+			return member;
+		}
+		member = member->next;
 	}
 	return NULL;
 }

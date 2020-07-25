@@ -17,6 +17,7 @@ typedef struct
 	ast_type_spec_t* type; //target value type
 	int32_t stack_offset;
 
+	bool push;
 	bool deref;
 }lval_data_t;
 
@@ -49,6 +50,12 @@ static uint32_t _next_label = 0;
 static void _make_label_name(char* name)
 {
 	sprintf(name, "_label%d", ++_next_label);
+}
+
+static lval_data_t _create_lval_data()
+{
+	lval_data_t val = { "", NULL, 0, false, false };
+	return val;
 }
 
 void gen_logical_binary_expr(ast_expression_t* expr)
@@ -113,7 +120,7 @@ ast_struct_member_t* _get_struct_member(ast_type_spec_t* type, ast_expr_identifi
 */
 lval_data_t _get_lvalue_addr(ast_expression_t* target)
 {
-	lval_data_t result = {"", NULL, 0 , false};
+	lval_data_t result = _create_lval_data();
 	if (target->kind == expr_identifier)
 	{
 		var_data_t* var = var_find(_var_set, target->data.var_reference.name);
@@ -147,7 +154,9 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 		if (a.type)
 		{
 			assert(target->data.binary_op.rhs->kind == expr_identifier);
-			ast_struct_member_t* member = _get_struct_member(a.type, &target->data.binary_op.rhs->data.var_reference);
+			ast_struct_member_t* member = ast_find_struct_member(a.type->struct_spec,
+																target->data.binary_op.rhs->data.var_reference.name);
+				//_get_struct_member(a.type, &target->data.binary_op.rhs->data.var_reference);
 			assert(member);
 			a.stack_offset += member->offset;
 			a.type = member->type;
@@ -189,11 +198,29 @@ void gen_expression(ast_expression_t* expr)
 			return;
 
 		ast_expression_t* param = expr->data.func_call.params;
+		ast_declaration_t* param_decl = decl->data.func.params;
 		while (param)
 		{
-			gen_expression(param);
-			_gen_asm("pushl %%eax");
+			if (param_decl->data.var.type->size == 4)
+			{
+				gen_expression(param);
+				_gen_asm("pushl %%eax");
+			}
+			else if (param_decl->data.var.type->size > 4)
+			{
+				lval_data_t target = _create_lval_data();
+				target.push = true;
+
+				lval_data_t* prev = _cur_assign_target;
+				_cur_assign_target = &target;
+
+				gen_expression(param);
+				_cur_assign_target = prev;
+			}
+
+			
 			param = param->next;
+			param_decl = param_decl->next;
 		}
 
 		if (decl->data.func.return_type->size > 4)
@@ -234,7 +261,6 @@ void gen_expression(ast_expression_t* expr)
 		
 		if (!lval.type)
 		{
-		//	gen_expression(expr->data.assignment.expr);
 			return;
 		}
 		lval_data_t* prev_target = _cur_assign_target;
@@ -291,7 +317,6 @@ void gen_expression(ast_expression_t* expr)
 			{
 				if (_cur_assign_target->deref)
 				{
-					_gen_asm("#Here");
 					//the destination address is in the stack at stack_offset
 					//load the address into eax
 					_gen_asm("movl %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
@@ -309,10 +334,20 @@ void gen_expression(ast_expression_t* expr)
 						sz -= 4;
 					}
 				}
+				if (_cur_assign_target->push)
+				{
+					int source_stack = lval.stack_offset + lval.type->size -4;
+					size_t sz = lval.type->size;
+					while (sz > 0)
+					{
+						_gen_asm("push %d(%%ebp)", source_stack);
+						source_stack -= 4;
+						sz -= 4;
+					}
+				}
 				else
 				{
 					//the destination is a stack offset
-
 					size_t sz = lval.type->size;
 					int source_stack = lval.stack_offset;
 					int32_t dest_off = _cur_assign_target->stack_offset;
@@ -485,7 +520,15 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	assert(var);
 	if (var_decl->expr)
 	{
+		//lval_data_t target = _create_lval_data();
+		//target.stack_offset = var->bsp_offset;
+
+		//lval_data_t* prev = _cur_assign_target;
+		//_cur_assign_target = &target;
+
 		gen_expression(var_decl->expr);
+		//_cur_assign_target = prev;
+
 		_gen_asm("pushl %%eax");
 	}
 	else

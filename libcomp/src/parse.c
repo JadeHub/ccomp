@@ -984,7 +984,7 @@ ast_statement_t* parse_statement()
 		//<statement> ::= "return" < exp > ";"
 		next_tok();
 		result->kind = smnt_return;
-		result->data.expr = parse_expression();
+		result->data.expr = parse_optional_expression(tok_semi_colon);// parse_expression();
 		expect_cur(tok_semi_colon);
 		next_tok();
 	}
