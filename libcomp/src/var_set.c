@@ -64,6 +64,10 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
+
+		if (fn->return_type->size > 4)
+			offset += 4; //add 4 bytes for the return value pointer
+
 		while (param)
 		{			
 			var_data_t* var = _make_stack_var(offset, param->data.var.name);

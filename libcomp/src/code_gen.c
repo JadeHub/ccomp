@@ -199,6 +199,7 @@ void gen_expression(ast_expression_t* expr)
 
 		ast_expression_t* param = expr->data.func_call.params;
 		ast_declaration_t* param_decl = decl->data.func.params;
+		uint32_t pushed = 0;
 		while (param)
 		{
 			if (param_decl->data.var.type->size == 4)
@@ -217,8 +218,7 @@ void gen_expression(ast_expression_t* expr)
 				gen_expression(param);
 				_cur_assign_target = prev;
 			}
-
-			
+			pushed += param_decl->data.var.type->size;
 			param = param->next;
 			param_decl = param_decl->next;
 		}
@@ -234,9 +234,9 @@ void gen_expression(ast_expression_t* expr)
 			_gen_asm("pushl %%eax");
 		}
 		_gen_asm("call %s", expr->data.func_call.name);
-		if (expr->data.func_call.param_count)
+		if (pushed > 0)
 		{
-			_gen_asm("addl $%d, %%esp", expr->data.func_call.param_count * 4);
+			_gen_asm("addl $%d, %%esp", pushed);
 		}
 	}
 	else if (expr->kind == expr_condition)
@@ -334,7 +334,7 @@ void gen_expression(ast_expression_t* expr)
 						sz -= 4;
 					}
 				}
-				if (_cur_assign_target->push)
+				else if (_cur_assign_target->push)
 				{
 					int source_stack = lval.stack_offset + lval.type->size -4;
 					size_t sz = lval.type->size;
@@ -520,16 +520,19 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	assert(var);
 	if (var_decl->expr)
 	{
-		//lval_data_t target = _create_lval_data();
-		//target.stack_offset = var->bsp_offset;
+		lval_data_t lval = _create_lval_data();
+		lval.type = var_decl->type;
+		lval.stack_offset = var->bsp_offset;
 
-		//lval_data_t* prev = _cur_assign_target;
-		//_cur_assign_target = &target;
+		lval_data_t* prev_target = _cur_assign_target;
+		_cur_assign_target = &lval;
 
 		gen_expression(var_decl->expr);
-		//_cur_assign_target = prev;
-
-		_gen_asm("pushl %%eax");
+		if (lval.type->size == 4)
+		{		
+			_gen_asm("pushl %%eax");
+		}
+		_cur_assign_target = prev_target;
 	}
 	else
 	{
@@ -554,16 +557,13 @@ void gen_return_statement(ast_statement_t* smnt)
 	if (_cur_fun->return_type->size > 4)
 	{
 		lval_data_t* prev = _cur_assign_target;
-		lval_data_t ret_val;
-		ret_val.name[0] = NULL;
+		lval_data_t ret_val = _create_lval_data();
 		ret_val.stack_offset = 8;
 		ret_val.deref = true;
 		ret_val.type = _cur_fun->return_type;
 		
 		_cur_assign_target = &ret_val;
 		
-		//_gen_asm("movl 8(%%ebp), %%eax"); //return value address in eax
-
 		gen_expression(smnt->data.expr);
 		_cur_assign_target = prev;		
 	}

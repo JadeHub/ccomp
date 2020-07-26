@@ -485,6 +485,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 /*
 <var_declaration> ::= <type_specifier> <id> [=<exp>] ";"
 */
+/*
 ast_declaration_t* parse_var_decl()
 {
 	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
@@ -504,6 +505,7 @@ ast_declaration_t* parse_var_decl()
 	if (current_is(tok_equal))
 	{
 		next_tok();
+
 		result->data.var.expr = parse_expression();
 	}
 	if (_parse_err)
@@ -513,14 +515,14 @@ ast_declaration_t* parse_var_decl()
 	}
 	result->tokens.end = current();
 	return result;
-}
+}*/
 
 /*
 <declaration> :: = <var_declaration> ";"
 				| <type-specifier> ";"
 				| <function_declaration> ";"
 
-<var_declaration> ::= <type_specifier> <id> [=<exp>]
+<var_declaration> ::= <type_specifier> <id> [= <exp>]
 <function_declaration> ::= <type-specifier> <id> "(" [ <function_params ] ")"
 <type_specifier> ::= "int" | <struct_specifier>
 */
@@ -565,6 +567,20 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 			if (current_is(tok_equal))
 			{
 				next_tok();
+
+				/*ast_expression_t* target = _alloc_expr();
+				target->tokens = result->tokens;
+				target->kind = expr_identifier;
+				strcpy(target->data.var_reference.name, result->data.var.name);
+
+				ast_expression_t* assignment = _alloc_expr();
+				assignment->tokens = result->tokens;
+				assignment->kind = expr_assign;
+				assignment->data.assignment.target = target;
+				assignment->data.assignment.expr = parse_expression();
+				assignment->tokens.end = current();
+
+				result->data.var.expr = assignment;*/
 				result->data.var.expr = parse_expression();
 			}
 		}
