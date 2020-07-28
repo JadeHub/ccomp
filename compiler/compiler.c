@@ -76,7 +76,13 @@ int main(int argc, char* argv[])
   
     ast_trans_unit_t* ast = parse_translation_unit(toks);
     valid_trans_unit_t* tl = tl_validate(ast);
+    if (!tl)
+    {
+        printf("Failed to validate\n");
+        return -1;
+    }
     code_gen(tl, &asm_print);
     tl_destroy(tl);
+    return 0;
 }
 

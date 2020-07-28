@@ -116,6 +116,16 @@ typedef struct
 	uint32_t param_count;
 }ast_expr_func_call_t;
 
+typedef struct
+{
+	enum {sizeof_type, sizeof_expr} kind;
+	union
+	{
+		struct ast_expression* expr;
+		struct ast_type_spec* type;
+	};
+}ast_sizeof_call_t;
+
 typedef enum
 {
 	expr_postfix_op,
@@ -126,6 +136,7 @@ typedef enum
 	expr_identifier,
 	expr_condition,
 	expr_func_call,
+	expr_sizeof,
 	expr_null
 }expression_kind;
 
@@ -142,6 +153,7 @@ typedef struct ast_expression
 		ast_expr_identifier_t var_reference;
 		ast_cond_expr_data_t condition;
 		ast_expr_func_call_t func_call;
+		ast_sizeof_call_t sizeof_call;
 	}data;
 	struct ast_expression* next; //func call param list
 }ast_expression_t;

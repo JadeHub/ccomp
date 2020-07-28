@@ -9,6 +9,7 @@
 
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
+ast_expression_t* parse_unary_expr();
 ast_type_spec_t* try_parse_type_spec();
 
 static token_t* _cur_tok = NULL;
@@ -214,7 +215,7 @@ static ast_expression_t* _alloc_expr()
 <statement> ::= "return" <exp> ";"
 			  | <exp-option> ";"
 			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-			  | "{" { <block-item> } "}
+			  | "{" { <block-item> } "}"
 			  | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
 			  | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
 			  | "while" "(" <exp> ")" <statement>
@@ -237,8 +238,10 @@ static ast_expression_t* _alloc_expr()
 <additive-exp> ::= <multiplacative-exp> { ("+" | "-") <multiplacative-exp> }
 <multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
 <cast-exp> ::= <unary-exp>
-<unary-exp> ::= <postfix_op>
+<unary-exp> ::= <postfix-exp>
 				| <unary-op> <cast-exp>
+				| "sizeof" <unary-exp>
+				| "sizeof" "(" <type_specifier> ")"
 
 <postfix-exp> ::= <primary-exp> {
 				| "(" [ <exp> { "," <exp> } ] ")"
@@ -765,9 +768,48 @@ ast_expression_t* try_parse_postfix_expr()
 
 ast_expression_t* parse_cast_expr();
 
+ast_expression_t* parse_sizeof_expr()
+{
+	ast_expression_t* expr = _alloc_expr();
+	expr->kind = expr_sizeof;
+	
+	next_tok();
+
+	if (current_is(tok_l_paren))
+	{
+		next_tok();
+		//Could be a typespec, or an expression in parentheses
+		ast_type_spec_t* type = try_parse_type_spec();
+		
+		if (type)
+		{
+			expr->data.sizeof_call.kind = sizeof_type;
+			expr->data.sizeof_call.type = type;
+		}
+		else
+		{
+			expr->data.sizeof_call.kind = sizeof_expr;
+			expr->data.unary_op.expression = parse_unary_expr();
+		}
+
+		expect_cur(tok_r_paren);
+		next_tok();
+	}
+	else
+	{
+		expr->data.sizeof_call.kind = sizeof_expr;
+		expr->data.unary_op.expression = parse_unary_expr();
+	}
+	
+	expr->tokens.end = current();
+	return expr;
+}
+
 /*
 <unary-exp> ::= <postfix-exp>
 				| <unary-op> <cast-exp>
+				| "sizeof" <unary-exp>
+				| "sizeof" "(" <type_specifier> ")"
 */
 ast_expression_t* try_parse_unary_expr()
 {
@@ -780,6 +822,10 @@ ast_expression_t* try_parse_unary_expr()
 		expr->data.unary_op.expression = parse_cast_expr();
 		expr->tokens.end = current();
 		return expr;
+	}
+	else if (current_is(tok_sizeof))
+	{
+		return parse_sizeof_expr();
 	}
 	return try_parse_postfix_expr();
 }

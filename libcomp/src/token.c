@@ -85,6 +85,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "struct";
 	case tok_union:
 		return "union";
+	case tok_sizeof:
+		return "sizeof";
 	case tok_comma:
 		return ",";
 	case tok_void:

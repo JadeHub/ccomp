@@ -23,6 +23,7 @@ extern "C"
 #define ERR_INVALID_RETURN 12 //return statmement is not valid
 #define ERR_INCOMPATIBLE_TYPE 13
 #define ERR_UNKNOWN_MEMBER_REF 14
+#define ERR_UNSUPPORTED 15
 
 struct token;
 

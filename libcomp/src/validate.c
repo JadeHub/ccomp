@@ -213,7 +213,6 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	}
 	case expr_int_literal:
 		return &_int_type;
-		break;
 	case expr_assign:
 		return _resolve_expr_type(expr->data.assignment.target);
 	case expr_identifier:
@@ -238,6 +237,9 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			return _resolve_type(decl->data.func.return_type);
 		return NULL;
 	}
+	case expr_sizeof:
+		return &_int_type;
+
 	case expr_null:
 		break;
 	}
@@ -355,6 +357,29 @@ bool process_assignment_expression(ast_expression_t* expr)
 	return process_expression(expr->data.assignment.target);
 }
 
+bool process_sizeof_expr(ast_expression_t* expr)
+{
+	ast_type_spec_t* type;
+	
+	if (expr->data.sizeof_call.kind == sizeof_type)
+		type = _resolve_type(expr->data.sizeof_call.type);
+	else
+		type = _resolve_expr_type(expr->data.sizeof_call.expr);
+
+	if (!type || type->size == 0)
+	{
+		_report_err(expr->tokens.start,
+			ERR_UNKNOWN_TYPE,
+			"could not determin type for sizeof call");
+		return false;
+	}
+
+	//change expression to represent a constant int
+	expr->kind = expr_int_literal;
+	expr->data.const_val = type->size;
+	return true;
+}
+
 bool process_expression(ast_expression_t* expr)
 {
 	if (!expr)
@@ -391,6 +416,9 @@ bool process_expression(ast_expression_t* expr)
 			break;
 		case expr_func_call:
 			return process_func_call(expr);
+			break;
+		case expr_sizeof:			
+			return process_sizeof_expr(expr);
 			break;
 		case expr_null:
 			break;

@@ -57,6 +57,7 @@ typedef enum
     tok_continue,
     tok_struct,
     tok_union,
+    tok_sizeof,
 
     //types
     tok_int,
@@ -72,6 +73,7 @@ typedef struct token
     size_t len;
     tok_kind kind;
     void* data;
+    //uint8_t flags;
     struct token* next;
     struct token* prev;
 }token_t;

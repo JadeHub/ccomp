@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 static token_t _invalid_tok;
 
@@ -107,6 +108,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_struct;
 	else if (tok_spelling_cmp(result, "union"))
 		result->kind = tok_union;
+	else if (tok_spelling_cmp(result, "sizeof"))
+		result->kind = tok_sizeof;
 }
 
 static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -390,6 +393,9 @@ token_t* lex_source(source_range_t* sr)
 	do
 	{
 		tok = (token_t*)malloc(sizeof(token_t));
+		memset(tok, 0, sizeof(token_t));
+
+		size_t a = sizeof tok;
 
 		if (!lex_next_tok(sr, pos, tok))
 			break;
