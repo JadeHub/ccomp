@@ -48,7 +48,7 @@ TEST_F(StructValidationTest, decl_define)
 	ExpectNoError(code);
 }
 
-TEST_F(StructValidationTest, redefine_new_scope)
+/*TEST_F(StructValidationTest, redefine_new_scope)
 {
 	std::string code = R"(
 	
@@ -67,7 +67,7 @@ TEST_F(StructValidationTest, redefine_new_scope)
 	)";
 
 	ExpectNoError(code);
-}
+}*/
 
 TEST_F(StructValidationTest, err_incorrect_ret_type)
 {
@@ -143,3 +143,26 @@ TEST_F(StructValidationTest, err_unknown_member2)
 	ExpectError(code, ERR_UNKNOWN_MEMBER_REF);
 }
 
+TEST_F(StructValidationTest, err_undefined_sizeof)
+{
+	std::string code = R"(
+	int main()
+	{		
+		return sizeof(struct A);
+	}
+	)";
+
+	ExpectError(code, ERR_UNKNOWN_TYPE);
+}
+
+TEST_F(StructValidationTest, defined_sizeof)
+{
+	std::string code = R"(
+	int main()
+	{		
+		return sizeof(struct A{int i;});
+	}
+	)";
+
+	ExpectNoError(code);
+}
