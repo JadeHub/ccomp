@@ -150,7 +150,7 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 		target->data.binary_op.operation == op_member_access)
 	{
 		// a.b
-		lval_data_t a = _get_lvalue_addr(target->data.binary_op.lhs);
+ 		lval_data_t a = _get_lvalue_addr(target->data.binary_op.lhs);
 		if (a.type)
 		{
 			assert(target->data.binary_op.rhs->kind == expr_identifier);

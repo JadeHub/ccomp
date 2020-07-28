@@ -29,7 +29,7 @@ void asm_print(const char* line)
 
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 {
-    file_pos_t pos = src_file_position(tok->loc);
+    //file_pos_t pos = src_file_position(tok->loc);
 
     printf("%s(%s): Err %d: %s\n",
         "file.c",

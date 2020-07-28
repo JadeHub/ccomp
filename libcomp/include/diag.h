@@ -18,9 +18,11 @@ extern "C"
 #define ERR_INVALID_PARAMS 8
 #define ERR_DUP_SYMBOL 9	//either function or global var
 #define ERR_INVALID_INIT 10 //global must have const init
-#define ERR_TYPE_DUP 11	//Multipple definitions of the same struct
+#define ERR_DUP_TYPE_DEF 11	//Multiple definitions of the same struct
 #define ERR_TYPE_INCOMPLETE 11	//Type not defined
 #define ERR_INVALID_RETURN 12 //return statmement is not valid
+#define ERR_INCOMPATIBLE_TYPE 13
+#define ERR_UNKNOWN_MEMBER_REF 14
 
 struct token;
 

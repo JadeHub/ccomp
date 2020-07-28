@@ -42,6 +42,18 @@ static void _report_err(token_t* tok, int err, const char* format, ...)
 	diag_err(tok, err, buff);
 }
 
+static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref);
+
+static void _resolve_struct_member_types(ast_struct_spec_t* struct_spec)
+{
+	ast_struct_member_t* member = struct_spec->members;
+	while (member)
+	{
+		member->type = _resolve_type(member->type);
+		member = member->next;
+	}
+}
+
 static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 {
 	switch (typeref->kind)
@@ -64,7 +76,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		if (exist->struct_spec->members && typeref->struct_spec->members)
 		{
 			//multiple definitions
-			_report_err(typeref->tokens.start, ERR_TYPE_DUP,
+			_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
 				"redefinition of struct '%s'",
 				typeref->struct_spec->name);
 			return NULL;
@@ -73,21 +85,28 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		if (!exist->struct_spec->members && typeref->struct_spec->members)
 		{
 			//update definition
+			exist->size = typeref->size;
 			exist->struct_spec->members = typeref->struct_spec->members;
 			typeref->struct_spec->members = NULL;
+
+			_resolve_struct_member_types(exist->struct_spec);
 		}
 		ast_destroy_type_spec(typeref);
 		return exist;
 	}
+	_resolve_struct_member_types(typeref->struct_spec);
 	idm_add_tag(_id_map, typeref);
 	return typeref;
+}
+
+static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
+{
+	return target == type;
 }
 
 bool process_variable_declaration(ast_declaration_t* decl)
 {
 	ast_var_decl_t* var = &decl->data.var;
-	//if (!var)
-		//return true;
 
 	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name, decl_var);
 	if (existing)
@@ -98,12 +117,13 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	}
 
 	ast_type_spec_t* type = _resolve_type(var->type);
-	if (!type)
+	if (!type || type->size == 0)
 	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
+			ast_declaration_name(decl));
 		return false;
 	}
 	var->type = type;
-
 	idm_add_id(_id_map, decl);
 
 	return true;
@@ -128,14 +148,22 @@ bool process_variable_reference(ast_expression_t* expr)
 	if (!expr)
 		return true;
 
-	
-
-	/*var_data_t* existing = var_find(_var_set, expr->data.var_reference.name);
-	if (!existing)
+ 	ast_declaration_t* decl = idm_find_block_decl(_id_map, expr->data.var_reference.name, decl_var);
+	if (!decl)
 	{
-		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined",expr->data.var_reference.name);
+		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown var %s",
+			expr->data.var_reference.name);
 		return false;
-	}*/
+	}
+
+	ast_type_spec_t* type = _resolve_type(decl->data.var.type);
+	if (!type || type->size == 0)
+	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
+			ast_declaration_name(decl));
+		return false;
+	}
+	decl->data.var.type = type;
 	return true;
 }
 
@@ -173,6 +201,7 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			ast_type_spec_t* member_spec = ast_find_struct_member(struct_spec->struct_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
 			return _resolve_type(member_spec);
 		}
+		
 		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
 		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
 		if (l == r)
@@ -269,6 +298,63 @@ bool process_func_call(ast_expression_t* expr)
 	return true;
 }
 
+bool process_member_access_expression(ast_expression_t* expr)
+{
+	// a.b (lhs.rhs)
+	if (!process_expression(expr->data.binary_op.lhs))
+		return false;
+
+	ast_type_spec_t* struct_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+	ast_struct_member_t* member = ast_find_struct_member(struct_spec->struct_spec, expr->data.binary_op.rhs->data.var_reference.name);
+	if (member == NULL)
+	{
+		_report_err(expr->tokens.start,
+			ERR_UNKNOWN_MEMBER_REF,
+			"%s is not a member of %s",
+			expr->data.binary_op.rhs->data.var_reference.name,
+			ast_type_name(struct_spec));
+		return false;
+	}
+	
+	return true;
+}
+
+bool process_assignment_expression(ast_expression_t* expr)
+{
+	if (!process_expression(expr->data.assignment.expr) || !process_expression(expr->data.assignment.target))
+		return false;
+
+	ast_type_spec_t* target_type = _resolve_expr_type(expr->data.assignment.target);
+	ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.assignment.expr);
+
+	if (!target_type)
+	{
+		_report_err(expr->tokens.start,
+			ERR_UNKNOWN_TYPE,
+			"cannot determine assignment target type");
+		return false;
+	}
+
+	if (!expr_type)
+	{
+		_report_err(expr->tokens.start,
+			ERR_UNKNOWN_TYPE,
+			"cannot determine assignment type");
+		return false;
+	}
+
+	if (!_can_convert_type(target_type, expr_type))
+	{
+		_report_err(expr->tokens.start,
+			ERR_INCOMPATIBLE_TYPE,
+			"assignment to incompatible type. expected %d",
+			ast_type_name(target_type));
+		return false;
+	}
+
+	return process_expression(expr->data.assignment.target);
+}
+
 bool process_expression(ast_expression_t* expr)
 {
 	if (!expr)
@@ -281,6 +367,9 @@ bool process_expression(ast_expression_t* expr)
 			return process_expression(expr->data.unary_op.expression);
 			break;
 		case expr_binary_op:
+			if (expr->data.binary_op.operation == op_member_access)
+				return process_member_access_expression(expr);
+			
 			if (!process_expression(expr->data.binary_op.lhs))
 				return false;
 			return process_expression(expr->data.binary_op.rhs);
@@ -288,9 +377,7 @@ bool process_expression(ast_expression_t* expr)
 		case expr_int_literal:
 			break;
 		case expr_assign:
-			if (!process_expression(expr->data.assignment.expr))
-				return false;
-			return process_variable_assignment(expr);
+			return process_assignment_expression(expr);
 			break;
 		case expr_identifier:
 			return process_variable_reference(expr);
@@ -330,7 +417,6 @@ bool process_block_item(ast_block_item_t* block)
 
 bool process_block_list(ast_block_item_t* blocks)
 {
-	idm_enter_block(_id_map);
 	ast_block_item_t* block = blocks;
 	while (block)
 	{
@@ -341,7 +427,6 @@ bool process_block_list(ast_block_item_t* blocks)
 		}
 		block = block->next;
 	}
-	idm_leave_block(_id_map);
 	return true;
 }
 
@@ -365,13 +450,6 @@ bool process_return_statement(ast_statement_t* smnt)
 	assert(_cur_func);
 	if (smnt->data.expr)
 	{
-		/*if (_cur_func->return_type->kind == type_void)
-		{
-			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
-				"return value type does not match function declaration");
-			return false;
-		}*/
-
 		if (_resolve_expr_type(smnt->data.expr) != _cur_func->return_type)
 		{
 			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
@@ -426,7 +504,9 @@ bool process_statement(ast_statement_t* smnt)
 			return false;
 		break;
 	case smnt_compound:
-		return process_block_list(smnt->data.compound.blocks);
+		idm_enter_block(_id_map);
+		bool ret = process_block_list(smnt->data.compound.blocks);
+		idm_leave_block(_id_map);
 		break;
 	case smnt_return:
 		return process_return_statement(smnt);

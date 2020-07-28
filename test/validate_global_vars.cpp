@@ -45,7 +45,7 @@ TEST_F(GlobalVarsValidationTest, err_struct_redefined)
 	struct B{int b;} foo;
 	struct B{int b;} foo1;	)";
 
-	ExpectError(code, ERR_TYPE_DUP);
+	ExpectError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(GlobalVarsValidationTest, err_struct_incomplete)
