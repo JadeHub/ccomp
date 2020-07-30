@@ -264,3 +264,27 @@ ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, cons
 	}
 	return NULL;
 }
+
+uint32_t ast_struct_member_size(ast_struct_member_t* member)
+{
+	if (member->bit_size > 0)
+		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
+	return member->type->size;
+}
+
+uint32_t ast_struct_size(ast_struct_spec_t* spec)
+{
+	uint32_t total = 0;
+	uint32_t max_member = 0;
+
+	ast_struct_member_t* member = spec->members;
+	while (member)
+	{
+		uint32_t size = ast_struct_member_size(member);
+		total += size;
+		if (size > max_member)
+			max_member = size;
+		member = member->next;
+	}
+	return spec->kind == struct_union ? max_member : total;
+}

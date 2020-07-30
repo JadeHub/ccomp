@@ -28,6 +28,7 @@ static inline bool _test_next_and_adv(source_range_t* sr, const char** pos, char
 	return false;
 }
 
+const unsigned volatile int k;
 
 /*
 [0-9]
@@ -86,6 +87,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	//Keywords
 	if (tok_spelling_cmp(result, "int"))
 		result->kind = tok_int;
+	else if (tok_spelling_cmp(result, "char"))
+		result->kind = tok_char;
 	else if (tok_spelling_cmp(result, "void"))
 		result->kind = tok_void;
 	else if (tok_spelling_cmp(result, "return"))
@@ -348,7 +351,10 @@ lex_next_tok:
 			result->len = 1;
 		}
 		break;
-	
+	case '\'':
+		result->kind = tok_apostrophe;
+		result->len = 1;
+		break;
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':		
 		_lex_num_literal(src, pos, result);

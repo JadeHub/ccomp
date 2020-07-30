@@ -47,8 +47,8 @@ void var_leave_function(var_set_t* vars);
 
 /* enter a scope block */
 void var_enter_block(var_set_t*);
-/* returns number of bytes to be added to esp*/
-int var_leave_block(var_set_t*);
+/* leave a block destroying local vars */
+void var_leave_block(var_set_t*);
 
 /* declare a new stack variable*/
 var_data_t* var_decl_stack_var(var_set_t*, ast_var_decl_t*);

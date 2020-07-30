@@ -25,6 +25,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "\r";
 	case tok_int:
 		return "int";
+	case tok_char:
+		return "char";
 	case tok_identifier:
 		return "identifier";
 	case tok_num_literal:
@@ -93,6 +95,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "void";
 	case tok_fullstop:
 		return ".";
+	case tok_apostrophe:
+		return "'";
 	}
 	return "invalid";
 }
@@ -115,6 +119,11 @@ void tok_printf(token_t* tok)
 	{
 		printf("Tok %s\n", tok_kind_spelling(tok->kind));
 	}
+}
+
+size_t tok_spelling_len(token_t* tok)
+{
+	return tok->len;
 }
 
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len)

@@ -18,12 +18,14 @@ TEST_F(LocalVarsValidationTest, err_dup_var)
 TEST_F(LocalVarsValidationTest, dup_new_scope)
 {
 	std::string code = R"(
-	void main()
+	int main()
 	{
 		int foo;
-
 		{
 			int foo;
+		}
+		{
+			return foo;
 		}
 	}	
 	)";
@@ -43,64 +45,32 @@ TEST_F(LocalVarsValidationTest, err_undeclared_var)
 	ExpectError(code, ERR_UNKNOWN_VAR);
 }
 
-
-
-
-
-/*TEST_F(LocalVarsValidationTest, err_dup_definition)
+TEST_F(LocalVarsValidationTest, err_incorrect_type_assign)
 {
 	std::string code = R"(
-	int foo = 4;
-	int foo = 5;	)";
-
-	ExpectError(code, ERR_DUP_SYMBOL);
-}
-
-TEST_F(LocalVarsValidationTest, err_change_type)
-{
-	std::string code = R"(
-	int foo = 4;
-	void foo;	)";
-
-	ExpectError(code, ERR_DUP_SYMBOL);
-}
-
-TEST_F(LocalVarsValidationTest, err_change_type2)
-{
-	std::string code = R"(
-	int foo = 4;
-	struct B{int b;} foo;	)";
-
-	ExpectError(code, ERR_DUP_SYMBOL);
-}
-
-TEST_F(LocalVarsValidationTest, err_struct_redefined)
-{
-	std::string code = R"(
-	struct B{int b;} foo;
-	struct B{int b;} foo1;	)";
-
-	ExpectError(code, ERR_DUP_TYPE_DEF);
-}
-
-TEST_F(LocalVarsValidationTest, err_struct_incomplete)
-{
-	std::string code = R"(
-	struct B foo;
+	struct A{int a;};
+	void main()
+	{
+		int i;
+		struct A a;
+		i = a;
+	}	
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
-TEST_F(LocalVarsValidationTest, struct_referenced)
+TEST_F(LocalVarsValidationTest, char_variable)
 {
 	std::string code = R"(
-	struct B{int b;} foo;
-	struct B foo1;
+	int main()
+	{
+		char c;
+		c = 'j';
+		return c;
+	}	
 	)";
 
 	ExpectNoError(code);
 }
-
-*/
 

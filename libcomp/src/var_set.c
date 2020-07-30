@@ -76,7 +76,7 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 			var->next = vars->vars;
 			vars->vars = var;
 
-			offset += param->data.var.type->size;
+			offset += param->data.var.type->size < 4 ? 4 : param->data.var.type->size;
 			param = param->next;
 		}
 	}
@@ -112,10 +112,8 @@ void var_enter_block(var_set_t* vars)
 	vars->vars = var;
 }
 
-int var_leave_block(var_set_t* vars)
+void var_leave_block(var_set_t* vars)
 {
-	int bsp_start = vars->bsp_offset;
-
 	// remove all up to and including the most recent block marker
 	var_data_t* var = vars->vars;
 	while (var)
@@ -126,7 +124,7 @@ int var_leave_block(var_set_t* vars)
 			vars->vars = var->next;
 			vars->bsp_offset = bsp_end;
 			free(var);
-			return bsp_end - bsp_start;
+			return;
 		}
 
 		var_data_t* next = var->next;
@@ -134,7 +132,6 @@ int var_leave_block(var_set_t* vars)
 		var = next;
 	}
 	assert(false);
-	return 0;
 }
 
 var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)

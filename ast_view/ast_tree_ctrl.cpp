@@ -64,7 +64,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         InsertExpression(tree_item, expr->data.unary_op.expression, "expr: ");
         break;
     case expr_int_literal:
-        sprintf_s(item->name, "%sInt Literal: %d", prefix, expr->data.const_val);
+        sprintf_s(item->name, "%sInt Literal: %d", prefix, expr->data.int_literal.value);
         tree_item = TreeInsert(parent, item);
         break;
     case expr_assign:

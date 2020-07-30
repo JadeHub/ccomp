@@ -126,6 +126,14 @@ typedef struct
 	};
 }ast_sizeof_call_t;
 
+typedef struct
+{
+	uint32_t value;
+
+	//Type to ultimatly be set to the smallest size required to hold 'value'
+	struct ast_type_spec* type;
+}ast_int_literal_t;
+
 typedef enum
 {
 	expr_postfix_op,
@@ -148,7 +156,7 @@ typedef struct ast_expression
 	{
 		ast_expr_unary_op_t unary_op;
 		ast_expr_binary_op_t binary_op;
-		uint32_t const_val;
+		ast_int_literal_t int_literal;
 		ast_expr_assign_t assignment;
 		ast_expr_identifier_t var_reference;
 		ast_cond_expr_data_t condition;
@@ -162,8 +170,8 @@ typedef struct ast_expression
 typedef enum
 {	
 	type_void,
-	/*type_char,
-	type_short,*/
+	type_char,
+	/*type_short,*/
 	type_int,
 	/*type_long,
 	type_float,
@@ -219,7 +227,7 @@ typedef struct ast_func_decl
 	uint32_t param_count;
 	ast_type_spec_t* return_type;
 
-	//static?
+	uint32_t required_stack_size;
 
 	//Definitions will have a list of blocks
 	struct ast_block_item* blocks;
@@ -345,6 +353,8 @@ const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
 const char* ast_type_name(ast_type_spec_t* type);
 ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, const char* name);
+uint32_t ast_struct_size(ast_struct_spec_t*);
+uint32_t ast_struct_member_size(ast_struct_member_t* member);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);

@@ -92,3 +92,15 @@ TEST_F(ReturnValidationTest, return_member_access)
 
 	ExpectNoError(code);
 }
+
+TEST_F(ReturnValidationTest, return_char_const)
+{
+	std::string code = R"(
+	int foo()
+	{
+		return 'a';
+	}
+	)";
+
+	ExpectNoError(code);
+}

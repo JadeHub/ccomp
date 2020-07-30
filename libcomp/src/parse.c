@@ -93,12 +93,16 @@ static bool _is_unary_op(token_t* tok)
 
 static bool _is_builtin_type(token_t* tok)
 {
-	return tok->kind == tok_int ||
+	return 
+		tok->kind == tok_char ||
+		tok->kind == tok_int ||
 		tok->kind == tok_void;
 }
 
 static uint32_t _get_builtin_type_size(token_t* tok)
 {
+	if (tok->kind == tok_char)
+		return 1;
 	if (tok->kind == tok_int)
 		return 4;
 	return 0;
@@ -110,6 +114,8 @@ static type_kind _get_builtin_type_kind(token_t* tok)
 	{
 	case tok_int:
 		return type_int;
+	case tok_char:
+		return type_char;
 	case tok_void:
 		return type_void;
 	}
@@ -208,8 +214,9 @@ static ast_expression_t* _alloc_expr()
 <declaration> :: = <var_declaration> ";"
 				| <type-specifier> ";"
 				| <function_declaration> ";"
-<var_declaration> ::= <type_specifier> <id> [=<exp>]
-<function_declaration> ::= <type_specifier> <id> "(" [ <type_specifier> <id> { "," <type_specifier> <id> } ] ")"
+<var_declaration> ::= <type_specifier> <id> [= <exp>]
+<function_declaration> ::= <type_specifier> <id> "(" [ <function_param_list> ] ")"
+<function_param_list> ::= <type_specifier> <id> { "," <type_specifier> <id> }
 <function> ::= <function_declaration> "{" { <block-item> } "}"
 <block-item> ::= [ <statement> | <declaration> ]
 <statement> ::= "return" <exp> ";"
@@ -253,10 +260,13 @@ static ast_expression_t* _alloc_expr()
 <primary-exp> ::= <id> | <literal> | "(" <exp> ")"
 
 <literal> ::= <int>
+			| "'" <char> "'"
+
 
 <unary_op> ::= "!" | "~" | "-" | "++" | "--"
 <type_specifier> ::= "int"
-				| <struct_specifier>
+					| "char"
+					| <struct_specifier>
 <struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
 <struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
 <struct_decl> ::= <type_specifier> [ <id> ] [ ":" <int> ]
@@ -384,7 +394,7 @@ ast_struct_spec_t* parse_struct_spec()
 }
 
 /*
-<type_specifier> :: = "int" | <struct_specifier>
+<type_specifier> :: = "int" | "char" | <struct_specifier>
 */
 ast_type_spec_t* try_parse_type_spec()
 {
@@ -407,12 +417,7 @@ ast_type_spec_t* try_parse_type_spec()
 		result->tokens.start = current();
 		result->kind = type_struct;
 		result->struct_spec = parse_struct_spec();
-		ast_struct_member_t* member = result->struct_spec->members;
-		while (member)
-		{
-			result->size += member->type->size;
-			member = member->next;
-		}
+		result->size = ast_struct_size(result->struct_spec);
 		result->tokens.end = current();
 		return result;
 	}
@@ -452,28 +457,6 @@ void parse_function_parameters(ast_function_decl_t* func)
 		if (!current_is(tok_comma))
 			break;
 		next_tok();
-
-
-		/*ast_function_param_t* param = (ast_function_param_t*)malloc(sizeof(ast_function_param_t));
-		memset(param, 0, sizeof(ast_function_param_t));
-		param->tokens.start = current();
-		param->type = type;
-		if (current_is(tok_identifier))
-		{
-			tok_spelling_cpy(current(), param->name, MAX_LITERAL_NAME);
-			next_tok();
-		}
-		param->tokens.end = current();
-		if (last_param)
-			last_param->next = param;
-		else
-			func->params = param;
-		last_param = param;
-		func->param_count++;
-		
-		if (!current_is(tok_comma))
-			break;
-		next_tok();*/
 	}
 
 	// if single void param remove it
@@ -484,41 +467,6 @@ void parse_function_parameters(ast_function_decl_t* func)
 		func->param_count = 0;
 	}
 }
-
-/*
-<var_declaration> ::= <type_specifier> <id> [=<exp>] ";"
-*/
-/*
-ast_declaration_t* parse_var_decl()
-{
-	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-	memset(result, 0, sizeof(ast_declaration_t));
-	result->tokens.start = current();
-	result->kind = decl_var;
-
-	result->data.var.type = try_parse_type_spec();
-	if (!result->data.var.type)
-	{
-		report_err(ERR_SYNTAX, "expected type spec");
-	}
-
-	expect_cur(tok_identifier);
-	tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
-	next_tok();
-	if (current_is(tok_equal))
-	{
-		next_tok();
-
-		result->data.var.expr = parse_expression();
-	}
-	if (_parse_err)
-	{
-		ast_destroy_declaration(result);
-		return NULL;
-	}
-	result->tokens.end = current();
-	return result;
-}*/
 
 /*
 <declaration> :: = <var_declaration> ";"
@@ -570,20 +518,6 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 			if (current_is(tok_equal))
 			{
 				next_tok();
-
-				/*ast_expression_t* target = _alloc_expr();
-				target->tokens = result->tokens;
-				target->kind = expr_identifier;
-				strcpy(target->data.var_reference.name, result->data.var.name);
-
-				ast_expression_t* assignment = _alloc_expr();
-				assignment->tokens = result->tokens;
-				assignment->kind = expr_assign;
-				assignment->data.assignment.target = target;
-				assignment->data.assignment.expr = parse_expression();
-				assignment->tokens.end = current();
-
-				result->data.var.expr = assignment;*/
 				result->data.var.expr = parse_expression();
 			}
 		}
@@ -646,6 +580,29 @@ ast_expression_t* parse_identifier()
 	return expr;
 }
 
+ast_expression_t* parse_char_literal()
+{
+	//"'" <char> "'"
+	expect_cur(tok_apostrophe);
+	next_tok();
+
+	expect_cur(tok_identifier);
+	if (tok_spelling_len(current()) > 1)
+	{
+		report_err(ERR_SYNTAX, "too many chars in character constant");
+		return NULL;
+	}
+
+	ast_expression_t* expr = _alloc_expr();
+	expr->kind = expr_int_literal;
+	expr->data.int_literal.value = (uint32_t)(long)current()->loc[0];
+
+	next_tok();
+	expect_cur(tok_apostrophe);
+	next_tok();
+	return expr;
+}
+
 /*
 <primary-exp> ::= <id> | <literal> | "(" <exp> ")"
 */
@@ -663,8 +620,14 @@ ast_expression_t* try_parse_primary_expr()
 		//<factor> ::= <int>
 		expr = _alloc_expr();
 		expr->kind = expr_int_literal;
-		expr->data.const_val = (uint32_t)(long)current()->data;
+		expr->data.int_literal.value = (uint32_t)(long)current()->data;
+		expr->data.int_literal.type = NULL;
+		
 		next_tok();
+	}
+	else if (current_is(tok_apostrophe))
+	{
+		return parse_char_literal();
 	}
 	else if (current_is(tok_l_paren))
 	{
@@ -852,7 +815,7 @@ ast_expression_t* parse_cast_expr()
 ast_expression_t* parse_multiplacative_expr()
 {
 	return parse_binary_expression(multiplacative_ops, parse_cast_expr);
-}
+ }
 
 /*
 <additive-exp> ::= <term> { ("+" | "-") <term> }
@@ -1094,7 +1057,7 @@ ast_statement_t* parse_statement()
 		{
 			//if no condition add a constant literal of 1
 			result->data.for_smnt.condition->kind = expr_int_literal;
-			result->data.for_smnt.condition->data.const_val = 1;
+			result->data.for_smnt.condition->data.int_literal.value = 1;
 		}
 	}
 	else if (current_is(tok_while))

@@ -3,6 +3,7 @@
 #include "source.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
 
 typedef enum
 {
@@ -24,7 +25,7 @@ typedef enum
     tok_star,               // *
     tok_slash,              // /
     tok_slashslash,         // //
-
+    tok_apostrophe,         // '
     tok_amp,                // &
     tok_ampamp,             // &&
     tok_pipe,               // |
@@ -60,6 +61,7 @@ typedef enum
     tok_sizeof,
 
     //types
+    tok_char,
     tok_int,
     tok_void,
 
@@ -90,6 +92,6 @@ const char* tok_kind_spelling(tok_kind);
 
 void tok_printf(token_t* tok);
 
+size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
-
 bool tok_spelling_cmp(token_t* tok, const char* str);

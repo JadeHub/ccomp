@@ -202,23 +202,30 @@ void gen_expression(ast_expression_t* expr)
 		uint32_t pushed = 0;
 		while (param)
 		{
-			if (param_decl->data.var.type->size == 4)
+			if (param_decl->data.var.type->size <= 4)
 			{
+				pushed += 4;
 				gen_expression(param);
-				_gen_asm("pushl %%eax");
+				_gen_asm("pushl %%eax");				
 			}
 			else if (param_decl->data.var.type->size > 4)
 			{
+				pushed += param_decl->data.var.type->size;
+
 				lval_data_t target = _create_lval_data();
 				target.push = true;
-
 				lval_data_t* prev = _cur_assign_target;
 				_cur_assign_target = &target;
 
 				gen_expression(param);
+
 				_cur_assign_target = prev;
 			}
-			pushed += param_decl->data.var.type->size;
+			else
+			{
+				assert(false);
+			}
+			
 			param = param->next;
 			param_decl = param_decl->next;
 		}
@@ -266,14 +273,14 @@ void gen_expression(ast_expression_t* expr)
 		lval_data_t* prev_target = _cur_assign_target;
 		_cur_assign_target = &lval;
 
+		gen_expression(expr->data.assignment.expr);
+
 		if (lval.type->size > 4)
 		{
-			gen_expression(expr->data.assignment.expr);
+			
 		}
 		else if (lval.type->size == 4)
 		{
-			gen_expression(expr->data.assignment.expr);
-			
 			//copy eax into the target
 			if (strlen(lval.name))
 			{
@@ -283,13 +290,17 @@ void gen_expression(ast_expression_t* expr)
 			{
 				_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
 			}
-			//_gen_asm("movl $0, %%eax"); //todo remove
+		}
+		else if (lval.type->size == 1)
+		{
+			_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
 		}
 		else
 		{
 			assert(false);
 		}		
 		_cur_assign_target = prev_target;
+
 		if(_cur_assign_target)
 			gen_expression(expr->data.assignment.target);		
 	}
@@ -312,6 +323,10 @@ void gen_expression(ast_expression_t* expr)
 				{
 					_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
 				}
+			}
+			else if (lval.type->size == 1)
+			{
+				_gen_asm("movzbl %d(%%ebp), %%eax", lval.stack_offset);
 			}
 			else if (lval.type->size > 4)
 			{
@@ -340,7 +355,7 @@ void gen_expression(ast_expression_t* expr)
 					size_t sz = lval.type->size;
 					while (sz > 0)
 					{
-						_gen_asm("push %d(%%ebp)", source_stack);
+						_gen_asm("pushl %d(%%ebp)", source_stack);
 						source_stack -= 4;
 						sz -= 4;
 					}
@@ -361,11 +376,15 @@ void gen_expression(ast_expression_t* expr)
 					}
 				}
 			}
+			else
+			{
+				assert(false);
+			}
 		}
 	}
 	else if (expr->kind == expr_int_literal)
 	{
-		_gen_asm("movl $%d, %%eax", expr->data.const_val);
+		_gen_asm("movl $%d, %%eax", expr->data.int_literal.value);
 	}
 	else if (expr->kind == expr_unary_op)
 	{
@@ -528,16 +547,19 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 		_cur_assign_target = &lval;
 
 		gen_expression(var_decl->expr);
+
 		if (lval.type->size == 4)
 		{		
-			_gen_asm("pushl %%eax");
+			_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
 		}
 		_cur_assign_target = prev_target;
 	}
 	else
 	{
-		for(uint32_t i=0; i<var_decl->type->size / 4; i++)
-			_gen_asm("pushl $0");
+		for (uint32_t i = 0; i < var_decl->type->size / 4; i++)
+		{
+			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
+		}
 	}
 }
 
@@ -548,8 +570,7 @@ void gen_scope_block_enter()
 
 void gen_scope_block_leave()
 {
-	int bsp = var_leave_block(_var_set);
-	_gen_asm("addl $%d, %%esp", bsp);
+	var_leave_block(_var_set);
 }
 
 void gen_return_statement(ast_statement_t* smnt)
@@ -698,6 +719,7 @@ void gen_statement(ast_statement_t* smnt)
 			gen_expression(f_data->post);
 		_gen_asm("jmp %s", label_start);
 		_gen_asm("%s:", label_end);
+
 		gen_scope_block_leave();
 	}
 	else if (smnt->kind == smnt_for_decl)
@@ -774,6 +796,13 @@ void gen_function(ast_function_decl_t* fn)
 	_gen_asm("push %%ebp");
 	_gen_asm("movl %%esp, %%ebp");
 
+	if (fn->required_stack_size > 0)
+	{
+		//align stack on 4 byte boundry
+		uint32_t sz = (fn->required_stack_size + 0x03) & ~0x03;
+		_gen_asm("subl $%d, %%esp", sz);
+	}
+
 	ast_block_item_t* blk = fn->blocks;
 
 	while (blk)
@@ -799,13 +828,13 @@ void gen_function(ast_function_decl_t* fn)
 void gen_global_var(ast_var_decl_t* var)
 {	
 	_gen_asm(".globl _var_%s", var->name); //export symbol
-	if (var->expr && var->expr->data.const_val != 0)
+	if (var->expr && var->expr->data.int_literal.value != 0)
 	{
 		//initialised var goes in .data section
 		_gen_asm(".data"); //data section
 		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".long %d", var->expr->data.const_val); //data and init value
+		_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
 	}
 	else
 	{

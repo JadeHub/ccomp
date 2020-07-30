@@ -14,6 +14,7 @@
 /* {{token_range_t}, kind, size, struct_spec} */
 static ast_type_spec_t _void_type = { {NULL, NULL}, type_void, 0, NULL };
 static ast_type_spec_t _int_type = { {NULL, NULL}, type_int, 4, NULL };
+static ast_type_spec_t _char_type = { {NULL, NULL}, type_char, 1, NULL };
 
 
 static identfier_map_t* _id_map;
@@ -64,6 +65,9 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_int:
 		ast_destroy_type_spec(typeref);
 		return &_int_type;
+	case type_char:
+		ast_destroy_type_spec(typeref);
+		return &_char_type;
 	case type_struct:
 		break;
 	}
@@ -101,6 +105,9 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 
 static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
+	if (target->kind == type_int && type->kind == type_char)
+		return true;
+
 	return target == type;
 }
 
@@ -125,6 +132,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	}
 	var->type = type;
 	idm_add_id(_id_map, decl);
+	_cur_func->required_stack_size += var->type->size;
 
 	return true;
 }
@@ -148,7 +156,7 @@ bool process_variable_reference(ast_expression_t* expr)
 	if (!expr)
 		return true;
 
- 	ast_declaration_t* decl = idm_find_block_decl(_id_map, expr->data.var_reference.name, decl_var);
+ 	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
 	if (!decl)
 	{
 		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown var %s",
@@ -164,20 +172,6 @@ bool process_variable_reference(ast_expression_t* expr)
 		return false;
 	}
 	decl->data.var.type = type;
-	return true;
-}
-
-bool process_variable_assignment(ast_expression_t* expr)
-{
-	/*if (!expr)
-		return true;
-	var_data_t* existing = var_find(_var_set, expr->data.assignment.name);
-	if (!existing)
-	{
-		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "var %s not defined", expr->data.assignment.name);
-		return false;
-	}*/
-
 	return true;
 }
 
@@ -206,13 +200,24 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
 		if (l == r)
 			return r;
+
+		//can r be promoted to l?
+		if (_can_convert_type(l, r))
+			return l;
+
+		//can l be promoted to r?
+		if (_can_convert_type(r, l))
+			return r;
+		
+
 		//if (!process_expression(expr->data.binary_op.lhs))
 		//	return false;
 		//return process_expression(expr->data.binary_op.rhs);
 		break;
 	}
 	case expr_int_literal:
-		return &_int_type;
+		assert(expr->data.int_literal.type);
+		return expr->data.int_literal.type;
 	case expr_assign:
 		return _resolve_expr_type(expr->data.assignment.target);
 	case expr_identifier:
@@ -241,6 +246,7 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		return &_int_type;
 
 	case expr_null:
+		return &_void_type;
 		break;
 	}
 	return NULL;
@@ -283,7 +289,7 @@ bool process_func_call(ast_expression_t* expr)
 		if (!process_expression(call_param))
 			return false;
 
-		if (func_param->data.var.type != _resolve_expr_type(call_param))
+		if (!_can_convert_type(func_param->data.var.type, _resolve_expr_type(call_param)))
 		{
 			_report_err(expr->tokens.start,
 				ERR_INVALID_PARAMS,
@@ -349,7 +355,7 @@ bool process_assignment_expression(ast_expression_t* expr)
 	{
 		_report_err(expr->tokens.start,
 			ERR_INCOMPATIBLE_TYPE,
-			"assignment to incompatible type. expected %d",
+			"assignment to incompatible type. expected %s",
 			ast_type_name(target_type));
 		return false;
 	}
@@ -374,9 +380,22 @@ bool process_sizeof_expr(ast_expression_t* expr)
 		return false;
 	}
 
-	//change expression to represent a constant int
+	//change expression to represent a constant int and re-process
 	expr->kind = expr_int_literal;
-	expr->data.const_val = type->size;
+	expr->data.int_literal.value = type->size;
+	return process_expression(expr);
+}
+
+bool process_int_literal(ast_expression_t* expr)
+{
+	if (expr->data.int_literal.value < 256)
+	{
+		expr->data.int_literal.type = _resolve_type(&_char_type);
+	}
+	else
+	{
+		expr->data.int_literal.type = _resolve_type(&_int_type);
+	}
 	return true;
 }
 
@@ -390,7 +409,6 @@ bool process_expression(ast_expression_t* expr)
 		case expr_postfix_op:
 		case expr_unary_op:
 			return process_expression(expr->data.unary_op.expression);
-			break;
 		case expr_binary_op:
 			if (expr->data.binary_op.operation == op_member_access)
 				return process_member_access_expression(expr);
@@ -398,28 +416,22 @@ bool process_expression(ast_expression_t* expr)
 			if (!process_expression(expr->data.binary_op.lhs))
 				return false;
 			return process_expression(expr->data.binary_op.rhs);
-			break;
 		case expr_int_literal:
-			break;
+			return process_int_literal(expr);
 		case expr_assign:
 			return process_assignment_expression(expr);
-			break;
 		case expr_identifier:
 			return process_variable_reference(expr);
-			break;
 		case expr_condition:
 			if (!process_expression(expr->data.condition.cond))
 				return false;
 			if (!process_expression(expr->data.condition.true_branch))
 				return false;
 			return process_expression(expr->data.condition.false_branch);
-			break;
 		case expr_func_call:
 			return process_func_call(expr);
-			break;
 		case expr_sizeof:			
 			return process_sizeof_expr(expr);
-			break;
 		case expr_null:
 			break;
 	}
@@ -476,26 +488,26 @@ bool process_for_statement(ast_statement_t* smnt)
 bool process_return_statement(ast_statement_t* smnt)
 {
 	assert(_cur_func);
-	if (smnt->data.expr)
+
+	if (!process_expression(smnt->data.expr))
+		return false;
+
+	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (_resolve_expr_type(smnt->data.expr) != _cur_func->return_type)
+		if (!_can_convert_type(_cur_func->return_type, _resolve_expr_type(smnt->data.expr)))
 		{
 			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
 			return false;
 		}
 	}
-	else
+	else if (_cur_func->return_type->kind != type_void)
 	{
-		if (_cur_func->return_type->kind != type_void)
-		{
-			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
-				"function must return a value");
-			return false;
-		}
+		_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+			"function must return a value");
+		return false;
 	}
-
-	return process_expression(smnt->data.expr);
+	return true;
 }
 
 bool process_statement(ast_statement_t* smnt)
