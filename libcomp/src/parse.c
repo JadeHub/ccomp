@@ -95,16 +95,24 @@ static bool _is_builtin_type(token_t* tok)
 {
 	return 
 		tok->kind == tok_char ||
+		tok->kind == tok_short ||
 		tok->kind == tok_int ||
+		tok->kind == tok_long ||
 		tok->kind == tok_void;
 }
 
 static uint32_t _get_builtin_type_size(token_t* tok)
 {
-	if (tok->kind == tok_char)
+	switch (tok->kind)
+	{
+	case tok_char:
 		return 1;
-	if (tok->kind == tok_int)
+	case tok_short:
+		return 2;
+	case tok_int:
+	case tok_long:
 		return 4;
+	}
 	return 0;
 }
 
@@ -112,10 +120,13 @@ static type_kind _get_builtin_type_kind(token_t* tok)
 {
 	switch (tok->kind)
 	{
-	case tok_int:
-		return type_int;
 	case tok_char:
 		return type_char;
+	case tok_short:
+		return type_short;
+	case tok_int:
+	case tok_long:
+		return type_int;
 	case tok_void:
 		return type_void;
 	}
@@ -264,8 +275,10 @@ static ast_expression_t* _alloc_expr()
 
 
 <unary_op> ::= "!" | "~" | "-" | "++" | "--"
-<type_specifier> ::= "int"
-					| "char"
+<type_specifier> ::=  "char"
+					| "short"
+					| "int"
+					| "long"
 					| <struct_specifier>
 <struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
 <struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]

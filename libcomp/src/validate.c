@@ -13,9 +13,9 @@
 /*built in types */
 /* {{token_range_t}, kind, size, struct_spec} */
 static ast_type_spec_t _void_type = { {NULL, NULL}, type_void, 0, NULL };
-static ast_type_spec_t _int_type = { {NULL, NULL}, type_int, 4, NULL };
 static ast_type_spec_t _char_type = { {NULL, NULL}, type_char, 1, NULL };
-
+static ast_type_spec_t _short_type = { {NULL, NULL}, type_short, 2, NULL };
+static ast_type_spec_t _int_type = { {NULL, NULL}, type_int, 4, NULL };
 
 static identfier_map_t* _id_map;
 static ast_function_decl_t* _cur_func = NULL;
@@ -62,12 +62,15 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_void:
 		ast_destroy_type_spec(typeref);
 		return &_void_type;
-	case type_int:
-		ast_destroy_type_spec(typeref);
-		return &_int_type;
 	case type_char:
 		ast_destroy_type_spec(typeref);
 		return &_char_type;
+	case type_short:
+		ast_destroy_type_spec(typeref);
+		return &_short_type;
+	case type_int:
+		ast_destroy_type_spec(typeref);
+		return &_int_type;
 	case type_struct:
 		break;
 	}
@@ -103,12 +106,28 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	return typeref;
 }
 
+static bool _is_int_type(ast_type_spec_t* spec)
+{
+	switch (spec->kind)
+	{
+	case type_char:
+	case type_short:
+	case type_int:
+		return true;
+	}
+	return false;
+}
+
 static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
-	if (target->kind == type_int && type->kind == type_char)
+	if (target == type)
 		return true;
 
-	return target == type;
+	//integer promotion
+	if (_is_int_type(target) && _is_int_type(type) && target->size >= type->size)
+		return true;
+
+	return false;
 }
 
 bool process_variable_declaration(ast_declaration_t* decl)
@@ -388,9 +407,13 @@ bool process_sizeof_expr(ast_expression_t* expr)
 
 bool process_int_literal(ast_expression_t* expr)
 {
-	if (expr->data.int_literal.value < 256)
+	if (expr->data.int_literal.value < 0xFF)
 	{
 		expr->data.int_literal.type = _resolve_type(&_char_type);
+	}
+	else if (expr->data.int_literal.value < 0xFFFF)
+	{
+		expr->data.int_literal.type = _resolve_type(&_short_type);
 	}
 	else
 	{

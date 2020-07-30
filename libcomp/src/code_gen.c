@@ -169,11 +169,14 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 //move the value in eax to target
 void gen_assign_expr(token_t* tok, ast_expression_t* target)
 {
+	// todo
+
 	lval_data_t lval = _get_lvalue_addr(target);
 
 	if (!lval.type)
 		return;
 
+	//todo
 	if (strlen(lval.name))
 	{
 		_gen_asm("movl %%eax, %s", lval.name);
@@ -275,25 +278,31 @@ void gen_expression(ast_expression_t* expr)
 
 		gen_expression(expr->data.assignment.expr);
 
+		//move the value in eax to target
 		if (lval.type->size > 4)
 		{
 			
 		}
 		else if (lval.type->size == 4)
 		{
-			//copy eax into the target
 			if (strlen(lval.name))
-			{
-				_gen_asm("movl %%eax, %s", lval.name);
-			}
+				_gen_asm("movl %%eax, %s", lval.name); //global
 			else
-			{
 				_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
-			}
+		}
+		else if (lval.type->size == 2)
+		{
+			if (strlen(lval.name))
+				_gen_asm("movw %%ax, %s", lval.name); //global
+			else
+				_gen_asm("movw %%ax, %d(%%ebp)", lval.stack_offset);
 		}
 		else if (lval.type->size == 1)
 		{
-			_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
+			if (strlen(lval.name))
+				_gen_asm("movb %%al, %s", lval.name); //global
+			else
+				_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
 		}
 		else
 		{
@@ -312,21 +321,27 @@ void gen_expression(ast_expression_t* expr)
 		lval_data_t lval = _get_lvalue_addr(expr);
 		if (lval.type)
 		{
+			// code: move the value of the(global or stack) variable to eax
 			if (lval.type->size == 4)
-			{
-				// code: move the value of the(global or stack) variable to eax
+			{				
 				if (strlen(lval.name))
-				{
 					_gen_asm("movl %s, %%eax", lval.name);
-				}
 				else
-				{
 					_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
-				}
+			}
+			else if (lval.type->size == 2)
+			{
+				if (strlen(lval.name))
+					_gen_asm("movzwl %s, %%eax", lval.name);
+				else
+					_gen_asm("movzwl %d(%%ebp), %%eax", lval.stack_offset);
 			}
 			else if (lval.type->size == 1)
 			{
-				_gen_asm("movzbl %d(%%ebp), %%eax", lval.stack_offset);
+				if (strlen(lval.name))
+					_gen_asm("movzbl %s, %%eax", lval.name);
+				else
+					_gen_asm("movzbl %d(%%ebp), %%eax", lval.stack_offset);
 			}
 			else if (lval.type->size > 4)
 			{

@@ -23,10 +23,14 @@ const char* tok_kind_spelling(tok_kind k)
 		return ";";
 	case tok_return:
 		return "\r";
-	case tok_int:
-		return "int";
 	case tok_char:
 		return "char";
+	case tok_short:
+		return "short";
+	case tok_int:
+		return "int";
+	case tok_long:
+		return "long";
 	case tok_identifier:
 		return "identifier";
 	case tok_num_literal:

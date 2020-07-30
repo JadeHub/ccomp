@@ -171,10 +171,10 @@ typedef enum
 {	
 	type_void,
 	type_char,
-	/*type_short,*/
+	type_short,
 	type_int,
-	/*type_long,
-	type_float,
+	/*type_long,*/
+	/*type_float,
 	type_double,*/
 	type_struct
 }type_kind;

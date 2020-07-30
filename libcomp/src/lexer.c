@@ -28,8 +28,6 @@ static inline bool _test_next_and_adv(source_range_t* sr, const char** pos, char
 	return false;
 }
 
-const unsigned volatile int k;
-
 /*
 [0-9]
 */
@@ -89,6 +87,10 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_int;
 	else if (tok_spelling_cmp(result, "char"))
 		result->kind = tok_char;
+	else if (tok_spelling_cmp(result, "short"))
+		result->kind = tok_short;
+	else if (tok_spelling_cmp(result, "long"))
+		result->kind = tok_long;
 	else if (tok_spelling_cmp(result, "void"))
 		result->kind = tok_void;
 	else if (tok_spelling_cmp(result, "return"))

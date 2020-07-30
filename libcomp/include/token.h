@@ -62,7 +62,9 @@ typedef enum
 
     //types
     tok_char,
+    tok_short,
     tok_int,
+    tok_long,
     tok_void,
 
     tok_identifier,         // main
