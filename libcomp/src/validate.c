@@ -71,7 +71,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_int:
 		ast_destroy_type_spec(typeref);
 		return &_int_type;
-	case type_struct:
+	case type_user:
 		break;
 	}
 

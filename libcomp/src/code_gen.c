@@ -99,7 +99,7 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 
 ast_struct_member_t* _get_struct_member(ast_type_spec_t* type, ast_expr_identifier_t* var_ref)
 {
-	assert(type->kind == type_struct);
+	assert(type->kind == type_user);
 
 	ast_struct_member_t* member = type->struct_spec->members;
 	while (member)

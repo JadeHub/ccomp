@@ -93,6 +93,28 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_long;
 	else if (tok_spelling_cmp(result, "void"))
 		result->kind = tok_void;
+	else if (tok_spelling_cmp(result, "signed"))
+		result->kind = tok_signed;
+	else if (tok_spelling_cmp(result, "unsigned"))
+		result->kind = tok_unsigned;
+	else if (tok_spelling_cmp(result, "float"))
+		result->kind = tok_float;
+	else if (tok_spelling_cmp(result, "double"))
+		result->kind = tok_double;
+	else if (tok_spelling_cmp(result, "const"))
+		result->kind = tok_const;
+	else if (tok_spelling_cmp(result, "volatile"))
+		result->kind = tok_volatile;
+	else if (tok_spelling_cmp(result, "typedef"))
+		result->kind = tok_typedef;
+	else if (tok_spelling_cmp(result, "extern"))
+		result->kind = tok_extern;
+	else if (tok_spelling_cmp(result, "static"))
+		result->kind = tok_static;
+	else if (tok_spelling_cmp(result, "auto"))
+		result->kind = tok_auto;
+	else if (tok_spelling_cmp(result, "register"))
+		result->kind = tok_register;
 	else if (tok_spelling_cmp(result, "return"))
 		result->kind = tok_return;
 	else if (tok_spelling_cmp(result, "if"))
@@ -113,6 +135,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_struct;
 	else if (tok_spelling_cmp(result, "union"))
 		result->kind = tok_union;
+	else if (tok_spelling_cmp(result, "enum"))
+		result->kind = tok_enum;
 	else if (tok_spelling_cmp(result, "sizeof"))
 		result->kind = tok_sizeof;
 }

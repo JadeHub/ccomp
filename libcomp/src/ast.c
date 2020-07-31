@@ -230,7 +230,7 @@ const char* ast_type_name(ast_type_spec_t* type)
 		return "void";
 	case type_int:
 		return "int";
-	case type_struct:
+	case type_user:
 		return type->struct_spec->name;
 	}
 	return "unknown type";
@@ -286,5 +286,5 @@ uint32_t ast_struct_size(ast_struct_spec_t* spec)
 			max_member = size;
 		member = member->next;
 	}
-	return spec->kind == struct_union ? max_member : total;
+	return spec->kind == user_type_union ? max_member : total;
 }

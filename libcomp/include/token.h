@@ -58,14 +58,30 @@ typedef enum
     tok_continue,
     tok_struct,
     tok_union,
+    tok_enum,
     tok_sizeof,
 
-    //types
+    //type specifiers
     tok_char,
     tok_short,
     tok_int,
     tok_long,
     tok_void,
+    tok_signed,
+    tok_unsigned,
+    tok_float,
+    tok_double,
+
+    //type qualifiers
+    tok_const,
+    tok_volatile,
+
+    // storage class specifiers
+    tok_typedef,
+    tok_extern,
+    tok_static,
+    tok_auto,
+    tok_register,
 
     tok_identifier,         // main
     tok_num_literal         // 1234

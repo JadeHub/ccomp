@@ -70,7 +70,8 @@ public:
 	{
 		EXPECT_CALL(*this, on_diag(_, err, _)).Times(times);
 		parse(code);
-		validate();
+		if(ast)
+			validate();
 	}
 
 	void ExpectNoError(const std::string& code)

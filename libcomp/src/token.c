@@ -91,6 +91,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "struct";
 	case tok_union:
 		return "union";
+	case tok_enum:
+		return "enum";
 	case tok_sizeof:
 		return "sizeof";
 	case tok_comma:
@@ -101,6 +103,28 @@ const char* tok_kind_spelling(tok_kind k)
 		return ".";
 	case tok_apostrophe:
 		return "'";
+	case tok_signed: 
+		return "signed";
+	case tok_unsigned: 
+		return "unsigned";
+	case tok_float: 
+		return "float";
+	case tok_double: 
+		return "double";
+	case tok_const: 
+		return "const";
+	case tok_volatile:
+		return "volatile";
+	case tok_typedef:
+		return "typedef";
+	case tok_extern: 
+		return "extern";
+	case tok_static: 
+		return "static";
+	case tok_auto: 
+		return "auto";
+	case tok_register:
+		return "register";
 	}
 	return "invalid";
 }

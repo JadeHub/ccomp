@@ -7,10 +7,91 @@
 #include <string.h>
 #include <assert.h>
 
+/*
+<translation_unit> ::= { <function>
+				| <declaration> }
+<declaration> :: = <var_declaration> ";"
+				| <type-specifier> ";"
+				| <function_declaration> ";"
+<var_declaration> ::= <declaration_specifiers> <id> [= <exp>]
+<function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_param_list> ] ")"
+<function_param_list> ::= <declaration_specifiers> <id> { "," <declaration_specifiers> <id> }
+<function> ::= <function_declaration> "{" { <block-item> } "}"
+<block-item> ::= [ <statement> | <declaration> ]
+<statement> ::= "return" <exp> ";"
+			  | <exp-option> ";"
+			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+			  | "{" { <block-item> } "}"
+			  | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
+			  | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
+			  | "while" "(" <exp> ")" <statement>
+			  | "do" <statement> "while" <exp> ";"
+			  | "break" ";"
+			  | "continue" ";"
+			  | <var_declaration> ";"
+<exp> ::= <assignment-exp>
+<assignment-exp> ::= <unary-exp> "=" <assignment-exp>
+				| <conditional-exp>
+<conditional-exp> ::= <logical-or-exp> "?" <exp> ":" <conditional-exp>
+<logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
+<logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
+<bitwise-or> ::= <bitwise-xor> { ("|") <bitwise-xor> }
+<bitwise-xor> ::= <bitwise-and> { ("^") <bitwise-and> }
+<bitwise-and> ::= <equality-exp> { ("&") <equality-exp> }
+<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
+<relational-exp> ::= <bitshift-exp> { ("<" | ">" | "<=" | ">=") <bitshift-exp> }
+<bitshift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
+<additive-exp> ::= <multiplacative-exp> { ("+" | "-") <multiplacative-exp> }
+<multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
+<cast-exp> ::= <unary-exp>
+<unary-exp> ::= <postfix-exp>
+				| <unary-op> <cast-exp>
+				| "sizeof" <unary-exp>
+				| "sizeof" "(" <declaration_specifiers> ")"
+
+<postfix-exp> ::= <primary-exp> {
+				| "(" [ <exp> { "," <exp> } ] ")"
+				| "." <id>
+				| ("++" || "--")
+
+				| "[" <exp> "]"
+				| "->" <id> }
+<primary-exp> ::= <id> | <literal> | "(" <exp> ")"
+
+<literal> ::= <int>
+			| "'" <char> "'"
+
+<unary_op> ::= "!" | "~" | "-" | "++" | "--"
+
+<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifier> ) }
+
+<type_qualifier> ::= "const"					//todo
+					| "volatile"				//todo
+<type_specifier> ::= "void"
+					| "char"
+					| "short"
+					| "int"
+					| "long"
+					| "signed"					//todo
+					| "unsigned"				//todo
+					| "float"					//todo
+					| "double"					//todo
+					| <struct_specifier>
+					| <enum_specifier>			//todo
+<storage_class_specifier> ::= "typedef"		//todo
+							| "extern"			//todo
+							| "static"			//todo
+							| "auto"			//todo
+							| "register"		//todo
+<struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
+<struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
+<struct_decl> ::= <declaration_specifiers> [ <id> ] [ ":" <int> ]
+*/
+
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
 ast_expression_t* parse_unary_expr();
-ast_type_spec_t* try_parse_type_spec();
+ast_type_spec_t* try_parse_decl_spec();
 
 static token_t* _cur_tok = NULL;
 static bool _parse_err = false;
@@ -64,6 +145,63 @@ static void expect_next(tok_kind k)
 {
 	next_tok();
 	expect_cur(k);
+}
+
+static bool tok_in_set(tok_kind kind, tok_kind* set)
+{
+	while (*set != tok_invalid)
+	{
+		if (kind == *set)
+			return true;
+		set++;
+	}
+	return false;
+}
+
+static bool _is_type_qualifier(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_const:
+	case tok_volatile:
+		return true;
+	}
+	return false;
+}
+
+static bool _is_type_specifier(token_t* tok)
+{
+	switch(tok->kind)
+	{ 
+	case tok_void: 
+	case tok_char:
+	case tok_short:
+	case tok_int:
+	case tok_long:
+	case tok_signed:
+	case tok_unsigned:
+	case tok_float:
+	case tok_double:
+	case tok_struct:
+	case tok_union:
+	case tok_enum:
+		return true;
+	};
+	return false;
+}
+
+static bool _is_storage_class_specifier(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_typedef:
+	case tok_extern:
+	case tok_static:
+	case tok_auto:
+	case tok_register:
+		return true;
+	};
+	return false;
 }
 
 static bool _is_postfix_unary_op(token_t* tok)
@@ -219,94 +357,6 @@ static ast_expression_t* _alloc_expr()
 	return result;
 }
 
-/*
-<translation_unit> ::= { <function> 
-				| <declaration> }
-<declaration> :: = <var_declaration> ";"
-				| <type-specifier> ";"
-				| <function_declaration> ";"
-<var_declaration> ::= <type_specifier> <id> [= <exp>]
-<function_declaration> ::= <type_specifier> <id> "(" [ <function_param_list> ] ")"
-<function_param_list> ::= <type_specifier> <id> { "," <type_specifier> <id> }
-<function> ::= <function_declaration> "{" { <block-item> } "}"
-<block-item> ::= [ <statement> | <declaration> ]
-<statement> ::= "return" <exp> ";"
-			  | <exp-option> ";"
-			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-			  | "{" { <block-item> } "}"
-			  | "for" "(" <exp-option> ";" <exp-option> ";" <exp-option> ")" <statement>
-			  | "for" "(" <declaration> <exp-option> ";" <exp-option> ")" <statement>
-			  | "while" "(" <exp> ")" <statement>
-			  | "do" <statement> "while" <exp> ";"
-			  | "break" ";"
-			  | "continue" ";"
-			  | <var_declaration> ";"
-<exp> ::= <assignment-exp>
-<assignment-exp> ::= <unary-exp> "=" <assignment-exp>
-				| <conditional-exp>
-<conditional-exp> ::= <logical-or-exp> "?" <exp> ":" <conditional-exp>
-<logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
-<logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
-<bitwise-or> ::= <bitwise-xor> { ("|") <bitwise-xor> }
-<bitwise-xor> ::= <bitwise-and> { ("^") <bitwise-and> }
-<bitwise-and> ::= <equality-exp> { ("&") <equality-exp> }
-<equality-exp> ::= <relational-exp> { ("!=" | "==") <relational-exp> }
-<relational-exp> ::= <bitshift-exp> { ("<" | ">" | "<=" | ">=") <bitshift-exp> }
-<bitshift-exp> ::= <additive-exp> { ("<<" | ">>") <additive-exp> }
-<additive-exp> ::= <multiplacative-exp> { ("+" | "-") <multiplacative-exp> }
-<multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
-<cast-exp> ::= <unary-exp>
-<unary-exp> ::= <postfix-exp>
-				| <unary-op> <cast-exp>
-				| "sizeof" <unary-exp>
-				| "sizeof" "(" <type_specifier> ")"
-
-<postfix-exp> ::= <primary-exp> {
-				| "(" [ <exp> { "," <exp> } ] ")"
-				| "." <id>
-				| ("++" || "--")
-				
-				| "[" <exp> "]"
-				| "->" <id> }
-<primary-exp> ::= <id> | <literal> | "(" <exp> ")"
-
-<literal> ::= <int>
-			| "'" <char> "'"
-
-
-<unary_op> ::= "!" | "~" | "-" | "++" | "--"
-<type_specifier> ::=  "char"
-					| "short"
-					| "int"
-					| "long"
-					| <struct_specifier>
-<struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
-<struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
-<struct_decl> ::= <type_specifier> [ <id> ] [ ":" <int> ]
-*/
-
-tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
-tok_kind logical_and_ops[] = { tok_ampamp, tok_invalid };
-tok_kind bitwise_or_ops[] = { tok_pipe, tok_invalid };
-tok_kind bitwise_xor_ops[] = { tok_caret, tok_invalid };
-tok_kind bitwise_and_ops[] = { tok_amp, tok_invalid };
-tok_kind equality_ops[] = { tok_equalequal, tok_exclaimequal, tok_invalid };
-tok_kind relational_ops[] = { tok_lesser, tok_lesserequal, tok_greater, tok_greaterequal, tok_invalid };
-tok_kind bitshift_ops[] = { tok_lesserlesser, tok_greatergreater, tok_invalid };
-tok_kind additive_ops[] = { tok_plus, tok_minus, tok_invalid };
-tok_kind multiplacative_ops[] = { tok_star, tok_slash, tok_percent, tok_invalid };
-
-static bool tok_in_set(tok_kind kind, tok_kind* set)
-{
-	while (*set != tok_invalid)
-	{
-		if (kind == *set)
-			return true;
-		set++;
-	}
-	return false;
-}
-
 typedef ast_expression_t* (*bin_parse_fn)();
 
 ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_parse)
@@ -314,20 +364,20 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 	token_t* start = current();
 	ast_expression_t* expr = sub_parse();
 	while (tok_in_set(current()->kind, op_set))
-	{		
-		op_kind op = _get_binary_operator(current());
-		next_tok();
-		ast_expression_t* rhs_expr = sub_parse();
+	{
+	op_kind op = _get_binary_operator(current());
+	next_tok();
+	ast_expression_t* rhs_expr = sub_parse();
 
-		//our two sides are now expr and rhs_expr
-		//build a new binary op expression for expr
-		ast_expression_t* cur_expr = expr;
-		expr = _alloc_expr();
-		expr->tokens.start = start;
-		expr->kind = expr_binary_op;
-		expr->data.binary_op.operation = op;
-		expr->data.binary_op.lhs = cur_expr;
-		expr->data.binary_op.rhs = rhs_expr;
+	//our two sides are now expr and rhs_expr
+	//build a new binary op expression for expr
+	ast_expression_t* cur_expr = expr;
+	expr = _alloc_expr();
+	expr->tokens.start = start;
+	expr->kind = expr_binary_op;
+	expr->data.binary_op.operation = op;
+	expr->data.binary_op.lhs = cur_expr;
+	expr->data.binary_op.rhs = rhs_expr;
 	}
 	if (_parse_err)
 	{
@@ -339,17 +389,17 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 }
 
 /*
-<struct_decl> :: = <type_specifier>[<id>][":" <int> ] ";"
+<struct_decl> :: = <declaration_specifiers>[<id>][":" <int> ] ";"
 */
 ast_struct_member_t* parse_struct_member()
 {
 	ast_struct_member_t* result = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
 	memset(result, 0, sizeof(ast_struct_member_t));
 	result->tokens.start = current();
-	result->type = try_parse_type_spec();
+	result->type = try_parse_decl_spec();
 	if (!result->type)
 	{
-		report_err(ERR_SYNTAX, "expected type specification");
+		report_err(ERR_SYNTAX, "expected declaration specification");
 	}
 
 	if (current_is(tok_identifier))
@@ -375,12 +425,11 @@ ast_struct_member_t* parse_struct_member()
 /*
 <struct_specifier> :: = ("struct" | "union") [<id>] ["{" < struct_decl_list > "}"]
 */
-ast_struct_spec_t* parse_struct_spec()
+ast_struct_spec_t* parse_struct_spec(user_type_kind kind)
 {
 	ast_struct_spec_t* result = (ast_struct_spec_t*)malloc(sizeof(ast_struct_spec_t));
 	memset(result, 0, sizeof(ast_struct_spec_t));
-	result->kind = current_is(tok_struct) ? struct_struct : struct_union;
-	next_tok();
+	result->kind = kind;
 
 	if (current_is(tok_identifier))
 	{
@@ -406,13 +455,278 @@ ast_struct_spec_t* parse_struct_spec()
 	return result;
 }
 
+//type-specifiers
+#define DECL_SPEC_VOID			(1 << 1)
+#define DECL_SPEC_CHAR			(1 << 2)
+#define DECL_SPEC_SHORT			(1 << 3)
+#define DECL_SPEC_INT			(1 << 4)
+#define DECL_SPEC_LONG			(1 << 5)
+#define DECL_SPEC_LONG_LONG		(1 << 6)
+#define DECL_SPEC_SIGNED		(1 << 7)
+#define DECL_SPEC_UNSIGNED		(1 << 8)
+#define DECL_SPEC_FLOAT			(1 << 9)
+#define DECL_SPEC_DOUBLE		(1 << 10)
+#define DECL_SPEC_STRUCT		(1 << 11)
+#define DECL_SPEC_UNION			(1 << 12)
+#define DECL_SPEC_ENUM			(1 << 13)
+
+#define DECL_SPEC_TYPE_FLAGS	0x1FFF
+
+//storage class specifiers
+#define DECL_SPEC_EXTERN		1 << 20
+#define DECL_SPEC_STATIC		1 << 21
+#define DECL_SPEC_AUTO			1 << 22
+#define DECL_SPEC_REGISTER		1 << 23
+
+//type-qualifiers
+#define DECL_SPEC_CONST			1 << 30
+#define DECL_SPEC_VOLATILE		1 << 31
+
+uint32_t _get_decl_spec_flag(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_void:
+		return DECL_SPEC_VOID;
+	case tok_char:
+		return DECL_SPEC_CHAR;
+	case tok_short:
+		return DECL_SPEC_SHORT;
+	case tok_int:
+		return DECL_SPEC_INT;
+	case tok_long:
+		return DECL_SPEC_LONG;
+	case tok_signed:
+		return DECL_SPEC_SIGNED;
+	case tok_unsigned:
+		return DECL_SPEC_UNSIGNED;
+	case tok_float:
+		return DECL_SPEC_FLOAT;
+	case tok_double:
+		return DECL_SPEC_DOUBLE;
+	case tok_struct:
+		return DECL_SPEC_STRUCT;
+	case tok_union:
+		return DECL_SPEC_UNION;
+	case tok_enum:
+		return DECL_SPEC_ENUM;
+	case tok_extern:
+		return DECL_SPEC_EXTERN;
+	case tok_static:
+		return DECL_SPEC_STATIC;
+	case tok_auto:
+		return DECL_SPEC_AUTO;
+	case tok_register:
+		return DECL_SPEC_REGISTER;
+	case tok_const:
+		return DECL_SPEC_CONST;
+	case tok_volatile:
+		return DECL_SPEC_VOLATILE;
+	}
+	return 0;
+}
+
+static bool _is_type_spec(uint32_t flags, uint32_t type_flags)
+{
+	return ((flags & DECL_SPEC_TYPE_FLAGS) == type_flags);
+}
+
+ast_type_spec_t* _make_int_type(type_kind kind, uint32_t len, bool unsigned_)
+{
+	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+	memset(result, 0, sizeof(ast_type_spec_t));
+	result->kind = kind;
+	result->size = len;
+	return result;
+}
+
+ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
+{
+	uint32_t spec_flags = 0;
+
+	token_t* tok = start;
+	while (tok != end)
+	{
+		uint32_t flag = _get_decl_spec_flag(tok);
+
+		//special case for long long
+		if (flag == DECL_SPEC_LONG && (spec_flags & DECL_SPEC_LONG))
+			flag = DECL_SPEC_LONG_LONG;
+
+		if (spec_flags & flag)
+			return NULL; //duplicate
+
+		spec_flags |= flag;
+		tok = tok->next;
+	}
+
+	//void
+	if (_is_type_spec(spec_flags, DECL_SPEC_VOID))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_void;
+		result->size = 0;
+		return result;
+	}
+
+	//struct and union
+	if (_is_type_spec(spec_flags, DECL_SPEC_STRUCT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNION))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_user;
+		result->struct_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
+		result->size = ast_struct_size(result->struct_spec);
+		return result;
+	}
+
+	//enum
+	if (_is_type_spec(spec_flags, DECL_SPEC_ENUM))
+	{
+		return NULL;
+	}
+
+	//check for integer type
+
+	//default to signed
+	if (!(spec_flags & DECL_SPEC_UNSIGNED))
+		spec_flags |= DECL_SPEC_SIGNED;
+
+	/*
+	8bit integer
+	signed char
+	unsigned char
+	*/
+	if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_CHAR) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_CHAR))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_char;
+		result->size = 1;
+		return result;
+	}
+	/*
+	16bit integer
+	signed short
+	unsigned short
+	signed short int
+	unsigned short int
+	*/
+	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_SHORT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_SHORT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_short;
+		result->size = 2;
+		return result;
+	}
+	/*
+	32bit integer
+	signed int
+	unsinged int
+	signed
+	unsigned
+	signed long
+	unsigned long
+	signed long int
+	unsigned long int
+	*/
+	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_INT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_INT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_SIGNED) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED) ||
+		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG) ||
+		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_INT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_INT))
+	{
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_int;
+		result->size = 4;
+		return result;
+	}
+	/*
+	64bit integer
+	signed long long
+	unsigned long long
+	signed long long int
+	unsigned long long int
+	*/
+	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG) ||
+		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG | DECL_SPEC_INT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG | DECL_SPEC_INT))
+	{
+		return NULL;
+	}
+	/*
+	float
+	signed float
+	unsigned float
+	*/
+	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_FLOAT) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_FLOAT))
+	{
+		return NULL;
+	}
+	/*
+	double
+	signed double
+	unsigned double
+	*/
+	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_DOUBLE) ||
+		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_DOUBLE))
+	{
+		return NULL;
+	}
+	return NULL;
+}
+
 /*
-<type_specifier> :: = "int" | "char" | <struct_specifier>
+<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifier> ) }
 */
-ast_type_spec_t* try_parse_type_spec()
+ast_type_spec_t* try_parse_decl_spec()
 {
 	token_t* start = current();
-	if(_is_builtin_type(current()))
+
+	//consume all type_specifier, type_qualifier, storage_class_specifier
+	uint32_t spec_flags = 0;
+	while (_is_type_specifier(current()) || 
+		_is_type_qualifier(current()) || 
+		_is_storage_class_specifier(current()))
+	{
+		next_tok();
+	}
+
+	if (start != current())
+	{
+		ast_type_spec_t* result = _make_decl_spec(start, current());
+		if (!result)
+		{
+			report_err(ERR_SYNTAX, "invalid combination of type specifiers");
+			return NULL;
+		}
+		return result;
+	}
+
+	/*if(_is_builtin_type(current()))
 	{
 		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
 		memset(result, 0, sizeof(ast_type_spec_t));
@@ -428,13 +742,13 @@ ast_type_spec_t* try_parse_type_spec()
 		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = current();
-		result->kind = type_struct;
+		result->kind = type_user;
 		result->struct_spec = parse_struct_spec();
 		result->size = ast_struct_size(result->struct_spec);
 		result->tokens.end = current();
 		return result;
 	}
-	_cur_tok = start;
+	_cur_tok = start;*/
 	return NULL;
 }
 
@@ -446,7 +760,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 	ast_type_spec_t* type;
 	ast_declaration_t* last_param = NULL;
 
-	while ((type = try_parse_type_spec()))
+	while ((type = try_parse_decl_spec()))
 	{
 		ast_declaration_t* param = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(param, 0, sizeof(ast_declaration_t));
@@ -483,19 +797,18 @@ void parse_function_parameters(ast_function_decl_t* func)
 
 /*
 <declaration> :: = <var_declaration> ";"
-				| <type-specifier> ";"
+				| <declaration_specifiers> ";"
 				| <function_declaration> ";"
 
-<var_declaration> ::= <type_specifier> <id> [= <exp>]
-<function_declaration> ::= <type-specifier> <id> "(" [ <function_params ] ")"
-<type_specifier> ::= "int" | <struct_specifier>
+<var_declaration> ::= <declaration_specifiers> <id> [= <exp>]
+<function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_params ] ")"
+<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifiers> ) }
 */
 ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 {
 	token_t* start = current();
 
-	ast_type_spec_t* type = try_parse_type_spec();
-
+	ast_type_spec_t* type = try_parse_decl_spec();
 	if (!type)
 		return NULL;
 
@@ -755,7 +1068,7 @@ ast_expression_t* parse_sizeof_expr()
 	{
 		next_tok();
 		//Could be a typespec, or an expression in parentheses
-		ast_type_spec_t* type = try_parse_type_spec();
+		ast_type_spec_t* type = try_parse_decl_spec();
 		
 		if (type)
 		{
@@ -785,7 +1098,7 @@ ast_expression_t* parse_sizeof_expr()
 <unary-exp> ::= <postfix-exp>
 				| <unary-op> <cast-exp>
 				| "sizeof" <unary-exp>
-				| "sizeof" "(" <type_specifier> ")"
+				| "sizeof" "(" <declaration_specifiers> ")"
 */
 ast_expression_t* try_parse_unary_expr()
 {
@@ -821,6 +1134,17 @@ ast_expression_t* parse_cast_expr()
 {
 	return parse_unary_expr();
 }
+
+static tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
+static tok_kind logical_and_ops[] = { tok_ampamp, tok_invalid };
+static tok_kind bitwise_or_ops[] = { tok_pipe, tok_invalid };
+static tok_kind bitwise_xor_ops[] = { tok_caret, tok_invalid };
+static tok_kind bitwise_and_ops[] = { tok_amp, tok_invalid };
+static tok_kind equality_ops[] = { tok_equalequal, tok_exclaimequal, tok_invalid };
+static tok_kind relational_ops[] = { tok_lesser, tok_lesserequal, tok_greater, tok_greaterequal, tok_invalid };
+static tok_kind bitshift_ops[] = { tok_lesserlesser, tok_greatergreater, tok_invalid };
+static tok_kind additive_ops[] = { tok_plus, tok_minus, tok_invalid };
+static tok_kind multiplacative_ops[] = { tok_star, tok_slash, tok_percent, tok_invalid };
 
 /*
 <multiplacative-exp> <cast-exp> { ("*" | "/") <cast-exp> }
@@ -1207,6 +1531,8 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	{
 		bool found_semi;
 		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
+		if (_parse_err)
+			goto parse_failure;
 
 		if (decl->kind == decl_func && !found_semi)
 		{
@@ -1221,10 +1547,8 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 				ast_block_item_t* blk = parse_block_item();
 
 				if (_parse_err)
-				{
-					ast_destory_translation_unit(result);
-					return NULL;
-				}
+					goto parse_failure;
+				
 				if (last_blk)
 					last_blk->next = blk;
 				else
@@ -1239,11 +1563,15 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 			report_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
 		}
 		if (_parse_err)
-			break;
+			goto parse_failure;
 		_add_decl_to_tl(result, decl);		
 	}
-	result->tokens.end = current();
 
+	result->tokens.end = current();
 	expect_cur(tok_eof);
 	return result;
+
+parse_failure:
+	ast_destory_translation_unit(result);
+	return NULL;
 }

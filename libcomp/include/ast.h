@@ -176,7 +176,7 @@ typedef enum
 	/*type_long,*/
 	/*type_float,
 	type_double,*/
-	type_struct
+	type_user
 }type_kind;
 
 typedef struct ast_struct_member
@@ -191,14 +191,17 @@ typedef struct ast_struct_member
 	struct ast_struct_member* next;
 }ast_struct_member_t;
 
+typedef enum
+{
+	user_type_struct,
+	user_type_union
+}user_type_kind;
+
 typedef struct ast_struct_spec
 {
 	char name[MAX_LITERAL_NAME]; //name is optional
-	enum
-	{
-		struct_struct,
-		struct_union
-	}kind;
+
+	user_type_kind kind;
 
 	ast_struct_member_t* members;
 }ast_struct_spec_t;

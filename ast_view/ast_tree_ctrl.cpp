@@ -110,7 +110,7 @@ void InsertStructDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char*
 {
     AstTreeItem* item = AllocTreeItem(spec->tokens);
     sprintf_s(item->name, "%s%s Decl: %s", prefix, 
-        spec->struct_spec->kind == ast_struct_spec_t::struct_struct ? "struct" : "union",
+        spec->struct_spec->kind == ast_struct_spec_t::user_type_struct ? "struct" : "union",
         spec->struct_spec->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
@@ -132,7 +132,7 @@ void InsertStructDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char*
 
 void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix)
 {
-    if (type->kind == type_struct)
+    if (type->kind == type_user)
     {
         InsertStructDefinition(parent, type, prefix);
     }
