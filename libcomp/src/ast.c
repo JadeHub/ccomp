@@ -1,5 +1,6 @@
 #include "ast.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,7 +48,7 @@ void ast_destroy_type_spec(ast_type_spec_t* type)
 
 	/*if (type->kind == type_struct)
 	{
-		ast_struct_member_t* member = type->struct_spec->members;
+		ast_struct_member_t* member = type->user_type_spec->members;
 
 		while (member)
 		{
@@ -56,7 +57,7 @@ void ast_destroy_type_spec(ast_type_spec_t* type)
 			free(member);
 			member = next;
 		}
-		free(type->struct_spec);
+		free(type->user_type_spec);
 	}*/
 	free(type);
 }
@@ -228,10 +229,10 @@ const char* ast_type_name(ast_type_spec_t* type)
 	{
 	case type_void:
 		return "void";
-	case type_int:
+	case type_int32:
 		return "int";
 	case type_user:
-		return type->struct_spec->name;
+		return type->user_type_spec->name;
 	}
 	return "unknown type";
 }
@@ -246,13 +247,16 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 		return decl->data.func.name;
 	case decl_type:
 		return ast_type_name(&decl->data.type);
+	case decl_const:
+		return decl->data.const_val.name;
 	}
 	return NULL;
 }
 
-ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, const char* name)
+ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec, const char* name)
 {
-	ast_struct_member_t* member = struct_spec->members;
+	assert(user_type_spec->kind != user_type_enum);
+	ast_struct_member_t* member = user_type_spec->struct_members;
 	while (member)
 	{
 		if (strcmp(member->name, name) == 0)
@@ -272,12 +276,13 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member)
 	return member->type->size;
 }
 
-uint32_t ast_struct_size(ast_struct_spec_t* spec)
+uint32_t ast_struct_size(ast_user_type_spec_t* spec)
 {
+	assert(spec->kind != user_type_enum);
 	uint32_t total = 0;
 	uint32_t max_member = 0;
 
-	ast_struct_member_t* member = spec->members;
+	ast_struct_member_t* member = spec->struct_members;
 	while (member)
 	{
 		uint32_t size = ast_struct_member_size(member);

@@ -97,24 +97,6 @@ void gen_logical_binary_expr(ast_expression_t* expr)
 	}
 }
 
-ast_struct_member_t* _get_struct_member(ast_type_spec_t* type, ast_expr_identifier_t* var_ref)
-{
-	assert(type->kind == type_user);
-
-	ast_struct_member_t* member = type->struct_spec->members;
-	while (member)
-	{
-		if (strcmp(member->name, var_ref->name) == 0)
-		{
-			//return member->offset;
-			return member;
-		}
-		member = member->next;
-	}
-	return 0;
-}
-
-
 /*
 
 */
@@ -154,9 +136,8 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 		if (a.type)
 		{
 			assert(target->data.binary_op.rhs->kind == expr_identifier);
-			ast_struct_member_t* member = ast_find_struct_member(a.type->struct_spec,
+			ast_struct_member_t* member = ast_find_struct_member(a.type->user_type_spec,
 																target->data.binary_op.rhs->data.var_reference.name);
-				//_get_struct_member(a.type, &target->data.binary_op.rhs->data.var_reference);
 			assert(member);
 			a.stack_offset += member->offset;
 			a.type = member->type;

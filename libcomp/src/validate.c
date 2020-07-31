@@ -11,11 +11,11 @@
 #include <stdlib.h>
 
 /*built in types */
-/* {{token_range_t}, kind, size, struct_spec} */
+/* {{token_range_t}, kind, size, user_type_spec} */
 static ast_type_spec_t _void_type = { {NULL, NULL}, type_void, 0, NULL };
-static ast_type_spec_t _char_type = { {NULL, NULL}, type_char, 1, NULL };
-static ast_type_spec_t _short_type = { {NULL, NULL}, type_short, 2, NULL };
-static ast_type_spec_t _int_type = { {NULL, NULL}, type_int, 4, NULL };
+static ast_type_spec_t _char_type = { {NULL, NULL}, type_int8, 1, NULL };
+static ast_type_spec_t _short_type = { {NULL, NULL}, type_int16, 2, NULL };
+static ast_type_spec_t _int_type = { {NULL, NULL}, type_int32, 4, NULL };
 
 static identfier_map_t* _id_map;
 static ast_function_decl_t* _cur_func = NULL;
@@ -45,12 +45,34 @@ static void _report_err(token_t* tok, int err, const char* format, ...)
 
 static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref);
 
-static void _resolve_struct_member_types(ast_struct_spec_t* struct_spec)
+static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 {
-	ast_struct_member_t* member = struct_spec->members;
+	assert(user_type_spec->kind != user_type_enum);
+	ast_struct_member_t* member = user_type_spec->struct_members;
 	while (member)
 	{
 		member->type = _resolve_type(member->type);
+		member = member->next;
+	}
+}
+
+static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
+{
+	assert(user_type_spec->kind == user_type_enum);
+	ast_enum_member_t* member = user_type_spec->enum_members;
+	while (member)
+	{
+		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
+		memset(decl, 0, sizeof(ast_declaration_t));
+		decl->tokens = member->tokens;
+		decl->kind = decl_const;
+		strcpy(decl->data.const_val.name, member->name);
+		decl->data.const_val.type = &_int_type;
+		decl->data.const_val.expr = member->const_value;
+		decl->data.const_val.expr->data.int_literal.type = &_int_type;
+
+		idm_add_id(_id_map, decl);
+
 		member = member->next;
 	}
 }
@@ -62,46 +84,87 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_void:
 		ast_destroy_type_spec(typeref);
 		return &_void_type;
-	case type_char:
+	case type_int8:
 		ast_destroy_type_spec(typeref);
 		return &_char_type;
-	case type_short:
+	case type_int16:
 		ast_destroy_type_spec(typeref);
 		return &_short_type;
-	case type_int:
+	case type_int32:
 		ast_destroy_type_spec(typeref);
 		return &_int_type;
 	case type_user:
 		break;
 	}
 
-	ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->struct_spec->name);
+	ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->user_type_spec->name);
 	if (typeref == exist)
 		return exist;
-	if (exist)
+
+	if (exist && exist->user_type_spec->kind != typeref->user_type_spec->kind)
 	{
-		if (exist->struct_spec->members && typeref->struct_spec->members)
+		_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+			"redefinition of %s '%s' changes type to %s",
+			user_type_kind_name(exist->user_type_spec->kind),
+			typeref->user_type_spec->name,
+			user_type_kind_name(typeref->user_type_spec->kind));
+		return NULL;
+	}
+
+	if (typeref->user_type_spec->kind == user_type_enum)
+	{
+		if (exist)
+		{
+			if (exist->user_type_spec->enum_members && typeref->user_type_spec->enum_members)
+			{
+				//multiple definitions
+				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+					"redefinition of enum '%s'",
+					typeref->user_type_spec->name);
+				return NULL;
+			}
+
+			if (!exist->user_type_spec->enum_members && typeref->user_type_spec->enum_members)
+			{
+				//update definition
+				exist->size = typeref->size;
+				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
+				typeref->user_type_spec->enum_members = NULL;
+
+				_register_enum_constants(exist->user_type_spec);
+			}
+			ast_destroy_type_spec(typeref);
+			return exist;
+		}
+		_register_enum_constants(typeref->user_type_spec);
+	}
+	else
+	{
+		if (exist)
+		{
+		if (exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
 		{
 			//multiple definitions
 			_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
 				"redefinition of struct '%s'",
-				typeref->struct_spec->name);
+				typeref->user_type_spec->name);
 			return NULL;
 		}
 
-		if (!exist->struct_spec->members && typeref->struct_spec->members)
+		if (!exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
 		{
 			//update definition
 			exist->size = typeref->size;
-			exist->struct_spec->members = typeref->struct_spec->members;
-			typeref->struct_spec->members = NULL;
+			exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
+			typeref->user_type_spec->struct_members = NULL;
 
-			_resolve_struct_member_types(exist->struct_spec);
+			_resolve_struct_member_types(exist->user_type_spec);
 		}
 		ast_destroy_type_spec(typeref);
 		return exist;
+		}
+		_resolve_struct_member_types(typeref->user_type_spec);
 	}
-	_resolve_struct_member_types(typeref->struct_spec);
 	idm_add_tag(_id_map, typeref);
 	return typeref;
 }
@@ -110,12 +173,13 @@ static bool _is_int_type(ast_type_spec_t* spec)
 {
 	switch (spec->kind)
 	{
-	case type_char:
-	case type_short:
-	case type_int:
+	case type_int8:
+	case type_int16:
+	case type_int32:
 		return true;
 	}
-	return false;
+
+	return spec->kind == type_user && spec->user_type_spec->kind == user_type_enum;
 }
 
 static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
@@ -153,7 +217,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	idm_add_id(_id_map, decl);
 	_cur_func->required_stack_size += var->type->size;
 
-	return true;
+	return process_expression(decl->data.var.expr);
 }
 
 bool process_declaration(ast_declaration_t* var)
@@ -175,23 +239,31 @@ bool process_variable_reference(ast_expression_t* expr)
 	if (!expr)
 		return true;
 
- 	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
-	if (!decl)
+	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
+	if (decl)
 	{
-		_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown var %s",
-			expr->data.var_reference.name);
-		return false;
+		ast_type_spec_t* type = _resolve_type(decl->data.var.type);
+		if (!type || type->size == 0)
+		{
+			_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
+				ast_declaration_name(decl));
+			return false;
+		}
+		decl->data.var.type = type;
+		return true;
 	}
 
-	ast_type_spec_t* type = _resolve_type(decl->data.var.type);
-	if (!type || type->size == 0)
+	decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_const);
+	if (decl)
 	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
-			ast_declaration_name(decl));
-		return false;
+		expr->kind = expr_int_literal;
+		expr->data.int_literal = decl->data.const_val.expr->data.int_literal;
+		return process_expression(expr);
 	}
-	decl->data.var.type = type;
-	return true;
+
+	_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown var %s",
+		expr->data.var_reference.name);
+	return false;
 }
 
 static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
@@ -209,9 +281,9 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		if (expr->data.binary_op.operation == op_member_access)
 		{
 			// a.b (lhs.rhs)
-			ast_type_spec_t* struct_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-			assert(struct_spec);
-			ast_type_spec_t* member_spec = ast_find_struct_member(struct_spec->struct_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
+			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+			assert(user_type_spec);
+			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
 			return _resolve_type(member_spec);
 		}
 		
@@ -331,15 +403,15 @@ bool process_member_access_expression(ast_expression_t* expr)
 	if (!process_expression(expr->data.binary_op.lhs))
 		return false;
 
-	ast_type_spec_t* struct_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-	ast_struct_member_t* member = ast_find_struct_member(struct_spec->struct_spec, expr->data.binary_op.rhs->data.var_reference.name);
+	ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+	ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
 	if (member == NULL)
 	{
 		_report_err(expr->tokens.start,
 			ERR_UNKNOWN_MEMBER_REF,
 			"%s is not a member of %s",
 			expr->data.binary_op.rhs->data.var_reference.name,
-			ast_type_name(struct_spec));
+			ast_type_name(user_type_spec));
 		return false;
 	}
 	
@@ -609,7 +681,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"function '%s' returns incomplete type '%s'",
-			func->name, ret_type->struct_spec->name);
+			func->name, ret_type->user_type_spec->name);
 		return false;
 	}
 	
@@ -636,7 +708,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		{
 			_report_err(param->tokens.start, ERR_TYPE_INCOMPLETE,
 				"function param '%s' returns incomplete type '%s'",
-				param->data.var.name, param_type->struct_spec->name);
+				param->data.var.name, param_type->user_type_spec->name);
 			return false;
 		}
 		
@@ -793,7 +865,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"global var '%s' uses incomplete type '%s'",
-			name, type->struct_spec->name);
+			name, type->user_type_spec->name);
 		return proc_decl_error;
 	}
 

@@ -76,22 +76,24 @@
 					| "unsigned"				//todo
 					| "float"					//todo
 					| "double"					//todo
-					| <struct_specifier>
+					| <user_type_specifier>
 					| <enum_specifier>			//todo
 <storage_class_specifier> ::= "typedef"		//todo
 							| "extern"			//todo
 							| "static"			//todo
 							| "auto"			//todo
 							| "register"		//todo
-<struct_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
+<user_type_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
 <struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
 <struct_decl> ::= <declaration_specifiers> [ <id> ] [ ":" <int> ]
+<enum_specifier> ::= "enum" [ <id> ] [ "{" { <id> [ = <int> ] } "}" ]
 */
 
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
 ast_expression_t* parse_unary_expr();
 ast_type_spec_t* try_parse_decl_spec();
+ast_expression_t* try_parse_literal();
 
 static token_t* _cur_tok = NULL;
 static bool _parse_err = false;
@@ -227,49 +229,6 @@ static bool _is_unary_op(token_t* tok)
 		return true;
 	}
 	return false;
-}
-
-static bool _is_builtin_type(token_t* tok)
-{
-	return 
-		tok->kind == tok_char ||
-		tok->kind == tok_short ||
-		tok->kind == tok_int ||
-		tok->kind == tok_long ||
-		tok->kind == tok_void;
-}
-
-static uint32_t _get_builtin_type_size(token_t* tok)
-{
-	switch (tok->kind)
-	{
-	case tok_char:
-		return 1;
-	case tok_short:
-		return 2;
-	case tok_int:
-	case tok_long:
-		return 4;
-	}
-	return 0;
-}
-
-static type_kind _get_builtin_type_kind(token_t* tok)
-{
-	switch (tok->kind)
-	{
-	case tok_char:
-		return type_char;
-	case tok_short:
-		return type_short;
-	case tok_int:
-	case tok_long:
-		return type_int;
-	case tok_void:
-		return type_void;
-	}
-	report_err(ERR_SYNTAX, "unknown type %s", tok_kind_spelling(tok->kind));
-	return type_void;
 }
 
 static op_kind _get_postfix_operator(token_t* tok)
@@ -423,12 +382,76 @@ ast_struct_member_t* parse_struct_member()
 }
 
 /*
-<struct_specifier> :: = ("struct" | "union") [<id>] ["{" < struct_decl_list > "}"]
+<enum_specifier> :: = "enum" [<id>] ["{" { <id> [= <int>] } "}"]
 */
-ast_struct_spec_t* parse_struct_spec(user_type_kind kind)
+ast_user_type_spec_t* parse_enum_spec()
 {
-	ast_struct_spec_t* result = (ast_struct_spec_t*)malloc(sizeof(ast_struct_spec_t));
-	memset(result, 0, sizeof(ast_struct_spec_t));
+	ast_user_type_spec_t* result = (ast_user_type_spec_t*)malloc(sizeof(ast_user_type_spec_t));
+	memset(result, 0, sizeof(ast_user_type_spec_t));
+	result->kind = user_type_enum;
+
+	if (current_is(tok_identifier))
+	{
+		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
+		next_tok();
+	}
+
+	if (current_is(tok_l_brace))
+	{
+		next_tok();
+		
+		uint32_t next_val = 0;
+		while (true)
+		{
+			expect_cur(tok_identifier);
+
+			ast_enum_member_t* member = (ast_enum_member_t*)malloc(sizeof(ast_enum_member_t));
+			memset(member, 0, sizeof(ast_enum_member_t));
+			member->tokens.start = current();
+			tok_spelling_cpy(current(), member->name, MAX_LITERAL_NAME);
+			next_tok();
+
+			if (current_is(tok_equal))
+			{
+				next_tok();
+				member->const_value = try_parse_literal();
+				next_val = member->const_value->data.int_literal.value + 1;
+			}
+			else
+			{
+				member->const_value = _alloc_expr();
+				member->const_value->tokens.start = member->tokens.start;
+				member->const_value->tokens.end = current();
+				member->const_value->kind = expr_int_literal;				
+				member->const_value->data.int_literal.value = next_val;
+				member->const_value->data.int_literal.type = NULL;
+				next_val++;
+			}
+
+			member->next = result->enum_members;
+			result->enum_members = member;
+
+			member->tokens.end = current();
+
+			if (!current_is(tok_comma))
+				break;
+			next_tok();
+		}
+		expect_cur(tok_r_brace);
+		next_tok();
+	}
+
+	return result;
+}
+
+
+/*
+<user_type_specifier> :: = ("struct" | "union") [<id>] ["{" < struct_decl_list > "}"]
+*/
+ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
+{
+	ast_user_type_spec_t* result = (ast_user_type_spec_t*)malloc(sizeof(ast_user_type_spec_t));
+	memset(result, 0, sizeof(ast_user_type_spec_t));
 	result->kind = kind;
 
 	if (current_is(tok_identifier))
@@ -445,8 +468,8 @@ ast_struct_spec_t* parse_struct_spec(user_type_kind kind)
 		{
 			ast_struct_member_t* member = parse_struct_member();
 			member->offset = offset;
-			member->next = result->members;
-			result->members = member;
+			member->next = result->struct_members;
+			result->struct_members = member;
 			offset += member->type->size;
 		}
 		next_tok();
@@ -470,7 +493,7 @@ ast_struct_spec_t* parse_struct_spec(user_type_kind kind)
 #define DECL_SPEC_UNION			(1 << 12)
 #define DECL_SPEC_ENUM			(1 << 13)
 
-#define DECL_SPEC_TYPE_FLAGS	0x1FFF
+#define DECL_SPEC_TYPE_FLAGS	0x3FFF
 
 //storage class specifiers
 #define DECL_SPEC_EXTERN		1 << 20
@@ -531,15 +554,6 @@ static bool _is_type_spec(uint32_t flags, uint32_t type_flags)
 	return ((flags & DECL_SPEC_TYPE_FLAGS) == type_flags);
 }
 
-ast_type_spec_t* _make_int_type(type_kind kind, uint32_t len, bool unsigned_)
-{
-	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-	memset(result, 0, sizeof(ast_type_spec_t));
-	result->kind = kind;
-	result->size = len;
-	return result;
-}
-
 ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 {
 	uint32_t spec_flags = 0;
@@ -581,15 +595,22 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = type_user;
-		result->struct_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
-		result->size = ast_struct_size(result->struct_spec);
+		result->user_type_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
+		result->size = ast_struct_size(result->user_type_spec);
 		return result;
 	}
 
 	//enum
 	if (_is_type_spec(spec_flags, DECL_SPEC_ENUM))
 	{
-		return NULL;
+		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+		memset(result, 0, sizeof(ast_type_spec_t));
+		result->tokens.start = start;
+		result->tokens.end = end;
+		result->kind = type_user;
+		result->user_type_spec = parse_enum_spec();
+		result->size = 4;
+		return result;
 	}
 
 	//check for integer type
@@ -610,7 +631,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_char;
+		result->kind = type_int8;
 		result->size = 1;
 		return result;
 	}
@@ -630,7 +651,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_short;
+		result->kind = type_int16;
 		result->size = 2;
 		return result;
 	}
@@ -658,7 +679,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_int;
+		result->kind = type_int32;
 		result->size = 4;
 		return result;
 	}
@@ -725,30 +746,6 @@ ast_type_spec_t* try_parse_decl_spec()
 		}
 		return result;
 	}
-
-	/*if(_is_builtin_type(current()))
-	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
-		result->tokens.start = current();
-		result->kind = _get_builtin_type_kind(current());
-		result->size = _get_builtin_type_size(current());
-		next_tok();
-		result->tokens.end = current();
-		return result;
-	}
-	else if (current_is(tok_struct) || current_is(tok_union))
-	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
-		result->tokens.start = current();
-		result->kind = type_user;
-		result->struct_spec = parse_struct_spec();
-		result->size = ast_struct_size(result->struct_spec);
-		result->tokens.end = current();
-		return result;
-	}
-	_cur_tok = start;*/
 	return NULL;
 }
 
@@ -929,6 +926,25 @@ ast_expression_t* parse_char_literal()
 	return expr;
 }
 
+ast_expression_t* try_parse_literal()
+{
+	if (current_is(tok_num_literal))
+	{
+		//<factor> ::= <int>
+		ast_expression_t* expr = _alloc_expr();
+		expr->kind = expr_int_literal;
+		expr->data.int_literal.value = (uint32_t)(long)current()->data;
+		expr->data.int_literal.type = NULL;
+		next_tok();
+		return expr;
+	}
+	else if (current_is(tok_apostrophe))
+	{
+		return parse_char_literal();
+	}
+	return NULL;
+}
+
 /*
 <primary-exp> ::= <id> | <literal> | "(" <exp> ")"
 */
@@ -941,20 +957,6 @@ ast_expression_t* try_parse_primary_expr()
 		//<factor> ::= <id>
 		expr = parse_identifier();
 	}
-	else if (current_is(tok_num_literal))
-	{
-		//<factor> ::= <int>
-		expr = _alloc_expr();
-		expr->kind = expr_int_literal;
-		expr->data.int_literal.value = (uint32_t)(long)current()->data;
-		expr->data.int_literal.type = NULL;
-		
-		next_tok();
-	}
-	else if (current_is(tok_apostrophe))
-	{
-		return parse_char_literal();
-	}
 	else if (current_is(tok_l_paren))
 	{
 		//<factor ::= "(" <exp> ")"
@@ -962,6 +964,10 @@ ast_expression_t* try_parse_primary_expr()
 		expr = parse_expression();
 		expect_cur(tok_r_paren);
 		next_tok();
+	}
+	else
+	{
+		expr = try_parse_literal();
 	}
 	if(expr)
 		expr->tokens.end = current();

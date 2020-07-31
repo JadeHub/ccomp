@@ -170,9 +170,9 @@ typedef struct ast_expression
 typedef enum
 {	
 	type_void,
-	type_char,
-	type_short,
-	type_int,
+	type_int8,
+	type_int16,
+	type_int32,
 	/*type_long,*/
 	/*type_float,
 	type_double,*/
@@ -191,27 +191,48 @@ typedef struct ast_struct_member
 	struct ast_struct_member* next;
 }ast_struct_member_t;
 
+typedef struct ast_enum_member
+{
+	token_range_t tokens;
+	char name[MAX_LITERAL_NAME]; //name is optional
+	ast_expression_t* const_value;
+	struct ast_enum_member* next;
+}ast_enum_member_t;
+
 typedef enum
 {
 	user_type_struct,
-	user_type_union
+	user_type_union,
+	user_type_enum
 }user_type_kind;
 
-typedef struct ast_struct_spec
+static inline const char* user_type_kind_name(user_type_kind k)
+{
+	if (k == user_type_struct)
+		return "struct";
+	else if (k == user_type_union)
+		return "union";
+	return "enum";
+}
+
+typedef struct ast_user_type_spec
 {
 	char name[MAX_LITERAL_NAME]; //name is optional
-
 	user_type_kind kind;
 
-	ast_struct_member_t* members;
-}ast_struct_spec_t;
+	union
+	{
+		ast_struct_member_t* struct_members;
+		ast_enum_member_t* enum_members;
+	};
+}ast_user_type_spec_t;
 
 typedef struct ast_type_spec
 {
 	token_range_t tokens;
 	type_kind kind;
 	uint32_t size;	
-	ast_struct_spec_t* struct_spec;
+	ast_user_type_spec_t* user_type_spec;
 }ast_type_spec_t;
 
 /* Declaration */
@@ -237,12 +258,22 @@ typedef struct ast_func_decl
 
 }ast_function_decl_t;
 
+typedef struct
+{
+	char name[MAX_LITERAL_NAME];
+	ast_type_spec_t* type;
+	ast_expression_t* expr;
+}ast_const_decl_t;
+
 typedef enum
 {
 	decl_var,
 	decl_func,
-	decl_type
+	decl_type,
+	decl_const
 }ast_decl_type;
+
+
 
 typedef struct ast_declaration
 {
@@ -254,6 +285,7 @@ typedef struct ast_declaration
 		ast_var_decl_t var;
 		ast_function_decl_t func;
 		ast_type_spec_t type;
+		ast_const_decl_t const_val;
 	}data;
 
 	struct ast_declaration* next;
@@ -355,8 +387,8 @@ void ast_print(ast_trans_unit_t* tl);
 const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
 const char* ast_type_name(ast_type_spec_t* type);
-ast_struct_member_t* ast_find_struct_member(ast_struct_spec_t* struct_spec, const char* name);
-uint32_t ast_struct_size(ast_struct_spec_t*);
+ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
+uint32_t ast_struct_size(ast_user_type_spec_t*);
 uint32_t ast_struct_member_size(ast_struct_member_t* member);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);

@@ -44,7 +44,7 @@ ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name)
 
 	while (tag)
 	{
-		if (strcmp(name, tag->spec->struct_spec->name) == 0)
+		if (strcmp(name, tag->spec->user_type_spec->name) == 0)
 		{
 			return tag->spec;
 		}

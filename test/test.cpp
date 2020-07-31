@@ -2,8 +2,10 @@
 
 
 
+
 int main(int argc, char** argv) 
 {
+	
 
 	size_t lli = sizeof( short );
 	size_t ill = sizeof( long long);
