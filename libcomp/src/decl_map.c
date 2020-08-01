@@ -38,12 +38,15 @@ void idm_add_id(identfier_map_t* map, ast_declaration_t* decl)
 	map->identifiers = id;
 }
 
-ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name)
+ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name)
 {
 	type_t* tag = map->tags;
 
 	while (tag)
 	{
+		if (!tag->spec) //indicates the end of the current scope block
+			break;
+
 		if (strcmp(name, tag->spec->user_type_spec->name) == 0)
 		{
 			return tag->spec;
@@ -53,8 +56,24 @@ ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name)
 	return NULL;
 }
 
-ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl)
+ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name)
 {
+	type_t* tag = map->tags;
+
+	while (tag)
+	{
+		if (tag->spec &&
+			strcmp(name, tag->spec->user_type_spec->name) == 0)
+		{
+			return tag->spec;
+		}
+		tag = tag->next;
+	}
+	return NULL;
+}
+
+ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl)
+{	
 	identifier_t* id = map->identifiers;
 
 	while (id)
@@ -134,14 +153,19 @@ void idm_enter_block(identfier_map_t* map)
 	id->next = map->identifiers;
 	map->identifiers = id;
 
-	//add block market to type stacl
+	//add block market to type stack
+	type_t* type = (type_t*)malloc(sizeof(type_t));
+	memset(type, 0, sizeof(type_t));
+
+	type->spec = NULL;
+	type->next = map->tags;
+	map->tags = type;
 }
 
 void idm_leave_block(identfier_map_t* map)
 {
 	identifier_t* id = map->identifiers;	
-
-	// remove all up to and including the most recent block marker
+	// remove all identifiers up to and including the most recent block marker
 	while (id)
 	{
 		identifier_t* next = id->next;
@@ -149,10 +173,24 @@ void idm_leave_block(identfier_map_t* map)
 		{
 			map->identifiers = id->next;
 			free(id);
-			return;
+			break;
 		}
 		free(id);
 		id = next;
 	}
-	assert(0);
+
+	type_t* type = map->tags;
+	// remove all tags up to and including the most recent block marker
+	while (type)
+	{
+		type_t* next = type->next;
+		if (type->spec == NULL)
+		{
+			map->tags = type->next;
+			free(type);
+			break;
+		}
+		free(type);
+		type = next;
+	}
 }

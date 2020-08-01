@@ -48,7 +48,7 @@ TEST_F(StructValidationTest, decl_define)
 	ExpectNoError(code);
 }
 
-/*TEST_F(StructValidationTest, redefine_new_scope)
+TEST_F(StructValidationTest, redefine_new_scope)
 {
 	std::string code = R"(
 	
@@ -67,7 +67,7 @@ TEST_F(StructValidationTest, decl_define)
 	)";
 
 	ExpectNoError(code);
-}*/
+}
 
 TEST_F(StructValidationTest, err_incorrect_ret_type)
 {
@@ -165,4 +165,42 @@ TEST_F(StructValidationTest, defined_sizeof)
 	)";
 
 	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, declare_define_new_scope)
+{
+	std::string code = R"(
+	struct A;
+	void foo()
+	{		
+		struct A {int i;} a;
+
+		a.i = 1;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, err_declare_define_new_scope)
+{
+	std::string code = R"(
+	struct A;
+	void foo()
+	{		
+		struct A {int i;} a;
+
+		a.i = 1;
+	}
+
+	void foo2()
+	{		
+		struct A a;
+
+		a.i = 1;
+	}
+
+	)";
+
+	ExpectError(code, ERR_TYPE_INCOMPLETE);
 }

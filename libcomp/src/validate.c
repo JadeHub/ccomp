@@ -77,6 +77,22 @@ static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 	}
 }
 
+static bool _user_type_is_definition(ast_user_type_spec_t* type)
+{
+	if (type->kind == user_type_enum)
+		return type->enum_members != NULL;
+	return type->struct_members != NULL;
+}
+
+static void _add_user_type(ast_type_spec_t* typeref)
+{
+	if (typeref->user_type_spec->kind == user_type_enum)
+		_register_enum_constants(typeref->user_type_spec);
+	else
+		_resolve_struct_member_types(typeref->user_type_spec);
+	idm_add_tag(_id_map, typeref);
+}
+
 static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 {
 	switch (typeref->kind)
@@ -97,7 +113,91 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		break;
 	}
 
-	ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->user_type_spec->name);
+	/*
+	structs, unions & enums
+
+	if typeref is a definition
+		Look for a type with the same name in the current lexical block
+			If declaration found: Update with definition
+			If definition found: Error duplicate definition
+			If not found: Add to id_map
+	else if typeref is a declaration
+		Look for a type with the same name in any lexical block
+		If found: return
+		If not found: Add to id_map
+	*/
+	if (_user_type_is_definition(typeref->user_type_spec))
+	{
+		ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->user_type_spec->name);
+		if (typeref == exist)
+			return exist;
+
+		if (exist)
+		{
+			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
+			{
+				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+					"redefinition of %s '%s' changes type to %s",
+					user_type_kind_name(exist->user_type_spec->kind),
+					typeref->user_type_spec->name,
+					user_type_kind_name(typeref->user_type_spec->kind));
+				return NULL;
+			}
+
+			if (_user_type_is_definition(exist->user_type_spec))
+			{
+				//multiple definitions
+				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+					"redefinition of %s '%s'",
+					user_type_kind_name(typeref->user_type_spec->kind),
+					typeref->user_type_spec->name);
+				return NULL;
+			}
+			//update the existing declaration
+			exist->size = typeref->size;
+			if (typeref->user_type_spec->kind == user_type_enum)
+			{
+				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
+				typeref->user_type_spec->enum_members = NULL;
+				_register_enum_constants(exist->user_type_spec);
+			}
+			else
+			{
+				//update definition
+				exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
+				typeref->user_type_spec->struct_members = NULL;
+				_resolve_struct_member_types(exist->user_type_spec);
+			}
+			return exist;
+		}
+		else
+		{
+			_add_user_type(typeref);
+		}
+	}
+	else
+	{
+		//declaration
+		ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->user_type_spec->name);
+		if (exist)
+		{
+			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
+			{
+				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+					"redefinition of %s '%s' changes type to %s",
+					user_type_kind_name(exist->user_type_spec->kind),
+					typeref->user_type_spec->name,
+					user_type_kind_name(typeref->user_type_spec->kind));
+				return NULL;
+			}
+			return exist;
+		}
+
+		_add_user_type(typeref);
+	}
+	return typeref;
+
+	/*ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->user_type_spec->name);
 	if (typeref == exist)
 		return exist;
 
@@ -142,31 +242,31 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	{
 		if (exist)
 		{
-		if (exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
-		{
-			//multiple definitions
-			_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
-				"redefinition of struct '%s'",
-				typeref->user_type_spec->name);
-			return NULL;
-		}
+			if (exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
+			{
+				//multiple definitions
+				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+					"redefinition of struct '%s'",
+					typeref->user_type_spec->name);
+				return NULL;
+			}
 
-		if (!exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
-		{
-			//update definition
-			exist->size = typeref->size;
-			exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
-			typeref->user_type_spec->struct_members = NULL;
+			if (!exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
+			{
+				//update definition
+				exist->size = typeref->size;
+				exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
+				typeref->user_type_spec->struct_members = NULL;
 
-			_resolve_struct_member_types(exist->user_type_spec);
-		}
-		ast_destroy_type_spec(typeref);
-		return exist;
+				_resolve_struct_member_types(exist->user_type_spec);
+			}
+			ast_destroy_type_spec(typeref);
+			return exist;
 		}
 		_resolve_struct_member_types(typeref->user_type_spec);
 	}
 	idm_add_tag(_id_map, typeref);
-	return typeref;
+	return typeref;*/
 }
 
 static bool _is_int_type(ast_type_spec_t* spec)
@@ -220,16 +320,18 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	return process_expression(decl->data.var.expr);
 }
 
-bool process_declaration(ast_declaration_t* var)
+bool process_declaration(ast_declaration_t* decl)
 {
-	if (!var)
+	if (!decl)
 		return true;
-	switch (var->kind)
+	switch (decl->kind)
 	{
 	case decl_var:
-		return process_variable_declaration(var);
+		return process_variable_declaration(decl);
 	case decl_func:
-		return process_function_decl(var) != proc_decl_error;
+		return process_function_decl(decl) != proc_decl_error;
+	case decl_type:
+		return _resolve_type(&decl->data.type);		
 	}
 	return true;
 }

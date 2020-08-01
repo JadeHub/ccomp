@@ -39,6 +39,7 @@ ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_dec
 ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
 
 ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name);
+ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name);
 
 void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn);
 void idm_leave_function(identfier_map_t* map);

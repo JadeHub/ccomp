@@ -165,3 +165,17 @@ TEST_F(GlobalFnsValidationTest, decl_decl_then_definition)
 
 	ExpectNoError(code);
 }
+
+TEST_F(GlobalFnsValidationTest, global_scope)
+{
+	std::string code = R"(
+	int a = 1;
+	
+	int foo(int a) 
+	{
+		{int a = 2;}
+		return a;
+	}
+	)";
+	ExpectNoError(code);
+}
