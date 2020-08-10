@@ -8,3 +8,5 @@
 + Typedef
 + Const
 + Static
++ Multiple declarations (int a, b, c;)
++ Floats & doubles
