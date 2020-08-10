@@ -1,27 +1,17 @@
 #include "lexer.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
 static token_t _invalid_tok;
 
-static inline bool _get_next_and_adv(source_range_t* sr, const char** pos, char* result)
+static inline bool _adv_pos(source_range_t* sr, const char** pos)
 {
 	if (*pos < sr->end) //skip the null and the last char
 	{
-		*result = **pos;
-		(*pos)++;
-		return true;
-	}
-	return false;
-}
-
-static inline bool _test_next_and_adv(source_range_t* sr, const char** pos, char* result)
-{
-	if (*pos < sr->end)
-	{
-		*result = **pos;
+		char c = **pos;
 		(*pos)++;
 		return true;
 	}
@@ -34,6 +24,24 @@ static inline bool _test_next_and_adv(source_range_t* sr, const char** pos, char
 static inline bool _is_digit_char(const char c)
 {
 	return c >= '0' && c <= '9';
+}
+
+/*
+[0-9A-Fa-f]
+*/
+static inline bool _is_hex_digit_char(const char c)
+{
+	return (c >= '0' && c <= '9') ||
+		(c >= 'A' && c <= 'F') ||
+		(c >= 'a' && c <= 'f');
+}
+
+/*
+[0-7]
+*/
+static inline bool _is_octal_digit_char(const char c)
+{
+	return c >= '0' && c <= '7';
 }
 
 /*
@@ -58,29 +66,113 @@ static inline bool _is_identifier_start(const char c)
 		(c == '_'));
 }
 
+static inline int _get_char_int_val(char c)
+{
+	if (_is_digit_char(c))
+		return c - '0';
+
+	if (c >= 'a' && c <= 'z')
+		return 10 + c - 'a';
+
+	if (c >= 'A' && c <= 'Z')
+		return 10 + c - 'A';
+
+	return 0;
+}
+
+static inline bool _is_valid_num_suffix(char ch)
+{
+	return (ch == 'l' || ch == 'L' || ch == 'u' || ch == 'U');
+}
+
+static inline bool _is_valid_num_char(uint32_t base, char ch)
+{
+	if (base == 10)
+		return _is_digit_char(ch);
+	if (base == 16)
+		return _is_hex_digit_char(ch);
+	if (base == 8)
+		return _is_octal_digit_char(ch);
+	return false;
+}
+
+static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
+{
+
+}
+
+static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
+{
+	result->loc = pos;
+	result->len = 0;
+	result->kind = tok_num_literal;
+	
+	uint32_t base = 10;
+
+	if (*pos == '0')
+	{
+		if (!_adv_pos(sr, &pos))
+		{
+			result->kind = tok_eof;
+			return;
+		}
+		if (*pos == 'x' || *pos == 'X')
+		{
+			//Hex
+			if (!_adv_pos(sr, &pos))
+			{
+				result->kind = tok_eof;
+				return;
+			}
+			base = 16;
+		}
+		else
+		{
+			//octal			
+			base = 8;
+		}
+	}
+
+	int i = 0;
+	do
+	{
+		i = i * base + _get_char_int_val(*pos);
+		result->len++;
+		if (!_adv_pos(sr, &pos))
+		{
+			result->kind = tok_eof;
+			return;
+		}
+	} while (_is_valid_num_char(base, *pos));
+	result->data = (void*)(long)i;
+
+	while (_is_valid_num_suffix(*pos))
+	{
+		result->len++;
+		if (!_adv_pos(sr, &pos))
+		{
+			result->kind = tok_eof;
+			return;
+		}
+	}
+}
+
 static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result)
 {
 	result->loc = pos;
 	result->len = 0;
 	result->kind = tok_identifier;
 
-	char ch;
-	if (!_get_next_and_adv(sr, &pos, &ch))
-	{
-		result->kind = tok_eof;
-		return;
-	}
-	int i = 0;
-	while (_is_identifier_body(ch))
+	do
 	{
 		//check len
 		result->len++;
-		if (!_get_next_and_adv(sr, &pos, &ch))
+		if (!_adv_pos(sr, &pos))
 		{
 			result->kind = tok_eof;
 			return;
 		}
-	}
+	} while (_is_identifier_body(*pos));
 
 	//Keywords
 	if (tok_spelling_cmp(result, "int"))
@@ -141,46 +233,16 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_sizeof;
 }
 
-static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
-{
-	result->loc = pos;
-	result->len = 0;
-	result->kind = tok_num_literal;
-
-	char ch = *pos;
-
-	if (!_get_next_and_adv(sr, &pos, &ch))
-	{
-		result->kind = tok_eof;
-		return;
-	}
-
-	int i = 0;
-	while (_is_digit_char(ch))
-	{
-		i = i * 10U + (uint32_t)(ch - '0');
-		result->len++;
-		if (!_get_next_and_adv(sr, &pos, &ch))
-		{
-			result->kind = tok_eof;
-			return;
-		}
-	}	
-	result->data = (void*)(long)i;
-}
-
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
 {
 	*result = _invalid_tok;
-
-	char ch = *pos;
 
 lex_next_tok:
 
 	//Skip any white space
 	while(*pos == ' ' || *pos == '\t')
 	{
-		if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
+		if (!_adv_pos(src, &pos)) goto _hit_end;
 	};
 
 	if (*pos == '\0')
@@ -380,6 +442,7 @@ lex_next_tok:
 	case '\'':
 		result->kind = tok_apostrophe;
 		result->len = 1;
+		_lex_char_literal(src, pos, result);
 		break;
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':		
@@ -402,10 +465,10 @@ lex_next_tok:
 	if (result->kind == tok_slashslash)
 	{
 		//Skip up to eol
-		while (*pos != '\n')
+		do
 		{
-			if (!_get_next_and_adv(src, &pos, &ch)) goto _hit_end;
-		};
+			if (!_adv_pos(src, &pos)) goto _hit_end;
+		} while (*pos != '\n');
 		goto lex_next_tok;
 	}
 

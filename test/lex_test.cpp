@@ -32,11 +32,17 @@ public:
 	}
 
 	std::vector<token_t> tokens;
+
+	template <typename T>
+	void ExpectIntLiteral(const token_t& t, T val)
+	{
+		EXPECT_EQ(t.kind, tok_num_literal);
+		EXPECT_EQ(t.data, (void*)val);
+	}
 };
 
 TEST_F(LexTest, foo)
 {
-	//Lex(R"(int main() {})");
 	Lex(R"(int foo = 0;)");
 }
 
@@ -65,4 +71,60 @@ TEST_F(LexTest, Comment)
 	EXPECT_TRUE(tok_spelling_cmp(&tokens[3], "foo2"));
 	EXPECT_EQ(tokens[4].kind, tok_equal);
 	EXPECT_EQ(tokens[5].kind, tok_num_literal);
+}
+
+TEST_F(LexTest, HexConstant1)
+{
+	std::string code = R"(int x = 0xFF;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0xFF);
+}
+
+TEST_F(LexTest, HexConstant2)
+{
+	std::string code = R"(int x = 0xFf;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0xFF);
+}
+
+TEST_F(LexTest, HexConstant3)
+{
+	std::string code = R"(int x = 0x00000;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0);
+}
+
+TEST_F(LexTest, HexConstant4)
+{
+	std::string code = R"(int x = 0x00000acb;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0xACB);
+}
+
+TEST_F(LexTest, OctalConstant1)
+{
+	std::string code = R"(int x = 052;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 42);
+}
+
+TEST_F(LexTest, BinaryConstant1)
+{
+	std::string code = R"(int x = 052;)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 42);
+}
+
+TEST_F(LexTest, CharConstant1)
+{
+	std::string code = R"(int x = 'a';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 'a');
 }
