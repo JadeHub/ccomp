@@ -17,23 +17,43 @@ extern "C"
 
 using namespace ::testing;
 
-class ValidationTest : public ::testing::Test
+struct TestWithErrorHandling : public ::testing::Test 
+{
+	TestWithErrorHandling()
+	{
+		diag_set_handler(&diag_cb, this);
+		EXPECT_CALL(*this, on_diag(_, _, _)).Times(0);
+	}
+
+	virtual ~TestWithErrorHandling()
+	{
+		diag_set_handler(NULL, NULL);
+	}
+
+	void ExpectError(uint32_t err, testing::Cardinality times = Exactly(1))
+	{
+		EXPECT_CALL(*this, on_diag(_, err, _)).Times(times);
+	}
+
+	void ExpectNoError()
+	{
+		EXPECT_CALL(*this, on_diag(_, _, _)).Times(Exactly(0));
+	}
+
+	static void diag_cb(token_t* tok, uint32_t err, const char* msg, void* data)
+	{
+		((TestWithErrorHandling*)data)->on_diag(tok, err, msg);
+	}
+
+	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
+};
+
+class ValidationTest : public TestWithErrorHandling
 {
 public:
 	ValidationTest()
 	{
 		lex_init();
-
-		std::function<void(token_t*, uint32_t, const char*)> fn =
-			[this](token_t* tok, uint32_t err, const char* msg) {};
-
-		diag_set_handler(&diag_cb, this);
-		EXPECT_CALL(*this, on_diag(_, _, _)).Times(0);
-	}
-
-	~ValidationTest()
-	{
-		diag_set_handler(NULL, NULL);
 	}
 
 	void parse(const std::string& src)
@@ -68,7 +88,7 @@ public:
 
 	void ExpectError(const std::string& code, uint32_t err, testing::Cardinality times = Exactly(1))
 	{
-		EXPECT_CALL(*this, on_diag(_, err, _)).Times(times);
+		TestWithErrorHandling::ExpectError(err, times);
 		parse(code);
 		if(ast)
 			validate();
@@ -76,19 +96,17 @@ public:
 
 	void ExpectNoError(const std::string& code)
 	{
-		EXPECT_CALL(*this, on_diag(_, _, _)).Times(Exactly(0));
+		TestWithErrorHandling::ExpectNoError();
 		parse(code);
 		validate();
 	}
 
 	void ExpectSyntaxErrors(const std::string& code)
 	{
-		EXPECT_CALL(*this, on_diag(_, ERR_SYNTAX, _)).Times(AtLeast(1));
+		TestWithErrorHandling::ExpectError(ERR_SYNTAX, ::testing::Cardinality(AtLeast(1)));
 		parse(code);
 		EXPECT_EQ(ast, nullptr);
 	}
-
-	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
 
 	std::vector<token_t> tokens;
 	ast_trans_unit_t* ast = nullptr;

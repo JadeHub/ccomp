@@ -903,29 +903,6 @@ ast_expression_t* parse_identifier()
 	return expr;
 }
 
-ast_expression_t* parse_char_literal()
-{
-	//"'" <char> "'"
-	expect_cur(tok_apostrophe);
-	next_tok();
-
-	expect_cur(tok_identifier);
-	if (tok_spelling_len(current()) > 1)
-	{
-		report_err(ERR_SYNTAX, "too many chars in character constant");
-		return NULL;
-	}
-
-	ast_expression_t* expr = _alloc_expr();
-	expr->kind = expr_int_literal;
-	expr->data.int_literal.value = (uint32_t)(long)current()->loc[0];
-
-	next_tok();
-	expect_cur(tok_apostrophe);
-	next_tok();
-	return expr;
-}
-
 ast_expression_t* try_parse_literal()
 {
 	if (current_is(tok_num_literal))
@@ -937,10 +914,6 @@ ast_expression_t* try_parse_literal()
 		expr->data.int_literal.type = NULL;
 		next_tok();
 		return expr;
-	}
-	else if (current_is(tok_apostrophe))
-	{
-		return parse_char_literal();
 	}
 	return NULL;
 }

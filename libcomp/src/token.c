@@ -101,8 +101,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "void";
 	case tok_fullstop:
 		return ".";
-	case tok_apostrophe:
-		return "'";
+//	case tok_apostrophe:
+	//	return "'";
 	case tok_signed: 
 		return "signed";
 	case tok_unsigned: 

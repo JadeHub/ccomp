@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "diag.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -17,6 +18,8 @@ static inline bool _adv_pos(source_range_t* sr, const char** pos)
 	}
 	return false;
 }
+
+#define ADV_POS(SR, POS)	if (!_adv_pos(SR, POS)) { result->kind = tok_eof; return; }
 
 /*
 [0-9]
@@ -96,9 +99,130 @@ static inline bool _is_valid_num_char(uint32_t base, char ch)
 	return false;
 }
 
+static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* result)
+{
+	result->loc = pos;
+	result->kind = tok_num_literal;
+	result->len = 1;
+	//skip slash
+	ADV_POS(sr, &pos);
+
+	int base = 0;
+	if (*pos == 'x')
+	{
+		//hex
+		ADV_POS(sr, &pos);
+		result->len++;
+		
+		base = 16;
+	}
+	else if (_is_octal_digit_char(*pos))
+	{
+		//octal
+		base = 8;
+	}
+
+	if (base > 0)
+	{
+		int i = 0;
+		do
+		{
+			i = i * base + _get_char_int_val(*pos);
+			result->len++;
+			ADV_POS(sr, &pos);
+		} while (_is_valid_num_char(base, *pos));
+
+		if (i > 255)
+		{
+			diag_err(result, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
+			result->kind = tok_eof;
+			return;
+		}
+
+		result->data = (void*)i;
+		return;
+	}
+
+	switch (*pos)
+	{
+	case '\\':
+	case '\'':
+	case '\"':
+	case '?':
+		result->data = (void*)*pos;
+		result->len++;
+		return;
+	case 'a':
+		result->data = (void*)0x07; //bell
+		result->len++;
+		return;	
+	case 'b':
+		result->data = (void*)0x08; //backspace
+		result->len++;
+		return;
+	case 'f':
+		result->data = (void*)0x0C; //form feed
+		result->len++;
+		return;
+	case 'n':
+		result->data = (void*)0x0A; //new line
+		result->len++;
+		return;
+
+	case 'r':
+		result->data = (void*)0x0D; //carriage return
+		result->len++;
+		return;
+
+	case 't':
+		result->data = (void*)0x09; //tab
+		result->len++;
+		return;
+	case 'v':
+		result->data = (void*)0x0B; //vert tab
+		result->len++;
+		return;
+	case '0':
+		result->data = 0;
+		result->len++;
+		return;
+	}
+	diag_err(result, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
+	result->kind = tok_eof;
+}
+
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
 {
+	result->loc = pos;
+	result->len = 1;
+	result->kind = tok_num_literal;
 
+	//skip initial apostrophe
+	ADV_POS(sr, &pos);
+	 
+	if (*pos == '\\')
+	{
+		_lex_escape_char(sr, pos, result);
+		if (result->kind == tok_eof)
+			return;
+		pos += result->len;
+	}
+	else
+	{
+		result->data = (void*)(*pos);
+		result->len++;
+		ADV_POS(sr, &pos);
+	}
+
+	if (*pos != '\'')
+	{
+		diag_err(result, ERR_SYNTAX, "Char literal too long");
+		result->kind = tok_eof;
+		return;
+	}
+	//slip trailing apostrophe
+	ADV_POS(sr, &pos);
+	result->len++;
 }
 
 static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -110,20 +234,13 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 	uint32_t base = 10;
 
 	if (*pos == '0')
-	{
-		if (!_adv_pos(sr, &pos))
-		{
-			result->kind = tok_eof;
-			return;
-		}
-		if (*pos == 'x' || *pos == 'X')
+	{		
+		if (*(pos+1) == 'x' || *(pos+1) == 'X')
 		{
 			//Hex
-			if (!_adv_pos(sr, &pos))
-			{
-				result->kind = tok_eof;
-				return;
-			}
+			ADV_POS(sr, &pos); //skip the '0'
+			ADV_POS(sr, &pos); //skip the 'x'
+			result->len += 2;
 			base = 16;
 		}
 		else
@@ -138,22 +255,14 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 	{
 		i = i * base + _get_char_int_val(*pos);
 		result->len++;
-		if (!_adv_pos(sr, &pos))
-		{
-			result->kind = tok_eof;
-			return;
-		}
+		ADV_POS(sr, &pos);
 	} while (_is_valid_num_char(base, *pos));
 	result->data = (void*)(long)i;
 
 	while (_is_valid_num_suffix(*pos))
 	{
 		result->len++;
-		if (!_adv_pos(sr, &pos))
-		{
-			result->kind = tok_eof;
-			return;
-		}
+		ADV_POS(sr, &pos);
 	}
 }
 
@@ -167,11 +276,7 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	{
 		//check len
 		result->len++;
-		if (!_adv_pos(sr, &pos))
-		{
-			result->kind = tok_eof;
-			return;
-		}
+		ADV_POS(sr, &pos);
 	} while (_is_identifier_body(*pos));
 
 	//Keywords
@@ -440,8 +545,6 @@ lex_next_tok:
 		}
 		break;
 	case '\'':
-		result->kind = tok_apostrophe;
-		result->len = 1;
 		_lex_char_literal(src, pos, result);
 		break;
 	case '0': case '1': case '2': case '3': case '4':

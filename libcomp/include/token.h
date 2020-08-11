@@ -25,7 +25,7 @@ typedef enum
     tok_star,               // *
     tok_slash,              // /
     tok_slashslash,         // //
-    tok_apostrophe,         // '
+   // tok_apostrophe,         // '
     tok_amp,                // &
     tok_ampamp,             // &&
     tok_pipe,               // |

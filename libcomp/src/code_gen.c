@@ -288,7 +288,7 @@ void gen_expression(ast_expression_t* expr)
 		else
 		{
 			assert(false);
-		}		
+		}
 		_cur_assign_target = prev_target;
 
 		if(_cur_assign_target)
@@ -544,9 +544,31 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 
 		gen_expression(var_decl->expr);
 
-		if (lval.type->size == 4)
+		if (lval.type->size > 4)
+		{
+
+		}
+		else if (lval.type->size == 4)
 		{		
 			_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+		}
+		else if (lval.type->size == 2)
+		{
+			if (strlen(lval.name))
+				_gen_asm("movw %%ax, %s", lval.name); //global
+			else
+				_gen_asm("movw %%ax, %d(%%ebp)", lval.stack_offset);
+		}
+		else if (lval.type->size == 1)
+		{
+			if (strlen(lval.name))
+				_gen_asm("movb %%al, %s", lval.name); //global
+			else
+				_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
+		}
+		else
+		{
+			assert(false);
 		}
 		_cur_assign_target = prev_target;
 	}

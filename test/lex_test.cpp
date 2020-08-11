@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include "validation_fixture.h"
+
 extern "C"
 {
 #include <libcomp/include/lexer.h>
@@ -9,9 +11,17 @@ extern "C"
 
 using namespace ::testing;
 
-class LexTest : public Test
+class LexTest : public TestWithErrorHandling
 {
 public:
+
+	LexTest()
+	{
+	}
+
+	~LexTest()
+	{
+	}
 
 	void Lex(const std::string& src)
 	{
@@ -39,6 +49,8 @@ public:
 		EXPECT_EQ(t.kind, tok_num_literal);
 		EXPECT_EQ(t.data, (void*)val);
 	}
+
+	
 };
 
 TEST_F(LexTest, foo)
@@ -105,6 +117,25 @@ TEST_F(LexTest, HexConstant4)
 	ExpectIntLiteral(tokens[3], 0xACB);
 }
 
+TEST_F(LexTest, HexConstant5)
+{
+	std::string code = R"(int x = 0x00000acb; int main())";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0xACB);
+	EXPECT_EQ(tokens[4].kind, tok_semi_colon);
+	EXPECT_EQ(tokens[5].kind, tok_int);
+	EXPECT_EQ(tokens[6].kind, tok_identifier);
+}
+
+TEST_F(LexTest, ErrCharConstantConstantTooLarge)
+{
+	std::string code = R"(int x = '\xFF1';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
+
 TEST_F(LexTest, OctalConstant1)
 {
 	std::string code = R"(int x = 052;)";
@@ -127,4 +158,60 @@ TEST_F(LexTest, CharConstant1)
 
 	Lex(code);
 	ExpectIntLiteral(tokens[3], 'a');
+}
+
+TEST_F(LexTest, CharConstantEsc1)
+{
+	std::string code = R"(int x = '\t';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], '\t');
+}
+
+TEST_F(LexTest, CharConstantNull)
+{
+	std::string code = R"(int x = '\0';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0);
+}
+
+TEST_F(LexTest, CharConstantEscHex)
+{
+	std::string code = R"(int x = '\xFF';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0xFF);
+}
+
+TEST_F(LexTest, CharConstantEscHex2)
+{
+	std::string code = R"(int x = '\x0F';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 0x0F);
+}
+
+TEST_F(LexTest, CharConstantEscOctal)
+{
+	std::string code = R"(int x = '\052';)";
+
+	Lex(code);
+	ExpectIntLiteral(tokens[3], 42);
+}
+
+TEST_F(LexTest, ErrCharConstantBadEsc)
+{
+	std::string code = R"(int x = '\q';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);	
+}
+
+TEST_F(LexTest, ErrCharConstantTooLong)
+{
+	std::string code = R"(int x = '\nr';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
 }
