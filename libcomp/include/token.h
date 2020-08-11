@@ -25,7 +25,6 @@ typedef enum
     tok_star,               // *
     tok_slash,              // /
     tok_slashslash,         // //
-   // tok_apostrophe,         // '
     tok_amp,                // &
     tok_ampamp,             // &&
     tok_pipe,               // |
@@ -84,7 +83,7 @@ typedef enum
     tok_register,
 
     tok_identifier,         // main
-    tok_num_literal         // 1234
+    tok_num_literal,        // 1234
 }tok_kind;
 
 typedef struct token

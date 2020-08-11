@@ -173,7 +173,11 @@ typedef enum
 	type_int8,
 	type_int16,
 	type_int32,
-	/*type_long,*/
+
+	type_uint8,
+	type_uint16,
+	type_uint32,
+	
 	/*type_float,
 	type_double,*/
 	type_user
@@ -231,7 +235,7 @@ typedef struct ast_type_spec
 {
 	token_range_t tokens;
 	type_kind kind;
-	uint32_t size;	
+	uint32_t size;
 	ast_user_type_spec_t* user_type_spec;
 }ast_type_spec_t;
 

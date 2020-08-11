@@ -157,7 +157,7 @@ void gen_assign_expr(token_t* tok, ast_expression_t* target)
 	if (!lval.type)
 		return;
 
-	//todo
+	//todo ?
 	if (strlen(lval.name))
 	{
 		_gen_asm("movl %%eax, %s", lval.name);
@@ -165,6 +165,90 @@ void gen_assign_expr(token_t* tok, ast_expression_t* target)
 	else
 	{
 		_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
+	}
+}
+
+static bool _is_unsigned_int_type(ast_type_spec_t* type)
+{
+	return type->kind == type_uint8 ||
+			type->kind == type_uint16 ||
+			type->kind == type_uint32;
+}
+
+static const char* _promoting_mov_instr(ast_type_spec_t* type)
+{
+	if (type->size == 4)
+		return "movl";
+
+	if (type->size == 2)
+		return _is_unsigned_int_type(type) ? "movzwl" : "movswl";
+
+	if (type->size == 1)
+		return _is_unsigned_int_type(type) ? "movzbl" : "movsbl";
+
+	assert(false);
+	return "";
+}
+
+void gen_copy_lval_to_eax(lval_data_t* lval)
+{
+
+	if (strlen(lval->name))
+		_gen_asm("%s %s, %%eax", _promoting_mov_instr(lval->type), lval->name);
+	else
+		_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset);
+
+	/*// code: move the value of the(global or stack) variable to eax
+	if (lval->type->size == 4)
+	{
+		if (strlen(lval->name))
+			_gen_asm("movl %s, %%eax", lval->name);
+		else
+			_gen_asm("movl %d(%%ebp), %%eax", lval->stack_offset);
+	}
+	else if (lval->type->size == 2)
+	{
+		if (strlen(lval->name))
+			_gen_asm("movzwl %s, %%eax", lval->name);
+		else
+			_gen_asm("movzwl %d(%%ebp), %%eax", lval->stack_offset);
+	}
+	else if (lval->type->size == 1)
+	{
+		if (strlen(lval->name))
+			_gen_asm("movzbl %s, %%eax", lval->name);
+		else
+			_gen_asm("movzbl %d(%%ebp), %%eax", lval->stack_offset);
+	}*/
+}
+
+void gen_copy_eax_to_target()
+{
+	//move the value in eax to target
+	if (_cur_assign_target->type->size == 4)
+	{
+		if (strlen(_cur_assign_target->name))
+			_gen_asm("movl %%eax, %s", _cur_assign_target->name); //global
+		else
+			_gen_asm("movl %%eax, %d(%%ebp)", _cur_assign_target->stack_offset);
+	}
+	else if (_cur_assign_target->type->size == 2)
+	{
+		if (strlen(_cur_assign_target->name))
+			_gen_asm("movw %%ax, %s", _cur_assign_target->name); //global
+		else
+			_gen_asm("movw %%ax, %d(%%ebp)", _cur_assign_target->stack_offset);
+	}
+	else if (_cur_assign_target->type->size == 1)
+	{
+		if (strlen(_cur_assign_target->name))
+			_gen_asm("movb %%al, %s", _cur_assign_target->name); //global
+		else
+			_gen_asm("movb %%al, %d(%%ebp)", _cur_assign_target->stack_offset);
+	}
+	else
+	{
+		assert(false);
 	}
 }
 
@@ -260,34 +344,9 @@ void gen_expression(ast_expression_t* expr)
 		gen_expression(expr->data.assignment.expr);
 
 		//move the value in eax to target
-		if (lval.type->size > 4)
+		if (lval.type->size <= 4)
 		{
-			
-		}
-		else if (lval.type->size == 4)
-		{
-			if (strlen(lval.name))
-				_gen_asm("movl %%eax, %s", lval.name); //global
-			else
-				_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
-		}
-		else if (lval.type->size == 2)
-		{
-			if (strlen(lval.name))
-				_gen_asm("movw %%ax, %s", lval.name); //global
-			else
-				_gen_asm("movw %%ax, %d(%%ebp)", lval.stack_offset);
-		}
-		else if (lval.type->size == 1)
-		{
-			if (strlen(lval.name))
-				_gen_asm("movb %%al, %s", lval.name); //global
-			else
-				_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
-		}
-		else
-		{
-			assert(false);
+			gen_copy_eax_to_target();
 		}
 		_cur_assign_target = prev_target;
 
@@ -302,29 +361,11 @@ void gen_expression(ast_expression_t* expr)
 		lval_data_t lval = _get_lvalue_addr(expr);
 		if (lval.type)
 		{
-			// code: move the value of the(global or stack) variable to eax
-			if (lval.type->size == 4)
-			{				
-				if (strlen(lval.name))
-					_gen_asm("movl %s, %%eax", lval.name);
-				else
-					_gen_asm("movl %d(%%ebp), %%eax", lval.stack_offset);
-			}
-			else if (lval.type->size == 2)
+			if (lval.type->size <= 4)
 			{
-				if (strlen(lval.name))
-					_gen_asm("movzwl %s, %%eax", lval.name);
-				else
-					_gen_asm("movzwl %d(%%ebp), %%eax", lval.stack_offset);
+				gen_copy_lval_to_eax(&lval);
 			}
-			else if (lval.type->size == 1)
-			{
-				if (strlen(lval.name))
-					_gen_asm("movzbl %s, %%eax", lval.name);
-				else
-					_gen_asm("movzbl %d(%%ebp), %%eax", lval.stack_offset);
-			}
-			else if (lval.type->size > 4)
+			else
 			{
 				if (_cur_assign_target->deref)
 				{
@@ -372,10 +413,10 @@ void gen_expression(ast_expression_t* expr)
 					}
 				}
 			}
-			else
+			/*else
 			{
 				assert(false);
-			}
+			}*/
 		}
 	}
 	else if (expr->kind == expr_int_literal)
@@ -544,31 +585,10 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 
 		gen_expression(var_decl->expr);
 
-		if (lval.type->size > 4)
+		//move the value in eax to target
+		if (lval.type->size <= 4)
 		{
-
-		}
-		else if (lval.type->size == 4)
-		{		
-			_gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
-		}
-		else if (lval.type->size == 2)
-		{
-			if (strlen(lval.name))
-				_gen_asm("movw %%ax, %s", lval.name); //global
-			else
-				_gen_asm("movw %%ax, %d(%%ebp)", lval.stack_offset);
-		}
-		else if (lval.type->size == 1)
-		{
-			if (strlen(lval.name))
-				_gen_asm("movb %%al, %s", lval.name); //global
-			else
-				_gen_asm("movb %%al, %d(%%ebp)", lval.stack_offset);
-		}
-		else
-		{
-			assert(false);
+			gen_copy_eax_to_target();
 		}
 		_cur_assign_target = prev_target;
 	}

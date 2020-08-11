@@ -631,7 +631,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_int8;
+		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint8 : type_int8;
 		result->size = 1;
 		return result;
 	}
@@ -651,7 +651,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_int16;
+		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint16 : type_int16;
 		result->size = 2;
 		return result;
 	}
@@ -679,7 +679,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		memset(result, 0, sizeof(ast_type_spec_t));
 		result->tokens.start = start;
 		result->tokens.end = end;
-		result->kind = type_int32;
+		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint32 : type_int32;
 		result->size = 4;
 		return result;
 	}

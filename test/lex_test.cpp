@@ -208,8 +208,13 @@ TEST_F(LexTest, ErrCharConstantBadEsc)
 	Lex(code);	
 }
 
+void foo(int) {}
+
 TEST_F(LexTest, ErrCharConstantTooLong)
 {
+	unsigned int a = 0xffffffff;
+	foo(a);
+
 	std::string code = R"(int x = '\nr';)";
 
 	ExpectError(ERR_SYNTAX);

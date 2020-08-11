@@ -191,6 +191,11 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 	result->kind = tok_eof;
 }
 
+static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* result)
+{
+
+}
+
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
 {
 	result->loc = pos;
@@ -546,6 +551,9 @@ lex_next_tok:
 		break;
 	case '\'':
 		_lex_char_literal(src, pos, result);
+		break;
+	case '\"':
+		_lex_string_literal(src, pos, result);
 		break;
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':		

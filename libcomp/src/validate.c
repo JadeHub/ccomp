@@ -11,11 +11,14 @@
 #include <stdlib.h>
 
 /*built in types */
-/* {{token_range_t}, kind, size, user_type_spec} */
-static ast_type_spec_t _void_type = { {NULL, NULL}, type_void, 0, NULL };
-static ast_type_spec_t _char_type = { {NULL, NULL}, type_int8, 1, NULL };
-static ast_type_spec_t _short_type = { {NULL, NULL}, type_int16, 2, NULL };
-static ast_type_spec_t _int_type = { {NULL, NULL}, type_int32, 4, NULL };
+/* {{token_range_t}, kind, size, flags, user_type_spec} */
+static ast_type_spec_t _void_type =		{ {NULL, NULL}, type_void,		0, NULL };
+static ast_type_spec_t _char_type =		{ {NULL, NULL}, type_int8,		1, NULL };
+static ast_type_spec_t _uchar_type =	{ {NULL, NULL}, type_uint8,		1, NULL };
+static ast_type_spec_t _short_type =	{ {NULL, NULL}, type_int16,		2, NULL };
+static ast_type_spec_t _ushort_type =	{ {NULL, NULL}, type_uint16,	2, NULL };
+static ast_type_spec_t _int_type =		{ {NULL, NULL}, type_int32,		4, NULL };
+static ast_type_spec_t _uint_type =		{ {NULL, NULL}, type_uint32,	4, NULL };
 
 static identfier_map_t* _id_map;
 static ast_function_decl_t* _cur_func = NULL;
@@ -103,12 +106,21 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_int8:
 		ast_destroy_type_spec(typeref);
 		return &_char_type;
+	case type_uint8:
+		ast_destroy_type_spec(typeref);
+		return &_uchar_type;
 	case type_int16:
 		ast_destroy_type_spec(typeref);
 		return &_short_type;
+	case type_uint16:
+		ast_destroy_type_spec(typeref);
+		return &_ushort_type;
 	case type_int32:
 		ast_destroy_type_spec(typeref);
 		return &_int_type;
+	case type_uint32:
+		ast_destroy_type_spec(typeref);
+		return &_uint_type;
 	case type_user:
 		break;
 	}
@@ -196,77 +208,6 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		_add_user_type(typeref);
 	}
 	return typeref;
-
-	/*ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->user_type_spec->name);
-	if (typeref == exist)
-		return exist;
-
-	if (exist && exist->user_type_spec->kind != typeref->user_type_spec->kind)
-	{
-		_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
-			"redefinition of %s '%s' changes type to %s",
-			user_type_kind_name(exist->user_type_spec->kind),
-			typeref->user_type_spec->name,
-			user_type_kind_name(typeref->user_type_spec->kind));
-		return NULL;
-	}
-
-	if (typeref->user_type_spec->kind == user_type_enum)
-	{
-		if (exist)
-		{
-			if (exist->user_type_spec->enum_members && typeref->user_type_spec->enum_members)
-			{
-				//multiple definitions
-				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
-					"redefinition of enum '%s'",
-					typeref->user_type_spec->name);
-				return NULL;
-			}
-
-			if (!exist->user_type_spec->enum_members && typeref->user_type_spec->enum_members)
-			{
-				//update definition
-				exist->size = typeref->size;
-				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
-				typeref->user_type_spec->enum_members = NULL;
-
-				_register_enum_constants(exist->user_type_spec);
-			}
-			ast_destroy_type_spec(typeref);
-			return exist;
-		}
-		_register_enum_constants(typeref->user_type_spec);
-	}
-	else
-	{
-		if (exist)
-		{
-			if (exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
-			{
-				//multiple definitions
-				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
-					"redefinition of struct '%s'",
-					typeref->user_type_spec->name);
-				return NULL;
-			}
-
-			if (!exist->user_type_spec->struct_members && typeref->user_type_spec->struct_members)
-			{
-				//update definition
-				exist->size = typeref->size;
-				exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
-				typeref->user_type_spec->struct_members = NULL;
-
-				_resolve_struct_member_types(exist->user_type_spec);
-			}
-			ast_destroy_type_spec(typeref);
-			return exist;
-		}
-		_resolve_struct_member_types(typeref->user_type_spec);
-	}
-	idm_add_tag(_id_map, typeref);
-	return typeref;*/
 }
 
 static bool _is_int_type(ast_type_spec_t* spec)
@@ -274,8 +215,11 @@ static bool _is_int_type(ast_type_spec_t* spec)
 	switch (spec->kind)
 	{
 	case type_int8:
+	case type_uint8:
 	case type_int16:
+	case type_uint16:
 	case type_int32:
+	case type_uint32:
 		return true;
 	}
 
