@@ -19,6 +19,7 @@ static ast_type_spec_t _short_type =	{ {NULL, NULL}, type_int16,		2, NULL };
 static ast_type_spec_t _ushort_type =	{ {NULL, NULL}, type_uint16,	2, NULL };
 static ast_type_spec_t _int_type =		{ {NULL, NULL}, type_int32,		4, NULL };
 static ast_type_spec_t _uint_type =		{ {NULL, NULL}, type_uint32,	4, NULL };
+static ast_type_spec_t _ptr_type =		{ {NULL, NULL}, type_ptr,		4, NULL };
 
 static identfier_map_t* _id_map;
 static ast_function_decl_t* _cur_func = NULL;
@@ -121,6 +122,10 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	case type_uint32:
 		ast_destroy_type_spec(typeref);
 		return &_uint_type;
+	case type_ptr:
+		typeref->ptr_type = _resolve_type(typeref->ptr_type);
+		return typeref;
+		break;
 	case type_user:
 		break;
 	}
@@ -321,6 +326,22 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	{
 	case expr_postfix_op:
 	case expr_unary_op:
+
+		if (expr->data.unary_op.operation == op_address_of)
+		{
+			ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
+			assert(expr_type);
+			ast_type_spec_t* ptr_type = ast_make_ptr_type(expr_type);
+			return _resolve_type(ptr_type);
+		}
+		else if (expr->data.unary_op.operation == op_dereference)
+		{
+			ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
+			assert(expr_type->kind == type_ptr);
+			return expr_type->ptr_type;
+		}
+
+		//todo handle signed/unisgned here, eg uint32 x = 5; int32 y = -x;
 		return _resolve_expr_type(expr->data.unary_op.expression);
 	case expr_binary_op:
 	{

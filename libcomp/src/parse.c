@@ -61,7 +61,7 @@
 <literal> ::= <int>
 			| "'" <char> "'"
 
-<unary_op> ::= "!" | "~" | "-" | "++" | "--"
+<unary_op> ::= "!" | "~" | "-" | "++" | "--" | "&" | "*"
 
 <declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifier> ) }
 
@@ -226,6 +226,8 @@ static bool _is_unary_op(token_t* tok)
 	case tok_exclaim:
 	case tok_plusplus:
 	case tok_minusminus:
+	case tok_amp:
+	case tok_star:
 		return true;
 	}
 	return false;
@@ -258,6 +260,10 @@ static op_kind _get_unary_operator(token_t* tok)
 		return op_prefix_dec;
 	case tok_plusplus:
 		return op_prefix_inc;
+	case tok_amp:
+		return op_address_of;
+	case tok_star:
+		return op_dereference;
 	}
 	report_err(ERR_SYNTAX, "Unknown unary op %s", tok_kind_spelling(tok->kind));
 	return op_unknown;
@@ -554,6 +560,13 @@ static bool _is_type_spec(uint32_t flags, uint32_t type_flags)
 	return ((flags & DECL_SPEC_TYPE_FLAGS) == type_flags);
 }
 
+static inline ast_type_spec_t* _make_type_spec()
+{
+	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+	memset(result, 0, sizeof(ast_type_spec_t));
+	return result;
+}
+
 ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 {
 	uint32_t spec_flags = 0;
@@ -577,8 +590,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	//void
 	if (_is_type_spec(spec_flags, DECL_SPEC_VOID))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = type_void;
@@ -590,8 +602,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	if (_is_type_spec(spec_flags, DECL_SPEC_STRUCT) ||
 		_is_type_spec(spec_flags, DECL_SPEC_UNION))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = type_user;
@@ -603,8 +614,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	//enum
 	if (_is_type_spec(spec_flags, DECL_SPEC_ENUM))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = type_user;
@@ -627,8 +637,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_CHAR) ||
 		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_CHAR))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint8 : type_int8;
@@ -647,8 +656,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT) ||
 		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint16 : type_int16;
@@ -675,8 +683,7 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_INT) ||
 		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_INT))
 	{
-		ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-		memset(result, 0, sizeof(ast_type_spec_t));
+		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
 		result->tokens.end = end;
 		result->kind = (spec_flags & DECL_SPEC_UNSIGNED) ? type_uint32 : type_int32;
@@ -812,6 +819,15 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 	memset(result, 0, sizeof(ast_declaration_t));
 	result->tokens.start = current();
+
+	while (current_is(tok_star))
+	{
+		//pointer
+		ast_type_spec_t* ptr_type = ast_make_ptr_type(type);
+		ptr_type->tokens.end = current();
+		type = ptr_type;
+		next_tok();
+	}
 
 	if (current_is(tok_identifier))
 	{

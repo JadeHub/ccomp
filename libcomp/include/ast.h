@@ -14,6 +14,8 @@ typedef enum
 	op_negate,
 	op_compliment,
 	op_not,
+	op_address_of,
+	op_dereference,
 	//binary operators
 	op_add,
 	op_sub,
@@ -180,7 +182,8 @@ typedef enum
 	
 	/*type_float,
 	type_double,*/
-	type_user
+	type_user,
+	type_ptr
 }type_kind;
 
 typedef struct ast_struct_member
@@ -236,7 +239,12 @@ typedef struct ast_type_spec
 	token_range_t tokens;
 	type_kind kind;
 	uint32_t size;
-	ast_user_type_spec_t* user_type_spec;
+
+	union
+	{
+		ast_user_type_spec_t* user_type_spec;
+		struct ast_type_spec* ptr_type;
+	};
 }ast_type_spec_t;
 
 /* Declaration */
@@ -276,8 +284,6 @@ typedef enum
 	decl_type,
 	decl_const
 }ast_decl_type;
-
-
 
 typedef struct ast_declaration
 {
@@ -394,6 +400,7 @@ const char* ast_type_name(ast_type_spec_t* type);
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
 uint32_t ast_struct_size(ast_user_type_spec_t*);
 uint32_t ast_struct_member_size(ast_struct_member_t* member);
+ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);

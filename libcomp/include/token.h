@@ -14,6 +14,8 @@ typedef enum
     tok_r_brace,            // }
     tok_l_paren,            // (
     tok_r_paren,            // )
+    tok_l_square_paren,     // [
+    tok_r_square_paren,     // ]
     tok_semi_colon,         // ;
     tok_minus,              // -
     tok_minusminus,         // --
@@ -84,6 +86,7 @@ typedef enum
 
     tok_identifier,         // main
     tok_num_literal,        // 1234
+    tok_string_literal      // "abc"
 }tok_kind;
 
 typedef struct token

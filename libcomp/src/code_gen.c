@@ -144,6 +144,17 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 			return a;
 		}
 	}
+	else if (target->kind == expr_unary_op &&
+		target->data.unary_op.operation == op_dereference)
+	{
+		result = _get_lvalue_addr(target->data.unary_op.expression);
+		result.deref = true;
+		return result;
+	}
+	else
+	{
+		assert(false);
+	}
 	return result;
 }
 
@@ -192,39 +203,37 @@ static const char* _promoting_mov_instr(ast_type_spec_t* type)
 
 void gen_copy_lval_to_eax(lval_data_t* lval)
 {
-
 	if (strlen(lval->name))
 		_gen_asm("%s %s, %%eax", _promoting_mov_instr(lval->type), lval->name);
 	else
 		_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset);
-
-	/*// code: move the value of the(global or stack) variable to eax
-	if (lval->type->size == 4)
-	{
-		if (strlen(lval->name))
-			_gen_asm("movl %s, %%eax", lval->name);
-		else
-			_gen_asm("movl %d(%%ebp), %%eax", lval->stack_offset);
-	}
-	else if (lval->type->size == 2)
-	{
-		if (strlen(lval->name))
-			_gen_asm("movzwl %s, %%eax", lval->name);
-		else
-			_gen_asm("movzwl %d(%%ebp), %%eax", lval->stack_offset);
-	}
-	else if (lval->type->size == 1)
-	{
-		if (strlen(lval->name))
-			_gen_asm("movzbl %s, %%eax", lval->name);
-		else
-			_gen_asm("movzbl %d(%%ebp), %%eax", lval->stack_offset);
-	}*/
 }
 
 void gen_copy_eax_to_target()
 {
 	//move the value in eax to target
+
+	if (_cur_assign_target->deref)
+	{
+		//load target address in edx
+		_gen_asm("movl %d(%%ebp), %%edx", _cur_assign_target->stack_offset);
+
+		//mov eax to (edx)
+		if (_cur_assign_target->type->size == 4)
+		{
+			_gen_asm("movl %%eax, (%%edx)");
+		}
+		else if (_cur_assign_target->type->size == 2)
+		{
+			_gen_asm("movw %%ax, (%%edx)");
+		}
+		else if (_cur_assign_target->type->size == 1)
+		{
+			_gen_asm("movb %%al, (%%edx)");
+		}
+		return;
+	}
+
 	if (_cur_assign_target->type->size == 4)
 	{
 		if (strlen(_cur_assign_target->name))
@@ -450,6 +459,24 @@ void gen_expression(ast_expression_t* expr)
 			_gen_asm("decl %%eax");
 			gen_assign_expr(expr->tokens.start, param);
 			break;
+		case op_dereference:
+			_gen_asm("movl (%%eax), %%eax");
+			break;
+		case op_address_of:
+			{
+				lval_data_t lval = _get_lvalue_addr(expr->data.unary_op.expression);
+
+				if (strlen(lval.name))
+				{
+
+				}
+				else
+				{
+					_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
+				}
+
+				break;
+			}
 		}
 	}
 	else if (expr->kind == expr_postfix_op)

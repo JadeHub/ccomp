@@ -50,7 +50,11 @@ public:
 		EXPECT_EQ(t.data, (void*)val);
 	}
 
-	
+	void ExpectStringLiteral(const token_t& t, const char* expected)
+	{
+		const char* str = (const char*)t.data;
+		EXPECT_STREQ(str, expected);
+	}
 };
 
 TEST_F(LexTest, foo)
@@ -208,14 +212,67 @@ TEST_F(LexTest, ErrCharConstantBadEsc)
 	Lex(code);	
 }
 
-void foo(int) {}
+TEST_F(LexTest, ErrCharConstantEmpty)
+{
+	std::string code = R"(int x = '';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
 
 TEST_F(LexTest, ErrCharConstantTooLong)
 {
-	unsigned int a = 0xffffffff;
-	foo(a);
-
 	std::string code = R"(int x = '\nr';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
+
+TEST_F(LexTest, ErrCharConstantUnterminated)
+{
+	std::string code = R"(int x = 'a;)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
+
+TEST_F(LexTest, ErrCharConstantUnterminated2)
+{
+	std::string code = R"(int x = 'a
+						';)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
+
+TEST_F(LexTest, StringConstant)
+{
+	std::string code = R"(int x = "abc";)";
+
+	Lex(code);
+	ExpectStringLiteral(tokens[3], "abc");
+}
+
+TEST_F(LexTest, EmptyStringConstant)
+{
+	std::string code = R"(int x = "";)";
+
+	Lex(code);
+	ExpectStringLiteral(tokens[3], "");
+}
+
+TEST_F(LexTest, ErrStringConstantUnterminated)
+{
+	std::string code = R"(int x = "abc;)";
+
+	ExpectError(ERR_SYNTAX);
+	Lex(code);
+}
+
+TEST_F(LexTest, ErrStringConstantUnterminated2)
+{
+	std::string code = R"(int x = "abc;
+							")";
 
 	ExpectError(ERR_SYNTAX);
 	Lex(code);

@@ -19,6 +19,10 @@ const char* tok_kind_spelling(tok_kind k)
 		return "{";
 	case tok_r_paren:
 		return "}";
+	case tok_l_square_paren:
+		return "[";
+	case tok_r_square_paren:
+		return "]";
 	case tok_semi_colon:
 		return ";";
 	case tok_return:

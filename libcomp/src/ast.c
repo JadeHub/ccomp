@@ -293,3 +293,14 @@ uint32_t ast_struct_size(ast_user_type_spec_t* spec)
 	}
 	return spec->kind == user_type_union ? max_member : total;
 }
+
+ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
+{
+	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+	memset(result, 0, sizeof(ast_type_spec_t));
+	result->tokens = ptr_type->tokens;
+	result->kind = type_ptr;
+	result->size = 4;
+	result->ptr_type = ptr_type;
+	return result;
+}
