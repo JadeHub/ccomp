@@ -181,6 +181,10 @@ const char* ast_op_name(op_kind k)
 		return "[--] Postfix inc";
 	case op_member_access:
 		return "[.] Member access";
+	case op_address_of:
+		return "[&] Address of";
+	case op_dereference:
+		return "[*] Defererence";
 	}
 	return "ERROR";
 }

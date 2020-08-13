@@ -2,10 +2,10 @@
 
 #include <stdbool.h>
 
-struct named_ptr_set;
+struct ptr_set;
 
-struct named_ptr_set* nps_create();
-void nps_destroy(struct named_ptr_set* set);
-void nps_insert(struct named_ptr_set* set, const char* name, void* ptr);
-bool nps_remove(struct named_ptr_set* set, const char* name);
-void* nps_lookup(struct named_ptr_set* set, const char* name);
+struct ptr_set* ps_create();
+void ps_destroy(struct ptr_set* set);
+void ps_insert(struct ptr_set* set, void* ptr);
+bool ps_remove(struct ptr_set* set, void* ptr);
+void* ps_lookup(struct ptr_set* set, void*);

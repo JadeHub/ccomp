@@ -104,14 +104,13 @@ typedef struct
 {
     token_t* start;
     token_t* end;
-
 }token_range_t;
 
-
+bool tok_is_valid_range(token_range_t* range);
+size_t tok_range_len(token_range_t* range);
+bool tok_is_in_range(token_t* tok, token_range_t* range);
 const char* tok_kind_spelling(tok_kind);
-
 void tok_printf(token_t* tok);
-
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
 bool tok_spelling_cmp(token_t* tok, const char* str);

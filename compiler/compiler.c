@@ -22,7 +22,7 @@ void print_tokens(token_t* toks)
     }
 }
 
-void asm_print(const char* line)
+void asm_print(const char* line, void* data)
 {
     printf("%s\n", line);
 }
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
         printf("Failed to validate\n");
         return -1;
     }
-    code_gen(tl, &asm_print);
+    code_gen(tl, &asm_print, NULL);
     tl_destroy(tl);
     return 0;
 }

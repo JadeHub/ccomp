@@ -172,3 +172,24 @@ bool tok_spelling_cmp(token_t* tok, const char* str)
 		return false;
 	return strncmp(tok->loc, str, l) == 0;
 }
+
+bool tok_is_in_range(token_t* tok, token_range_t* range)
+{
+	if (!tok_is_valid_range(range)) return false;
+	return tok->loc >= range->start->loc &&
+		tok->loc + tok->len <= range->end->loc + range->end->len;
+}
+
+size_t tok_range_len(token_range_t* range)
+{
+	if (!tok_is_valid_range(range))
+		return 0;
+	return range->end->loc + range->end->len - range->start->loc;
+}
+
+bool tok_is_valid_range(token_range_t* range)
+{
+	return range->start && range->end;
+}
+
+

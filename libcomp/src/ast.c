@@ -229,10 +229,22 @@ const char* ast_type_name(ast_type_spec_t* type)
 	{
 	case type_void:
 		return "void";
+	case type_int8:
+		return "int8";
+	case type_uint8:
+		return "uint8";
+	case type_int16:
+		return "int16";
+	case type_uint16:
+		return "uint16";
 	case type_int32:
-		return "int";
+		return "int32";
+	case type_uint32:
+		return "uint32";
 	case type_user:
 		return type->user_type_spec->name;
+	case type_ptr:
+		return "pointer"; //todo
 	}
 	return "unknown type";
 }

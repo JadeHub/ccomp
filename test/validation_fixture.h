@@ -56,6 +56,11 @@ public:
 		lex_init();
 	}
 
+	virtual ~ValidationTest()
+	{
+		tl_destroy(tl);
+	}
+
 	void parse(const std::string& src)
 	{
 		source_range_t sr;
@@ -79,8 +84,7 @@ public:
 	{
 		if (ast)
 		{
-			valid_trans_unit_t* tl = tl_validate(ast);
-			tl_destroy(tl);
+			tl = tl_validate(ast);			
 		}
 	}
 
@@ -113,5 +117,6 @@ public:
 
 	std::vector<token_t> tokens;
 	ast_trans_unit_t* ast = nullptr;
+	valid_trans_unit_t* tl = nullptr;
 };
 

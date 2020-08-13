@@ -102,25 +102,32 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	switch (typeref->kind)
 	{
 	case type_void:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_void_type)
+			ast_destroy_type_spec(typeref);
 		return &_void_type;
 	case type_int8:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_char_type)
+			ast_destroy_type_spec(typeref);
 		return &_char_type;
 	case type_uint8:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_uchar_type)
+			ast_destroy_type_spec(typeref);
 		return &_uchar_type;
 	case type_int16:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_short_type)
+			ast_destroy_type_spec(typeref);
 		return &_short_type;
 	case type_uint16:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_ushort_type)
+			ast_destroy_type_spec(typeref);
 		return &_ushort_type;
 	case type_int32:
-		ast_destroy_type_spec(typeref);
+		if(typeref != &_int_type)
+			ast_destroy_type_spec(typeref);
 		return &_int_type;
 	case type_uint32:
-		ast_destroy_type_spec(typeref);
+		if (typeref != &_uint_type)
+			ast_destroy_type_spec(typeref);
 		return &_uint_type;
 	case type_ptr:
 		typeref->ptr_type = _resolve_type(typeref->ptr_type);
@@ -239,6 +246,9 @@ static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	//integer promotion
 	if (_is_int_type(target) && _is_int_type(type) && target->size >= type->size)
 		return true;
+
+	if (target->kind == type_ptr && type->kind == type_ptr)
+		return _can_convert_type(target->ptr_type, type->ptr_type);
 
 	return false;
 }
@@ -945,10 +955,14 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 {
 	_id_map = idm_create();
 
-	ast_declaration_t* vars = NULL;
 	ast_declaration_t* fns = NULL;
+	ast_declaration_t* vars = NULL;
+	ast_declaration_t* types = NULL;
 	
 	ast_declaration_t* decl = ast->decls;
+
+	struct ptr_set* typePtrSet = ps_create();
+
 	while (decl)
 	{
 		ast_declaration_t* next = decl->next;
@@ -986,7 +1000,14 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 		}
 		else if (decl->kind == decl_type)
 		{
-			_resolve_type(&decl->data.type);
+			ast_type_spec_t* type = _resolve_type(&decl->data.type);
+
+			if (!ps_lookup(typePtrSet, type))
+			{
+				ps_insert(typePtrSet, type);
+				decl->next = types;
+				types = decl;
+			}
 		}
 		decl = next;
 	}
@@ -996,9 +1017,10 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 	result->ast = ast;
 	result->functions = fns;
 	result->variables = vars;
-	result->identifiers = _id_map;
-	_id_map = NULL;
-
+	result->types = types;
+	ps_destroy(typePtrSet);
+	idm_destroy(_id_map);
+	_id_map = NULL;	
 	return result;
 }
 
@@ -1006,7 +1028,7 @@ void tl_destroy(valid_trans_unit_t* tl)
 {
 	if (!tl)
 		return;
-	idm_destroy(tl->identifiers);
+	
 	ast_destory_translation_unit(tl->ast);
 	free(tl);
 }

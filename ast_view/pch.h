@@ -10,4 +10,11 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+#include "diag.h"
+#include "lexer.h"
+#include "parse.h"
+#include "code_gen.h"
+#include "validate.h"
+
+
 #endif //PCH_H

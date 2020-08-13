@@ -604,10 +604,10 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	{
 		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
-		result->tokens.end = end;
 		result->kind = type_user;
 		result->user_type_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
 		result->size = ast_struct_size(result->user_type_spec);
+		result->tokens.end = current();
 		return result;
 	}
 
@@ -616,10 +616,10 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	{
 		ast_type_spec_t* result = _make_type_spec();
 		result->tokens.start = start;
-		result->tokens.end = end;
 		result->kind = type_user;
 		result->user_type_spec = parse_enum_spec();
 		result->size = 4;
+		result->tokens.end = current();
 		return result;
 	}
 
@@ -768,7 +768,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 	{
 		ast_declaration_t* param = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(param, 0, sizeof(ast_declaration_t));
-		param->tokens.start = current();
+		param->tokens = type->tokens;
 		param->kind = decl_var;
 		param->data.var.type = type;
 
@@ -810,23 +810,21 @@ void parse_function_parameters(ast_function_decl_t* func)
 */
 ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 {
-	token_t* start = current();
-
 	ast_type_spec_t* type = try_parse_decl_spec();
 	if (!type)
 		return NULL;
 
 	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 	memset(result, 0, sizeof(ast_declaration_t));
-	result->tokens.start = current();
+	result->tokens = type->tokens;
 
 	while (current_is(tok_star))
 	{
+		next_tok();
 		//pointer
 		ast_type_spec_t* ptr_type = ast_make_ptr_type(type);
 		ptr_type->tokens.end = current();
 		type = ptr_type;
-		next_tok();
 	}
 
 	if (current_is(tok_identifier))
@@ -992,6 +990,7 @@ ast_expression_t* try_parse_postfix_expr()
 	while (tok_in_set(current()->kind, postfix_ops))
 	{
 		ast_expression_t* expr = _alloc_expr();
+		expr->tokens = primary->tokens;
 		if (current_is(tok_l_paren))
 		{
 			if (primary->kind != expr_identifier)
@@ -1027,8 +1026,6 @@ ast_expression_t* try_parse_postfix_expr()
 		{
 			//member access
 			next_tok();
-
-			expr->tokens = primary->tokens;
 			expr->kind = expr_binary_op;
 			expr->data.binary_op.lhs = primary;
 			expr->data.binary_op.rhs = parse_identifier();
@@ -1038,7 +1035,6 @@ ast_expression_t* try_parse_postfix_expr()
 		else if (current_is(tok_plusplus) || current_is(tok_minusminus))
 		{
 			//postfix inc/dec
-			expr->tokens = primary->tokens;
 			expr->kind = expr_postfix_op;
 			expr->data.unary_op.operation = _get_postfix_operator(current());
 			expr->data.unary_op.expression = primary;
@@ -1552,6 +1548,7 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 				last_blk->next = NULL;
 			}
 			next_tok();
+			decl->tokens.end = current();
 		}
 		else if(!found_semi)
 		{

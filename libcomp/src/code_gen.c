@@ -18,11 +18,12 @@ typedef struct
 	int32_t stack_offset;
 
 	bool push;
-	bool deref;
+	uint32_t deref;
 }lval_data_t;
 
 
 static write_asm_cb _asm_cb;
+static void* _asm_cb_data;
 
 static var_set_t* _var_set;
 static bool _returned = false;
@@ -42,7 +43,7 @@ static void _gen_asm(const char* format, ...)
 	vsnprintf(buff, 256, format, args);
 	va_end(args);
 
-	_asm_cb(buff);
+	_asm_cb(buff, _asm_cb_data);
 }
 
 static uint32_t _next_label = 0;
@@ -147,8 +148,8 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 	else if (target->kind == expr_unary_op &&
 		target->data.unary_op.operation == op_dereference)
 	{
-		result = _get_lvalue_addr(target->data.unary_op.expression);
-		result.deref = true;
+ 		result = _get_lvalue_addr(target->data.unary_op.expression);
+		result.deref++;
 		return result;
 	}
 	else
@@ -218,6 +219,14 @@ void gen_copy_eax_to_target()
 		//load target address in edx
 		_gen_asm("movl %d(%%ebp), %%edx", _cur_assign_target->stack_offset);
 
+		uint32_t count = _cur_assign_target->deref;
+		while (count > 1)
+		{
+			//multiple dereference
+			_gen_asm("movl (%%edx), %%edx");
+			count--;
+		}
+
 		//mov eax to (edx)
 		if (_cur_assign_target->type->size == 4)
 		{
@@ -261,15 +270,32 @@ void gen_copy_eax_to_target()
 	}
 }
 
+ast_declaration_t* _find_func_decl(const char* name)
+{
+	ast_declaration_t* decl = _cur_tl->functions;
+
+	while (decl)
+	{
+		if (strcmp(name, decl->data.func.name) == 0)
+			return decl;
+		decl = decl->next;
+	}
+	return NULL;
+}
+
 void gen_expression(ast_expression_t* expr)
 {
 	if (expr->kind == expr_null)
 	{
 		//null
+		return;
 	}
-	else if (expr->kind == expr_func_call)
+
+	_gen_asm("");
+
+	if (expr->kind == expr_func_call)
 	{
-		ast_declaration_t* decl = idm_find_decl(_cur_tl->identifiers, expr->data.func_call.name, decl_func);
+		ast_declaration_t* decl = _find_func_decl(expr->data.func_call.name);
 		assert(decl);
 		if (!decl)
 			return;
@@ -360,7 +386,7 @@ void gen_expression(ast_expression_t* expr)
 		_cur_assign_target = prev_target;
 
 		if(_cur_assign_target)
-			gen_expression(expr->data.assignment.target);		
+			gen_expression(expr->data.assignment.target);
 	}
 	else if (expr->kind == expr_identifier)
 	{
@@ -455,7 +481,7 @@ void gen_expression(ast_expression_t* expr)
 			gen_assign_expr(expr->tokens.start, param);
 			break;
 		case op_prefix_dec:
-			assert(expr->data.unary_op.expression->kind == expr_identifier);
+			assert(param->kind == expr_identifier);
 			_gen_asm("decl %%eax");
 			gen_assign_expr(expr->tokens.start, param);
 			break;
@@ -464,11 +490,11 @@ void gen_expression(ast_expression_t* expr)
 			break;
 		case op_address_of:
 			{
-				lval_data_t lval = _get_lvalue_addr(expr->data.unary_op.expression);
-
+				lval_data_t lval = _get_lvalue_addr(param);
+				assert(lval.type);
 				if (strlen(lval.name))
 				{
-
+					_gen_asm("leal %s, %%eax", lval.name);
 				}
 				else
 				{
@@ -645,7 +671,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		lval_data_t* prev = _cur_assign_target;
 		lval_data_t ret_val = _create_lval_data();
 		ret_val.stack_offset = 8;
-		ret_val.deref = true;
+		ret_val.deref = 1;
 		ret_val.type = _cur_fun->return_type;
 		
 		_cur_assign_target = &ret_val;
@@ -913,9 +939,10 @@ void gen_global_var(ast_var_decl_t* var)
 	_gen_asm("\n");
 }
 
-void code_gen(valid_trans_unit_t* tl, write_asm_cb cb)
+void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 {
 	_asm_cb = cb;
+	_asm_cb_data = data;
 	_cur_tl = tl;
 	_var_set = var_init_set();
 
@@ -942,4 +969,6 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb)
 	var_destory_set(_var_set);
 	_cur_tl = NULL;
 	_var_set = NULL;
+	_asm_cb_data = NULL;
+	_asm_cb = NULL;
 }

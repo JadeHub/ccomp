@@ -4,80 +4,73 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-typedef struct named_ptr_item
+typedef struct ptr_item
 {
 	const char* name;
 	void* ptr;
-	struct named_ptr_item* next;
-}named_ptr_item_t;
+	struct ptr_item* next;
+}ptr_item_t;
 
-typedef struct named_ptr_set
+typedef struct ptr_set
 {
-	named_ptr_item_t* items;
-}named_ptr_set_t;
+	ptr_item_t* items;
+}ptr_set_t;
 
-named_ptr_set_t* nps_create()
+ptr_set_t* ps_create()
 {
-	named_ptr_set_t* set = (named_ptr_set_t*)malloc(sizeof(named_ptr_set_t));
-	memset(set, 0, sizeof(named_ptr_set_t));
+	ptr_set_t* set = (ptr_set_t*)malloc(sizeof(ptr_set_t));
+	memset(set, 0, sizeof(ptr_set_t));
 	return set;
 }
 
-void nps_destroy(named_ptr_set_t* set)
+void ps_destroy(ptr_set_t* set)
 {
-	named_ptr_item_t* item = set->items;
-	named_ptr_item_t* next;
+	ptr_item_t* item = set->items;
+	ptr_item_t* next;
 
 	while (item)
 	{
 		next = item->next;
-		free((void*)item->name);
 		free(item);
 		item = next;
 	}
 	free(set);
 }
 
-void* nps_lookup(named_ptr_set_t* set, const char* name)
+void* ps_lookup(ptr_set_t* set, void* val)
 {
-	named_ptr_item_t* item = set->items;
+	ptr_item_t* item = set->items;
 
 	while (item)
 	{
-		if (strcmp(item->name, name) == 0)
+		if (item->ptr == val)
 			return item->ptr;
 		item = item->next;
 	}
 	return NULL;
 }
 
-void nps_insert(named_ptr_set_t* set, const char* name, void* ptr)
+void ps_insert(ptr_set_t* set, void* ptr)
 {
-	named_ptr_item_t* item = (named_ptr_item_t*)malloc(sizeof(named_ptr_item_t));
-	memset(item, 0, sizeof(named_ptr_item_t));
-	item->name = strdup(name);
+	ptr_item_t* item = (ptr_item_t*)malloc(sizeof(ptr_item_t));
+	memset(item, 0, sizeof(ptr_item_t));
 	item->ptr = ptr;
 	item->next = set->items;
 	set->items = item;
 }
 
-bool nps_remove(named_ptr_set_t* set, const char* name)
+bool ps_remove(ptr_set_t* set, void* val)
 {
 	if (!set->items) return false;
 
-	if (strcmp(set->items->name, name) == 0)
-	{
-		set->items = set->items->next;
-		return true;
-	}
-
-	named_ptr_item_t* item = set->items->next;
-	named_ptr_item_t* prev = set->items;
+	ptr_item_t* item = set->items->next;
+	ptr_item_t* prev = set->items;
 	while (item)
 	{
-		if (strcmp(item->name, name) == 0)
+		if (item->ptr == val)
 		{
 			prev->next = item->next;
+			free(item);
 			return true;
 		}
 		prev = item;

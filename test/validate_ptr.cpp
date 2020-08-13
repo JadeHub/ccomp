@@ -2,30 +2,22 @@
 
 class PtrValidationTest : public ValidationTest {};
 
-TEST_F(PtrValidationTest, foo)
+TEST_F(PtrValidationTest, global)
 {
-	std::string code = R"(
-	int main()
-	{
-		int i = 5;
-		int* ptr = &i;
-		return *ptr;
-	}
-	)";
+	std::string code = R"(int* p;)";
 
-	ExpectNoError(code);	
+	ExpectNoError(code);
+}
+
+TEST_F(PtrValidationTest, return_ptr)
+{
+	std::string code = R"(int g = 5; 
+						int* fn()
+						{
+							return &g;
+						})";
+
+	ExpectNoError(code);
 }
 
 
-void fn1(), *fn2(int);
-
-void fn1() {}
-void* fn2(int) { return 0; }
-
-void x()
-{
-	int******** i;
-
-	fn1();
-	fn2(5);
-}

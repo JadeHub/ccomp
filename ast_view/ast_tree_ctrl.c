@@ -48,37 +48,37 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
     switch (expr->kind)
     {
     case expr_binary_op:
-        sprintf_s(item->name, "%sBinary Op: %s", prefix, ast_op_name(expr->data.binary_op.operation));
+        sprintf_s(item->name, 128,"%sBinary Op: %s", prefix, ast_op_name(expr->data.binary_op.operation));
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.binary_op.lhs, "lhs: ");
         InsertExpression(tree_item, expr->data.binary_op.rhs, "rhs: ");
         break;
     case expr_unary_op:
-        sprintf_s(item->name, "%sUnary Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
+        sprintf_s(item->name, 128,"%sUnary Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.unary_op.expression, "expr: ");
         break;
     case expr_postfix_op:
-        sprintf_s(item->name, "%sPostfix Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
+        sprintf_s(item->name, 128,"%sPostfix Op: %s", prefix, ast_op_name(expr->data.unary_op.operation));
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.unary_op.expression, "expr: ");
         break;
     case expr_int_literal:
-        sprintf_s(item->name, "%sInt Literal: %d", prefix, expr->data.int_literal.value);
+        sprintf_s(item->name, 128,"%sInt Literal %d", prefix, expr->data.int_literal.value);
         tree_item = TreeInsert(parent, item);
         break;
     case expr_assign:
-        sprintf_s(item->name, "%sAssignment", prefix);
+        sprintf_s(item->name, 128,"%sAssignment", prefix);
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.assignment.target, "target: ");
         InsertExpression(tree_item, expr->data.assignment.expr, "expr: ");
         break;
     case expr_identifier:
-        sprintf_s(item->name, "%sID: %s", prefix, expr->data.var_reference.name);
+        sprintf_s(item->name, 128,"%sID: %s", prefix, expr->data.var_reference.name);
         tree_item = TreeInsert(parent, item);
         break;
     case expr_condition:
-        sprintf_s(item->name, "%sCondition", prefix);
+        sprintf_s(item->name, 128,"%sCondition", prefix);
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.condition.cond, "cond: ");
         InsertExpression(tree_item, expr->data.condition.true_branch, "true: ");
@@ -86,7 +86,7 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
             InsertExpression(tree_item, expr->data.condition.false_branch, "false: ");
         break;
     case expr_func_call:
-        sprintf_s(item->name, "%sFunc Call: %s", prefix, expr->data.func_call.name);
+        sprintf_s(item->name, 128,"%sFunc Call: %s", prefix, expr->data.func_call.name);
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, expr->data.func_call.target, "target: ");
         sub_expr = expr->data.func_call.params;
@@ -97,20 +97,19 @@ void InsertExpression(HTREEITEM parent, ast_expression_t* expr, const char* pref
         }
         break;
     case expr_null:
-        sprintf_s(item->name, "%sNull Expr", prefix);
+        sprintf_s(item->name, 128,"%sNull Expr", prefix);
         tree_item = TreeInsert(parent, item);
         break;
     default:
-        sprintf_s(item->name, "%sUnknown expression kind %d", prefix, expr->kind);
+        sprintf_s(item->name, 128,"%sUnknown expression kind %d", prefix, expr->kind);
         tree_item = TreeInsert(parent, item);
     }
 }
 
-//todo
 void InsertStructDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(spec->tokens);
-    sprintf_s(item->name, "%s%s Decl: %s", prefix, 
+    sprintf_s(item->name, 128,"%s%s %s", prefix, 
         spec->user_type_spec->kind == user_type_struct ? "struct" : "union",
         spec->user_type_spec->name);
     HTREEITEM tree_item = TreeInsert(parent, item);
@@ -121,12 +120,35 @@ void InsertStructDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char*
     {
         AstTreeItem* item = AllocTreeItem(member->tokens);
         if(member->bit_size)
-            sprintf_s(item->name, "member: %s bits: %d", member->name, member->bit_size);
+            sprintf_s(item->name, 128,"member: %s bits: %d", member->name, member->bit_size);
         else
-            sprintf_s(item->name, "member: %s", member->name);
+            sprintf_s(item->name, 128,"member: %s", member->name);
         HTREEITEM mh = TreeInsert(tree_item, item);
         InsertTypeSpec(mh, member->type, "");
                 
+        member = member->next;
+    }
+}
+
+void InsertEnumDefinition(HTREEITEM parent, ast_type_spec_t* spec, const char* prefix)
+{
+    AstTreeItem* item = AllocTreeItem(spec->tokens);
+    sprintf_s(item->name, 128, "%senum %s", prefix,
+        spec->user_type_spec->name);
+    HTREEITEM tree_item = TreeInsert(parent, item);
+
+    ast_enum_member_t* member = spec->user_type_spec->enum_members;
+
+    while (member)
+    {
+        AstTreeItem* item = AllocTreeItem(member->tokens);
+        sprintf_s(item->name, 128, "%s", member->name);
+        HTREEITEM mh = TreeInsert(tree_item, item);
+        if (member->const_value)
+        {
+            InsertExpression(mh, member->const_value, "Val ");
+        }
+        
         member = member->next;
     }
 }
@@ -135,12 +157,15 @@ void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix)
 {
     if (type->kind == type_user)
     {
-        InsertStructDefinition(parent, type, prefix);
+        if(type->user_type_spec->kind == user_type_enum)
+            InsertEnumDefinition(parent, type, prefix);
+        else
+            InsertStructDefinition(parent, type, prefix);
     }
     else
     {
         AstTreeItem* item = AllocTreeItem(type->tokens);
-        sprintf_s(item->name, "%stype: %s", prefix, ast_type_name(type));
+        sprintf_s(item->name, 128,"%s%s", prefix, ast_type_name(type));
         HTREEITEM tree_item = TreeInsert(parent, item);
     }
 }
@@ -148,29 +173,27 @@ void InsertTypeSpec(HTREEITEM parent, ast_type_spec_t* type, const char* prefix)
 void InsertVariableDefinition(HTREEITEM parent, ast_declaration_t* var, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(var->tokens);
-    sprintf_s(item->name, "%sVar Decl: %s", prefix, var->data.var.name);
+    sprintf_s(item->name, 128,"%sVar \'%s\' Type \'%s\'", prefix, var->data.var.name, ast_type_name(var->data.var.type));
     HTREEITEM tree_item = TreeInsert(parent, item);
     if (var->data.var.expr)
     {
-        InsertExpression(tree_item, var->data.var.expr, "= expr: ");
+        InsertExpression(tree_item, var->data.var.expr, "= ");
     }
-
-    InsertTypeSpec(tree_item, var->data.var.type, "");
 }
 
 HTREEITEM InsertFunctionDeclaration(HTREEITEM parent, ast_declaration_t* func, const char* prefix)
 {
     AstTreeItem* item = AllocTreeItem(func->tokens);
-    sprintf_s(item->name, "%sFunction Decl: %s", prefix, func->data.func.name);
+    sprintf_s(item->name, 128,"%sFunction: %s", prefix, func->data.func.name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    InsertTypeSpec(tree_item, func->data.func.return_type, "return ");
+    InsertTypeSpec(tree_item, func->data.func.return_type, "Return Type: ");
 
     ast_declaration_t* param = func->data.func.params;
     while (param)
     {
         AstTreeItem* item = AllocTreeItem(param->tokens);
-        sprintf_s(item->name, "param: %s", param->data.var.name);
+        sprintf_s(item->name, 128,"param: %s", param->data.var.name);
         HTREEITEM hp = TreeInsert(tree_item, item);
         InsertTypeSpec(hp, param->data.var.type, "");
         param = param->next;
@@ -212,12 +235,12 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
     switch (smnt->kind)
     {
     case smnt_expr:
-        sprintf_s(item->name, "%sExpr Statement", prefix);
-        tree_item = TreeInsert(parent, item);
-        InsertExpression(tree_item, smnt->data.expr, "expr: ");
+        /*sprintf_s(item->name, 128,"%sExpr Statement", prefix);
+        tree_item = TreeInsert(parent, item);*/
+        InsertExpression(parent, smnt->data.expr, "expr: ");
         break;
     case smnt_return:
-        sprintf_s(item->name, "%sReturn Statement", prefix);
+        sprintf_s(item->name, 128,"%sReturn Statement", prefix);
         tree_item = TreeInsert(parent, item);
         if (smnt->data.expr)
         {
@@ -225,7 +248,7 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
         }
         break;
     case smnt_if:
-        sprintf_s(item->name, "%sIf Statement", prefix);
+        sprintf_s(item->name, 128,"%sIf Statement", prefix);
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, smnt->data.if_smnt.condition, "cond: ");
         InsertStatement(tree_item, smnt->data.if_smnt.true_branch, "true: ");
@@ -233,7 +256,7 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
             InsertStatement(tree_item, smnt->data.if_smnt.false_branch, "false: ");
         break;
     case smnt_compound:
-        sprintf_s(item->name, "%sCompound", prefix);
+        sprintf_s(item->name, 128,"%sCompound", prefix);
         tree_item = TreeInsert(parent, item);
 
         block = smnt->data.compound.blocks;
@@ -245,7 +268,7 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
         break;
     case smnt_for:
     case smnt_for_decl:
-        sprintf_s(item->name, "%sfor", prefix);
+        sprintf_s(item->name, 128,"%sfor", prefix);
         tree_item = TreeInsert(parent, item);
 
         if(smnt->data.for_smnt.init)
@@ -262,23 +285,23 @@ void InsertStatement(HTREEITEM parent, ast_statement_t* smnt, const char* prefix
         InsertStatement(tree_item, smnt->data.for_smnt.statement, "body ");
         break;    
     case smnt_while:
-        sprintf_s(item->name, "%swhile", prefix);
+        sprintf_s(item->name, 128,"%swhile", prefix);
         tree_item = TreeInsert(parent, item);
         InsertExpression(tree_item, smnt->data.while_smnt.condition, "cond ");
         InsertStatement(tree_item, smnt->data.while_smnt.statement, "body ");
         break;
     case smnt_do:
-        sprintf_s(item->name, "%sdo..while", prefix);
+        sprintf_s(item->name, 128,"%sdo..while", prefix);
         tree_item = TreeInsert(parent, item);
         InsertStatement(tree_item, smnt->data.while_smnt.statement, "body ");
         InsertExpression(tree_item, smnt->data.while_smnt.condition, "cond ");        
         break;
     case smnt_break:
-        sprintf_s(item->name, "%sbreak", prefix);
+        sprintf_s(item->name, 128,"%sbreak", prefix);
         tree_item = TreeInsert(parent, item);
         break;
     case smnt_continue:
-        sprintf_s(item->name, "%scontinue", prefix);
+        sprintf_s(item->name, 128,"%scontinue", prefix);
         tree_item = TreeInsert(parent, item);
         break;
     }
@@ -296,38 +319,32 @@ void InsertBlockItem(HTREEITEM parent, ast_block_item_t* blk)
     }
 }
 
-/*void InsertFunction(HTREEITEM parent, ast_function_t* func)
+void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, valid_trans_unit_t* tl)
 {
-    HTREEITEM tree_item = InsertFunctionDeclaration(parent, func->decl, "");
-
-    ast_block_item_t* blk = func->blocks;
-    while (blk)
-    {
-        InsertBlockItem(tree_item, blk);
-        blk = blk->next;
-    }
-}*/
-
-void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, ast_trans_unit_t* tl)
-{
-    AstTreeItem* item = AllocTreeItem(tl->tokens);
-    sprintf_s(item->name, "TranslationUnit: %s", file_name);
+    AstTreeItem* item = AllocTreeItem(tl->ast->tokens);
+    sprintf_s(item->name, 128,"TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    ast_declaration_t* decl = tl->decls;
+    ast_declaration_t* decl = tl->types;
     while (decl)
     {
-        InsertDeclaration(tree_item, decl, "global: ");
+        InsertDeclaration(tree_item, decl, "");
         decl = decl->next;
     }
 
-   /* ast_function_t* fn = tl->functions;
-    while (fn)
+    decl = tl->variables;
+    while (decl)
     {
-        InsertFunction(tree_item, fn);
-        fn = fn->next;
+        InsertDeclaration(tree_item, decl, "Global ");
+        decl = decl->next;
     }
-    */
+
+    decl = tl->functions;
+    while (decl)
+    {
+        InsertDeclaration(tree_item, decl, "Global ");
+        decl = decl->next;
+    }
 }
 
 void DeleteItem(HTREEITEM item)
@@ -361,7 +378,8 @@ void PopulateAstTreeView(SourceFile* sf)
 
     DeleteChildren(root);
     DeleteItem(root);
-    InsertTranslationUnit(TVI_ROOT, (LPCTSTR)sf->szFileName, sf->pAst);
+    InsertTranslationUnit(TVI_ROOT, (LPCTSTR)sf->szFileName, sf->pTransUnit);
+    TreeView_Expand(hWndTree, TreeView_GetRoot(hWndTree), TVE_EXPAND);
 }
 
 BOOL InitTreeViewImageLists(HWND hwndTV)
@@ -391,18 +409,71 @@ BOOL InitTreeViewImageLists(HWND hwndTV)
     return TRUE;
 }
 
+typedef struct
+{
+    HTREEITEM item;
+    token_range_t* range;
+}tok_find_result_t;
+
+static token_range_t* _best_match(token_range_t* r1, token_range_t* r2)
+{
+    if (!r1)
+        return r2;
+    if (!r2)
+        return r1;
+    return tok_range_len(r1) < tok_range_len(r2) ? r1 : r2;
+}
+
+void FindToken(HTREEITEM item, token_t* tok, tok_find_result_t* bestMatch)
+{
+    TVITEM tvi;
+
+    tvi.mask = TVIF_PARAM;
+    tvi.hItem = item;    
+    if (!TreeView_GetItem(hWndTree, &tvi))
+        return NULL;
+
+    AstTreeItem* data = (AstTreeItem*)tvi.lParam;
+
+    if (tok_is_in_range(tok, &data->tokens))
+    {
+        if (!bestMatch->range || tok_range_len(&data->tokens) < tok_range_len(bestMatch->range))
+        {
+            bestMatch->item = item;
+            bestMatch->range = &data->tokens;
+        }
+    }
+
+    HTREEITEM child = TreeView_GetChild(hWndTree, item);
+    while (child)
+    {
+        FindToken(child, tok, bestMatch);
+        child = TreeView_GetNextSibling(hWndTree, child);
+    }
+}
+
+void AstTree_SelectToken(token_t* tok)
+{
+    HTREEITEM root = TreeView_GetRoot(hWndTree);
+    
+    tok_find_result_t bestMatch = { 0, 0 };
+
+    FindToken(root, tok, &bestMatch);
+    if (bestMatch.item)
+    {
+        TreeView_SelectItem(hWndTree, bestMatch.item);
+
+        SendMessage(hWndTree, WM_SETFOCUS, 0, 0);
+    }
+}
+
 HWND CreateAstTreeView(HWND hwndParent)
 {
-    RECT rcClient;
-    GetClientRect(hwndParent, &rcClient);
     hWndTree = CreateWindowEx(0,
         WC_TREEVIEW,
         TEXT("Tree View"),
         WS_VISIBLE | WS_CHILD | WS_BORDER | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS,
-        0,
-        0,
-        rcClient.right/2,
-        rcClient.bottom,
+        0, 0, 10, 10,
         hwndParent,
         NULL,
         hInst,

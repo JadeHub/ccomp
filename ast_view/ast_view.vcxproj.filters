@@ -32,16 +32,22 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ast_view.cpp">
+    <ClCompile Include="main_wnd.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="ast_tree_ctrl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ast_tree_ctrl.cpp">
+    <ClCompile Include="ast_view.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source_text_ctrl.cpp">
+    <ClCompile Include="pch.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source_text_ctrl.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
