@@ -113,6 +113,6 @@ source_range_t* src_init_source(const char* src, size_t len)
 const char* src_file_pos_str(file_pos_t pos)
 {
 	static char _buff[32];
-	sprintf(_buff, "%x, %d", pos.line, pos.col);
+	sprintf(_buff, "%d, %d", pos.line, pos.col);
 	return _buff;
 }
