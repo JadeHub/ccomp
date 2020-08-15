@@ -7,6 +7,7 @@ typedef struct var_data
 {
 	int bsp_offset;
 	char name[MAX_LITERAL_NAME];
+	char global_name[MAX_LITERAL_NAME * 2];
 
 	enum
 	{

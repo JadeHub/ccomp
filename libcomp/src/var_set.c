@@ -1,6 +1,7 @@
 #include "var_set.h"
 #include "diag.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -11,6 +12,7 @@ static var_data_t* _make_stack_var(int bsp_offset, const char* name)
 {
 	var_data_t* var = (var_data_t*)malloc(sizeof(var_data_t));
 	memset(var, 0, sizeof(var_data_t));
+	var->kind = 
 	var->bsp_offset = bsp_offset;
 	strcpy(var->name, name);
 	return var;
@@ -159,6 +161,8 @@ var_data_t* var_decl_global_var(var_set_t* vars, ast_var_decl_t* decl)
 	var_data_t* var = _make_stack_var(vars->bsp_offset, decl->name);
 	var->kind = var_global;
 	var->data.decl = decl;
+
+	sprintf(var->global_name, "_var_%s", var->name);
 
 	//insert after global marker
 	var->next = vars->global_marker->next;

@@ -283,6 +283,245 @@ ast_declaration_t* _find_func_decl(const char* name)
 	return NULL;
 }
 
+typedef struct
+{
+	ast_type_spec_t* type;
+
+	enum
+	{
+		lval_none,
+		lval_stack,		//at stack_offset(%ebp) + offset
+		lval_address,	//address + offset
+		lval_label,		//global + offset
+		lval_push		//push to stack
+	}kind;
+
+	union
+	{
+		char* label;
+		int32_t stack_offset;
+	};
+
+	uint32_t offset;
+
+}lval_t;
+
+lval_t* _cur_lval = NULL;
+
+static inline bool _is_binary_op(ast_expression_t* expr, op_kind op)
+{
+	return expr->kind == expr_binary_op && expr->data.binary_op.operation == op;
+}
+
+static inline bool _is_unary_op(ast_expression_t* expr, op_kind op)
+{
+	return expr->kind == expr_unary_op && expr->data.unary_op.operation == op;
+}
+
+void gen_lval_target_expr(ast_expression_t* expr, lval_t* result)
+{
+	if (expr->kind == expr_identifier)
+	{
+		var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
+		if (!var)
+		{
+			diag_err(expr->tokens.start, ERR_UNKNOWN_VAR,
+				"reference to unknown variabe %s",
+				expr->data.var_reference.name);
+			return ;
+		}
+
+		result->type = var->data.decl->type;
+
+		if (var->kind == var_global)
+		{
+			result->kind = lval_label;
+			result->label = var->global_name;
+		}
+		else
+		{
+			result->kind = lval_stack;
+			result->stack_offset = var->bsp_offset;
+		}
+
+		//The target is a struct larger than 4 bytes, load its address into edx
+		if (result->type->size > 4)
+		{
+			assert(result->type->kind != type_ptr);
+			switch (result->kind)
+			{
+			case lval_label:
+				_gen_asm("leal %s, %%edx", result->label);
+				break;
+			case lval_stack:
+				_gen_asm("leal %d(%%ebp), %%edx", result->stack_offset);
+				break;
+			}
+			result->kind = lval_address;
+		}
+
+		/*if(result->type->kind == type_ptr)
+		{
+			//move value to edx
+			switch (result->kind)
+			{
+			case lval_label:
+				_gen_asm("movl %s, %%edx", result->label);
+				break;
+			case lval_stack:
+				_gen_asm("movl %d(%%ebp), %%edx", result->stack_offset);
+				break;
+			}
+		}*/
+
+	}
+	else if (_is_binary_op(expr, op_member_access))
+	{
+		//lhs.rhs
+		gen_lval_target_expr(expr->data.binary_op.lhs, result);
+
+		assert(result->type);
+		//adjust result to indicate the member of lhs
+		assert(expr->data.binary_op.rhs->kind == expr_identifier);
+
+		ast_struct_member_t* member = ast_find_struct_member(result->type->user_type_spec,
+									expr->data.binary_op.rhs->data.var_reference.name);
+		assert(member);
+		result->offset += member->offset;
+		result->type = member->type;
+	}
+	//->
+	else if (_is_unary_op(expr, op_address_of))
+	{
+		gen_lval_target_expr(expr->data.unary_op.expression, result);
+
+		//generate code to place the target address in edx
+		//adjust result type
+
+		assert(result->kind != lval_none);
+		switch (result->kind)
+		{
+		case lval_label:
+			_gen_asm("leal %s, %%edx", result->label);
+			result->kind = lval_address;
+			break;		
+		case lval_stack:
+			_gen_asm("leal %d(%%ebp), %%edx", result->stack_offset);
+			result->kind = lval_address;
+			break;
+		case lval_address:
+			assert(false); //? should be a lvalue
+			break;
+		}
+		result->type = ast_make_ptr_type(result->type);
+	}
+	else if (_is_unary_op(expr, op_dereference))
+	{
+		gen_lval_target_expr(expr->data.unary_op.expression, result);
+
+		//must be a pointer type to be dereferenced
+		assert(result->kind != lval_none);
+		assert(result->type->kind == type_ptr);
+
+		if (result->type->ptr_type->kind != type_ptr)
+		{
+			//move value to edx
+			switch (result->kind)
+			{
+			case lval_label:
+				_gen_asm("movl %s, %%edx", result->label);
+				result->kind = lval_address;
+				break;
+			case lval_stack:
+				_gen_asm("movl %d(%%ebp), %%edx", result->stack_offset);
+				result->kind = lval_address;
+				break;
+			case lval_address:
+				//already an address in eax
+				break;
+			}
+		}
+			
+		
+		//adjust type
+		result->type = result->type->ptr_type;
+		result->kind = lval_address;
+	}
+}
+
+void gen_copy_eax_to_lval(lval_t* lval)
+{
+	switch (lval->kind)
+	{
+		case lval_stack:
+			_gen_asm("movl %%eax, %d(%%ebp)", lval->stack_offset + lval->offset);
+			break;
+		case lval_label:
+			if (lval->offset)
+				_gen_asm("movl %%eax, %s + %d", lval->label, lval->offset);
+			else
+				_gen_asm("movl %%eax, %s", lval->label);
+			break;
+		case lval_address:
+			if(lval->offset)
+				_gen_asm("movl %%eax, %d(%%edx)", lval->offset);
+			else
+				_gen_asm("movl %%eax, (%%edx)");
+			break;
+	}
+}
+
+void gen_assignment_expression(ast_expression_t* expr)
+{
+	/*
+	1) Process the target expression generating code to calculate the assignment target which can be one of:
+		A) types of 4 bytes or less to be written to a stack location or address (all int and pointer types)
+		B) types greater than 4 bytes in length are copied to a stack location or to an address stored in a stack location
+	*/
+	
+	lval_t lval;
+	memset(&lval, 0, sizeof(lval_t));
+	lval.kind = lval_none;
+	gen_lval_target_expr(expr->data.assignment.target, &lval);
+		
+	assert(lval.kind != lval_none);
+
+	lval_t* prev_target = _cur_lval;
+	_cur_lval = &lval;
+
+	gen_expression(expr->data.assignment.expr);
+	
+	//move the value in eax to target
+	if (lval.type->size <= 4)
+	{
+		gen_copy_eax_to_lval(&lval);
+	}
+
+	_cur_lval = prev_target;
+	
+	/*lval_data_t lval = _get_lvalue_addr(expr->data.assignment.target);
+
+	if (!lval.type)
+	{
+		return;
+	}
+	lval_data_t* prev_target = _cur_assign_target;
+	_cur_assign_target = &lval;
+
+	gen_expression(expr->data.assignment.expr);
+
+	//move the value in eax to target
+	if (lval.type->size <= 4)
+	{
+		gen_copy_eax_to_target();
+	}
+	_cur_assign_target = prev_target;
+
+	if (_cur_assign_target)
+	gen_expression(expr->data.assignment.target);*/
+
+}
+
 void gen_expression(ast_expression_t* expr)
 {
 	if (expr->kind == expr_null)
@@ -309,20 +548,19 @@ void gen_expression(ast_expression_t* expr)
 			{
 				pushed += 4;
 				gen_expression(param);
-				_gen_asm("pushl %%eax");				
+				_gen_asm("pushl %%eax");
 			}
 			else if (param_decl->data.var.type->size > 4)
 			{
-				pushed += param_decl->data.var.type->size;
-
-				lval_data_t target = _create_lval_data();
-				target.push = true;
-				lval_data_t* prev = _cur_assign_target;
-				_cur_assign_target = &target;
-
+				lval_t param_target;
+				memset(&param_target, 0, sizeof(lval_t));
+				param_target.type = param_decl->data.var.type;
+				param_target.kind = lval_push;
+				lval_t* prev_target = _cur_lval;
+				_cur_lval = &param_target;
 				gen_expression(param);
-
-				_cur_assign_target = prev;
+				_cur_lval = prev_target;
+				pushed += param_decl->data.var.type->size;
 			}
 			else
 			{
@@ -335,13 +573,22 @@ void gen_expression(ast_expression_t* expr)
 
 		if (decl->data.func.return_type->size > 4)
 		{
+			if (_cur_lval->kind == lval_address)
+			{
+				_gen_asm("push %%edx");
+			}
+			else
+			{
+				assert(false);
+			}
+
 			//put the address of the target in eax
-			if(_cur_assign_target->deref)
-				_gen_asm("movl %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
+			/*if(_cur_assign_target->deref)
+				_gen_asm("movl %d(%%ebp), %%eax", _cur_assign_target->stack_offset); // x = foo() - _cur_assign_traget is x
 			else
 				_gen_asm("leal %d(%%ebp), %%eax", _cur_assign_target->stack_offset);
 			//push eax
-			_gen_asm("pushl %%eax");
+			_gen_asm("pushl %%eax");*/
 		}
 		_gen_asm("call %s", expr->data.func_call.name);
 		if (pushed > 0)
@@ -367,26 +614,7 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		lval_data_t lval = _get_lvalue_addr(expr->data.assignment.target);
-		
-		if (!lval.type)
-		{
-			return;
-		}
-		lval_data_t* prev_target = _cur_assign_target;
-		_cur_assign_target = &lval;
-
-		gen_expression(expr->data.assignment.expr);
-
-		//move the value in eax to target
-		if (lval.type->size <= 4)
-		{
-			gen_copy_eax_to_target();
-		}
-		_cur_assign_target = prev_target;
-
-		if(_cur_assign_target)
-			gen_expression(expr->data.assignment.target);
+		gen_assignment_expression(expr);
 	}
 	else if (expr->kind == expr_identifier)
 	{
@@ -402,6 +630,39 @@ void gen_expression(ast_expression_t* expr)
 			}
 			else
 			{
+				if (_cur_lval)
+				{
+					if (_cur_lval->kind == lval_push)
+					{
+						int source_stack = lval.stack_offset + lval.type->size - 4;
+						size_t sz = lval.type->size;
+						while (sz > 0)
+						{
+							_gen_asm("pushl %d(%%ebp)", source_stack);
+							source_stack -= 4;
+							sz -= 4;
+						}
+						return;
+					}
+
+					assert(_cur_lval->kind == lval_address);
+					//copy to the address in edx
+
+					// code: copy the bytes from source to the address in eax
+					size_t sz = lval.type->size;
+					int source_stack = lval.stack_offset;
+					uint32_t dest_off = 0;
+					while (sz > 0)
+					{
+						_gen_asm("movl %d(%%ebp), %%ebx", source_stack);
+						_gen_asm("movl %%ebx, %d(%%edx)", dest_off);
+						source_stack += 4;
+						dest_off += 4;
+						sz -= 4;
+					}
+					return;
+				}
+
 				if (_cur_assign_target->deref)
 				{
 					//the destination address is in the stack at stack_offset
@@ -460,6 +721,33 @@ void gen_expression(ast_expression_t* expr)
 	}
 	else if (expr->kind == expr_unary_op)
 	{
+		if (expr->data.unary_op.operation == op_address_of)
+		{
+			lval_t lval;
+			memset(&lval, 0, sizeof(lval_t));
+			gen_lval_target_expr(expr->data.unary_op.expression, &lval);
+
+			//todo lval.offset
+
+			switch (lval.kind)
+			{
+			case lval_label:
+				_gen_asm("leal %s, %%eax", lval.label);
+				
+				break;
+			case lval_stack:
+				_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
+				break;
+			case lval_address:
+				//assert(false); //? should be a lvalue
+				_gen_asm("movl %%edx, %%eax");
+				break;
+			}
+
+			return;
+		}
+		
+
 		ast_expression_t* param = expr->data.unary_op.expression;
 		gen_expression(param);
 		switch (expr->data.unary_op.operation)
@@ -488,21 +776,6 @@ void gen_expression(ast_expression_t* expr)
 		case op_dereference:
 			_gen_asm("movl (%%eax), %%eax");
 			break;
-		case op_address_of:
-			{
-				lval_data_t lval = _get_lvalue_addr(param);
-				assert(lval.type);
-				if (strlen(lval.name))
-				{
-					_gen_asm("leal %s, %%eax", lval.name);
-				}
-				else
-				{
-					_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
-				}
-
-				break;
-			}
 		}
 	}
 	else if (expr->kind == expr_postfix_op)
@@ -668,6 +941,16 @@ void gen_return_statement(ast_statement_t* smnt)
 {
 	if (_cur_fun->return_type->size > 4)
 	{
+		lval_data_t return_target;
+		memset(&return_target, 0, sizeof(lval_data_t));
+		return_target.type = _cur_fun->return_type;
+
+
+
+
+
+
+
 		lval_data_t* prev = _cur_assign_target;
 		lval_data_t ret_val = _create_lval_data();
 		ret_val.stack_offset = 8;
@@ -925,6 +1208,7 @@ void gen_global_var(ast_var_decl_t* var)
 		_gen_asm(".data"); //data section
 		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
+		//todo?	
 		_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
 	}
 	else
@@ -933,7 +1217,7 @@ void gen_global_var(ast_var_decl_t* var)
 		_gen_asm(".bss"); //bss section
 		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".zero 4"); //data length		
+		_gen_asm(".zero %d", var->type->size); //data length		
 	}
 	_gen_asm(".text"); //back to text section
 	_gen_asm("\n");
