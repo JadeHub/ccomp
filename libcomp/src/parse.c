@@ -980,7 +980,7 @@ static bool _is_postfix_op(token_t* tok)
 
 ast_expression_t* try_parse_postfix_expr()
 {
-	static tok_kind postfix_ops[] = { tok_l_paren, tok_fullstop, tok_plusplus, tok_minusminus, tok_invalid };
+	static tok_kind postfix_ops[] = { tok_l_paren, tok_fullstop, tok_plusplus, tok_minusminus, tok_minusgreater, tok_invalid };
 
 	ast_expression_t* primary = try_parse_primary_expr();
 
@@ -1030,6 +1030,16 @@ ast_expression_t* try_parse_postfix_expr()
 			expr->data.binary_op.lhs = primary;
 			expr->data.binary_op.rhs = parse_identifier();
 			expr->data.binary_op.operation = op_member_access;
+			expr->tokens.end = current();
+		}
+		else if (current_is(tok_minusgreater))
+		{
+			//pointer member access
+			next_tok();
+			expr->kind = expr_binary_op;
+			expr->data.binary_op.lhs = primary;
+			expr->data.binary_op.rhs = parse_identifier();
+			expr->data.binary_op.operation = op_ptr_member_access;
 			expr->tokens.end = current();
 		}
 		else if (current_is(tok_plusplus) || current_is(tok_minusminus))

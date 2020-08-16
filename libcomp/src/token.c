@@ -129,6 +129,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "auto";
 	case tok_register:
 		return "register";
+	case tok_minusgreater:
+		return "minusgreater";
 	}
 	return "invalid";
 }

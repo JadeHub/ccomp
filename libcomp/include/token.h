@@ -40,6 +40,7 @@ typedef enum
     tok_greater,            // >
     tok_greatergreater,     // >>
     tok_greaterequal,       // >=
+    tok_minusgreater,       // ->
 
     tok_percent,            // %
     tok_caret,              // ^

@@ -31,6 +31,7 @@ typedef enum
 	op_bitwise_and,
 
 	op_member_access,
+	op_ptr_member_access,
 
 	//logical operators
 	op_and,

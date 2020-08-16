@@ -363,6 +363,15 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
 			return _resolve_type(member_spec);
 		}
+
+		if (expr->data.binary_op.operation == op_ptr_member_access)
+		{
+			// a->b (lhs.rhs)
+			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+			assert(user_type_spec);
+			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->ptr_type->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
+			return _resolve_type(member_spec);
+		}
 		
 		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
 		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
@@ -481,6 +490,27 @@ bool process_member_access_expression(ast_expression_t* expr)
 		return false;
 
 	ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+
+	if (expr->data.binary_op.operation == op_ptr_member_access)
+	{
+		if (user_type_spec->kind != type_ptr)
+		{
+			_report_err(expr->tokens.start,
+				ERR_INCOMPATIBLE_TYPE,
+				"-> must be applied to a pointer type");
+			return false;
+		}
+		user_type_spec = user_type_spec->ptr_type;
+	}
+	
+	if (user_type_spec->kind != type_user)
+	{
+		_report_err(expr->tokens.start,
+			ERR_INCOMPATIBLE_TYPE,
+			"-> or . can only be applied to user defined types");
+		return false;
+	}
+
 	ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
 	if (member == NULL)
 	{
@@ -582,7 +612,7 @@ bool process_expression(ast_expression_t* expr)
 		case expr_unary_op:
 			return process_expression(expr->data.unary_op.expression);
 		case expr_binary_op:
-			if (expr->data.binary_op.operation == op_member_access)
+			if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
 				return process_member_access_expression(expr);
 			
 			if (!process_expression(expr->data.binary_op.lhs))

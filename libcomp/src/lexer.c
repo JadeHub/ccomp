@@ -450,6 +450,11 @@ lex_next_tok:
 			result->kind = tok_minusminus;
 			result->len = 2;
 		}
+		else if (pos[1] == '>')
+		{
+			result->kind = tok_minusgreater;
+			result->len = 2;
+		}
 		else
 		{
 			result->kind = tok_minus;
