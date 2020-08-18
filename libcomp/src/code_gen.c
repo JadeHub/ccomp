@@ -33,7 +33,6 @@ static var_set_t* _var_set;
 static bool _returned = false;
 static ast_function_decl_t* _cur_fun = NULL;
 static valid_trans_unit_t* _cur_tl = NULL;
-static lval_data_t* _cur_assign_target = NULL;
 
 static const char* _cur_break_label = NULL;
 static const char* _cur_cont_label = NULL;
@@ -261,13 +260,22 @@ void gen_lval_target_expr(ast_expression_t* expr, lval_t* result)
 		{
 			result->kind = lval_label;
 			result->label = var->global_name;
-			_gen_asm("movl %s, %%eax", result->label);
+
+			//load the value, or the address of the value if greater than 4 bytes
+			if(result->type->size <= 4)
+				_gen_asm("%s %s, %%eax", _promoting_mov_instr(result->type), result->label);
+			else
+				_gen_asm("leal %s, %%eax", result->label);
 		}
 		else
 		{
 			result->kind = lval_stack;
 			result->stack_offset = var->bsp_offset;
-			_gen_asm("movl %d(%%ebp), %%eax", result->stack_offset);
+
+			if (result->type->size <= 4)
+				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(result->type), result->stack_offset);
+			else
+				_gen_asm("leal %d(%%ebp), %%eax", result->stack_offset);
 		}
 	}
 	else if (expr->kind == expr_func_call)
@@ -392,20 +400,22 @@ void gen_lval_target_expr(ast_expression_t* expr, lval_t* result)
 	else if (expr->kind == expr_assign)
 	{
 		gen_assignment_expression_impl(expr, result);
-		//gen_assignment_expression(expr);
 	}
 }
 
 void gen_copy_eax_to_lval(lval_t* lval)
 {
-	if (lval->kind == lval_address)
-	{
-		// destination is an address which was pushed onto the stack
-		_gen_asm("pop %%edx");
-	}
-
+	/*
+	* eax contains the source
+	* lval specifies the destination 
+	* 
+	* for types <= 4 byte length the desination can be a stack offset (+ offset), label (+ offset), or a memory address stored in edx (+ offset)
+	* for types > 4 byte length, eax always represents an address and data is copied from there to the address at edx, or an address stored on the stack
+	* 
+	*/
 	if (lval->type->size <= 4)
 	{
+		//copy from eax to the destination specified in lval
 		switch (lval->kind)
 		{
 		case lval_stack:
@@ -432,16 +442,12 @@ void gen_copy_eax_to_lval(lval_t* lval)
 			// destination is an address which was stored on the stack			
 			_gen_asm("leal %d(%%ebp), %%edx", lval->stack_offset);
 		}
-		else if (lval->kind == lval_address)
-		{
-			
-		}
 		else
 		{
-			assert(false);
+			assert(lval->kind == lval_address);
 		}
 		//source address is in eax, dest in edx
-		int32_t dest_off = lval->stack_offset;
+		int32_t dest_off = lval->stack_offset; // += lval->offset?
 		uint32_t offset = 0;
 		while (offset < lval->type->size)
 		{
@@ -485,6 +491,8 @@ void gen_assignment_expression_impl(ast_expression_t* expr, lval_t* lval)
 
 	if (!lval->done)
 	{
+		if (lval->kind == lval_address)
+			_gen_asm("pop %%edx");
 		gen_copy_eax_to_lval(lval);
 	}
 }
