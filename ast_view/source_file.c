@@ -61,7 +61,7 @@ static void _asm_handler(const char* line, void* data)
     
     asm_out_t* asm = (asm_out_t*)malloc(sizeof(asm_out_t));
     memset(asm, 0, sizeof(asm_out_t));
-    asm->line = (char*)malloc(len + 1);
+    asm->line = (const char*)malloc(len + 1);
     strcpy_s(asm->line, len + 1, line);
 
     if (!sf->asm)

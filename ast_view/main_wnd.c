@@ -294,7 +294,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             static bool selecting;
 
             if (selecting)
-                return;
+                return 0;
 
             selecting = true;
 

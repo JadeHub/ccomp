@@ -431,7 +431,7 @@ void FindToken(HTREEITEM item, token_t* tok, tok_find_result_t* bestMatch)
     tvi.mask = TVIF_PARAM;
     tvi.hItem = item;    
     if (!TreeView_GetItem(hWndTree, &tvi))
-        return NULL;
+        return;
 
     AstTreeItem* data = (AstTreeItem*)tvi.lParam;
 

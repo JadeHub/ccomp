@@ -4,6 +4,21 @@ project(compiler)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDebug")
 
+IF (WIN32)
+FOREACH (MODE "_DEBUG" "_MINSIZEREL" "_RELEASE" "_RELWITHDEBINFO")
+STRING(REPLACE "/MT" "/MD" TMP "${CMAKE_C_FLAGS${MODE}}")
+SET(CMAKE_C_FLAGS${MODE} "${TMP}" CACHE STRING "" FORCE)
+MESSAGE(STATUS "C_${MODE}=${CMAKE_C_FLAGS${MODE}}")
+STRING(REPLACE "/MT" "/MM" TMP "${CMAKE_CXX_FLAGS${MODE}}")
+SET(CMAKE_CXX_FLAGS${MODE} "${TMP}" CACHE STRING "" FORCE)
+MESSAGE(STATUS "CXX_${MODE}=${CMAKE_CXX_FLAGS${MODE}}")
+ENDFOREACH (MODE)
+
+add_compile_options(/wd4996) # code may be unsafe - sprintf etc
+
+
+ENDIF (WIN32)
+
 configure_file(CMakeLists.txt.in
         googletest-download/CMakeLists.txt)
 execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
