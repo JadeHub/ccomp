@@ -4,22 +4,13 @@
 #include "decl_map.h"
 #include "nps.h"
 
+#include "std_types.h"
+
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-
-/*built in types */
-/* {{token_range_t}, kind, size, flags, user_type_spec} */
-static ast_type_spec_t _void_type =		{ {NULL, NULL}, type_void,		0, NULL };
-static ast_type_spec_t _char_type =		{ {NULL, NULL}, type_int8,		1, NULL };
-static ast_type_spec_t _uchar_type =	{ {NULL, NULL}, type_uint8,		1, NULL };
-static ast_type_spec_t _short_type =	{ {NULL, NULL}, type_int16,		2, NULL };
-static ast_type_spec_t _ushort_type =	{ {NULL, NULL}, type_uint16,	2, NULL };
-static ast_type_spec_t _int_type =		{ {NULL, NULL}, type_int32,		4, NULL };
-static ast_type_spec_t _uint_type =		{ {NULL, NULL}, type_uint32,	4, NULL };
-static ast_type_spec_t _ptr_type =		{ {NULL, NULL}, type_ptr,		4, NULL };
 
 static identfier_map_t* _id_map;
 static ast_function_decl_t* _cur_func = NULL;
@@ -71,9 +62,9 @@ static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 		decl->tokens = member->tokens;
 		decl->kind = decl_const;
 		strcpy(decl->data.const_val.name, member->name);
-		decl->data.const_val.type = &_int_type;
+		decl->data.const_val.type = uint32_type_spec;
 		decl->data.const_val.expr = member->const_value;
-		decl->data.const_val.expr->data.int_literal.type = &_int_type;
+		decl->data.const_val.expr->data.int_literal.type = uint32_type_spec;
 
 		idm_add_id(_id_map, decl);
 
@@ -102,33 +93,33 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	switch (typeref->kind)
 	{
 	case type_void:
-		if (typeref != &_void_type)
+		if (typeref != void_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_void_type;
+		return void_type_spec;
 	case type_int8:
-		if (typeref != &_char_type)
+		if (typeref != int8_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_char_type;
+		return int8_type_spec;
 	case type_uint8:
-		if (typeref != &_uchar_type)
+		if (typeref != uint8_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_uchar_type;
+		return uint8_type_spec;
 	case type_int16:
-		if (typeref != &_short_type)
+		if (typeref != int16_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_short_type;
+		return int16_type_spec;
 	case type_uint16:
-		if (typeref != &_ushort_type)
+		if (typeref != uint16_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_ushort_type;
+		return uint16_type_spec;
 	case type_int32:
-		if(typeref != &_int_type)
+		if (typeref != int32_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_int_type;
+		return int32_type_spec;
 	case type_uint32:
-		if (typeref != &_uint_type)
+		if (typeref != uint32_type_spec)
 			ast_destroy_type_spec(typeref);
-		return &_uint_type;
+		return uint32_type_spec;
 	case type_ptr:
 		typeref->ptr_type = _resolve_type(typeref->ptr_type);
 		return typeref;
@@ -420,10 +411,10 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		return NULL;
 	}
 	case expr_sizeof:
-		return &_int_type;
+		return uint32_type_spec;
 
 	case expr_null:
-		return &_void_type;
+		return void_type_spec;
 		break;
 	}
 	return NULL;
@@ -588,15 +579,15 @@ bool process_int_literal(ast_expression_t* expr)
 {
 	if (expr->data.int_literal.value < 0xFF)
 	{
-		expr->data.int_literal.type = _resolve_type(&_char_type);
+		expr->data.int_literal.type = uint8_type_spec;
 	}
 	else if (expr->data.int_literal.value < 0xFFFF)
 	{
-		expr->data.int_literal.type = _resolve_type(&_short_type);
+		expr->data.int_literal.type = uint16_type_spec;
 	}
 	else
 	{
-		expr->data.int_literal.type = _resolve_type(&_int_type);
+		expr->data.int_literal.type = uint32_type_spec;
 	}
 	return true;
 }
@@ -983,6 +974,8 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 
 valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 {
+	types_init();
+
 	_id_map = idm_create();
 
 	ast_declaration_t* fns = NULL;

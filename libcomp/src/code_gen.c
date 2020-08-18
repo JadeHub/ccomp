@@ -163,27 +163,6 @@ lval_data_t _get_lvalue_addr(ast_expression_t* target)
 	return result;
 }
 
-//move the value in eax to target
-void gen_assign_expr(token_t* tok, ast_expression_t* target)
-{
-	// todo
-
-	lval_data_t lval = _get_lvalue_addr(target);
-
-	if (!lval.type)
-		return;
-
-	//todo ?
-	if (strlen(lval.name))
-	{
-		_gen_asm("movl %%eax, %s", lval.name);
-	}
-	else
-	{
-		_gen_asm("movl %%eax, %d(%%ebp)", lval.stack_offset);
-	}
-}
-
 static bool _is_unsigned_int_type(ast_type_spec_t* type)
 {
 	return type->kind == type_uint8 ||
@@ -204,74 +183,6 @@ static const char* _promoting_mov_instr(ast_type_spec_t* type)
 
 	assert(false);
 	return "";
-}
-
-void gen_copy_lval_to_eax(lval_data_t* lval)
-{
-	if (strlen(lval->name))
-		_gen_asm("%s %s, %%eax", _promoting_mov_instr(lval->type), lval->name);
-	else
-		_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset);
-}
-
-void gen_copy_eax_to_target()
-{
-	//move the value in eax to target
-
-	if (_cur_assign_target->deref)
-	{
-		//load target address in edx
-		_gen_asm("movl %d(%%ebp), %%edx", _cur_assign_target->stack_offset);
-
-		uint32_t count = _cur_assign_target->deref;
-		while (count > 1)
-		{
-			//multiple dereference
-			_gen_asm("movl (%%edx), %%edx");
-			count--;
-		}
-
-		//mov eax to (edx)
-		if (_cur_assign_target->type->size == 4)
-		{
-			_gen_asm("movl %%eax, (%%edx)");
-		}
-		else if (_cur_assign_target->type->size == 2)
-		{
-			_gen_asm("movw %%ax, (%%edx)");
-		}
-		else if (_cur_assign_target->type->size == 1)
-		{
-			_gen_asm("movb %%al, (%%edx)");
-		}
-		return;
-	}
-
-	if (_cur_assign_target->type->size == 4)
-	{
-		if (strlen(_cur_assign_target->name))
-			_gen_asm("movl %%eax, %s", _cur_assign_target->name); //global
-		else
-			_gen_asm("movl %%eax, %d(%%ebp)", _cur_assign_target->stack_offset);
-	}
-	else if (_cur_assign_target->type->size == 2)
-	{
-		if (strlen(_cur_assign_target->name))
-			_gen_asm("movw %%ax, %s", _cur_assign_target->name); //global
-		else
-			_gen_asm("movw %%ax, %d(%%ebp)", _cur_assign_target->stack_offset);
-	}
-	else if (_cur_assign_target->type->size == 1)
-	{
-		if (strlen(_cur_assign_target->name))
-			_gen_asm("movb %%al, %s", _cur_assign_target->name); //global
-		else
-			_gen_asm("movb %%al, %d(%%ebp)", _cur_assign_target->stack_offset);
-	}
-	else
-	{
-		assert(false);
-	}
 }
 
 ast_declaration_t* _find_func_decl(const char* name)
@@ -307,11 +218,15 @@ typedef struct
 	};
 
 	uint32_t offset;
-
 	bool done;
-
 }lval_t;
 
+
+typedef struct
+{
+	ast_type_spec_t* type;
+	lval_t lval;
+}expr_result;
 
 lval_t* _cur_lval = NULL;
 
@@ -346,11 +261,13 @@ void gen_lval_target_expr(ast_expression_t* expr, lval_t* result)
 		{
 			result->kind = lval_label;
 			result->label = var->global_name;
+			_gen_asm("movl %s, %%eax", result->label);
 		}
 		else
 		{
 			result->kind = lval_stack;
 			result->stack_offset = var->bsp_offset;
+			_gen_asm("movl %d(%%ebp), %%eax", result->stack_offset);
 		}
 	}
 	else if (expr->kind == expr_func_call)
@@ -481,8 +398,16 @@ void gen_lval_target_expr(ast_expression_t* expr, lval_t* result)
 
 void gen_copy_eax_to_lval(lval_t* lval)
 {
-	switch (lval->kind)
+	if (lval->kind == lval_address)
 	{
+		// destination is an address which was pushed onto the stack
+		_gen_asm("pop %%edx");
+	}
+
+	if (lval->type->size <= 4)
+	{
+		switch (lval->kind)
+		{
 		case lval_stack:
 			_gen_asm("movl %%eax, %d(%%ebp)", lval->stack_offset + lval->offset);
 			break;
@@ -493,15 +418,40 @@ void gen_copy_eax_to_lval(lval_t* lval)
 				_gen_asm("movl %%eax, %s", lval->label);
 			break;
 		case lval_address:
-			if(lval->offset)
+			if (lval->offset)
 				_gen_asm("movl %%eax, %d(%%edx)", lval->offset);
 			else
 				_gen_asm("movl %%eax, (%%edx)");
 			break;
+		}
+	}
+	else
+	{
+		if (lval->kind == lval_stack)
+		{
+			// destination is an address which was stored on the stack			
+			_gen_asm("leal %d(%%ebp), %%edx", lval->stack_offset);
+		}
+		else if (lval->kind == lval_address)
+		{
+			
+		}
+		else
+		{
+			assert(false);
+		}
+		//source address is in eax, dest in edx
+		int32_t dest_off = lval->stack_offset;
+		uint32_t offset = 0;
+		while (offset < lval->type->size)
+		{
+			_gen_asm("movl %d(%%eax), %%edx", offset);
+			_gen_asm("movl %%edx, %d(%%ebp)", dest_off);
+			offset += 4;
+			dest_off += 4;
+		}
 	}
 }
-
-
 
 void gen_assignment_expression(ast_expression_t* expr)
 {
@@ -535,47 +485,8 @@ void gen_assignment_expression_impl(ast_expression_t* expr, lval_t* lval)
 
 	if (!lval->done)
 	{
-		if (lval->kind == lval_address)
-		{
-			_gen_asm("pop %%edx");
-		}
-		//move the value in eax to target
-		if (lval->type->size <= 4)
-		{
-			gen_copy_eax_to_lval(lval);
-		}
-		else
-		{
-		//	assert(lval.kind == lval_address);
-
-			switch (lval->kind)
-			{
-			case lval_stack:
-			{
-				//dest is stack offset
-				_gen_asm("leal %d(%%ebp), %%edx", lval->stack_offset);
-			}
-				
-			case lval_address:
-			{
-				//source address is in eax, dest in edx
-				int32_t dest_off = lval->stack_offset;
-				uint32_t offset = 0;
-				while (offset < lval->type->size)
-				{
-					_gen_asm("movl %d(%%eax), %%edx", offset);
-					_gen_asm("movl %%edx, %d(%%ebp)", dest_off);
-					offset += 4;
-					dest_off += 4;
-				}
-				break;
-			}
-			}
-		}
+		gen_copy_eax_to_lval(lval);
 	}
-
-	
-
 }
 
 ast_type_spec_t* gen_func_call_expression(ast_expression_t* expr)
@@ -731,30 +642,6 @@ void gen_expression(ast_expression_t* expr)
 				break;
 		}
 
-		/*if (strlen(lval->name))
-			_gen_asm("%s %s, %%eax", _promoting_mov_instr(lval->type), lval->name);
-		else
-			_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset);
-
-		lval_data_t lval = _get_lvalue_addr(expr);
-		if (lval.type)
-		{
-			if (lval.type->size <= 4)
-			{
-				gen_copy_lval_to_eax(&lval);
-			}
-			else
-			{
-				//put the address of the result in eax
-				if(strlen(lval.name))
-					_gen_asm("leal %s, %%eax", lval.name);
-				else
-					_gen_asm("leal %d(%%ebp), %%eax", lval.stack_offset);
-
-				return;
-			}
-		}*/
-
 
 	}
 	else if (expr->kind == expr_int_literal)
@@ -806,15 +693,37 @@ void gen_expression(ast_expression_t* expr)
 			_gen_asm("sete %%al"); //if eax was 0 in cmpl, set al to 1
 			break;
 		case op_prefix_inc:
-			assert(param->kind == expr_identifier);
+		{
+			lval_t lval;
+			memset(&lval, 0, sizeof(lval_t));
+			lval.kind = lval_none;
+
+			gen_lval_target_expr(param, &lval);
+
 			_gen_asm("incl %%eax");
-			gen_assign_expr(expr->tokens.start, param);
+
+			if (!lval.done)
+			{
+				gen_copy_eax_to_lval(&lval);
+			}
 			break;
+		}
 		case op_prefix_dec:
-			assert(param->kind == expr_identifier);
+		{
+			lval_t lval;
+			memset(&lval, 0, sizeof(lval_t));
+			lval.kind = lval_none;
+
+			gen_lval_target_expr(param, &lval);
+
 			_gen_asm("decl %%eax");
-			gen_assign_expr(expr->tokens.start, param);
+
+			if (!lval.done)
+			{
+				gen_copy_eax_to_lval(&lval);
+			}
 			break;
+		}
 		case op_dereference:
 			_gen_asm("movl (%%eax), %%eax");
 			break;
@@ -827,24 +736,53 @@ void gen_expression(ast_expression_t* expr)
 		switch (expr->data.unary_op.operation)
 		{
 		case op_postfix_inc:
+		{
 			//get the value of the parameter
-			gen_expression(param);
+			lval_t lval;
+			memset(&lval, 0, sizeof(lval_t));
+			lval.kind = lval_none;
+			gen_lval_target_expr(param, &lval);
+
 			//save the current value
 			_gen_asm("pushl %%eax");
+
 			//increment
 			_gen_asm("incl %%eax");
-			//assign incremented value back to variable
-			gen_assign_expr(expr->tokens.start, param);
+
+			if (!lval.done)
+			{
+				gen_copy_eax_to_lval(&lval);
+			}
+
 			//pop the un-incremented value back into eax
 			_gen_asm("popl %%eax");
+
 			break;
+		}
 		case op_postfix_dec:
-			gen_expression(param);
+		{
+			//get the value of the parameter
+			lval_t lval;
+			memset(&lval, 0, sizeof(lval_t));
+			lval.kind = lval_none;
+			gen_lval_target_expr(param, &lval);
+
+			//save the current value
 			_gen_asm("pushl %%eax");
+
+			//increment
 			_gen_asm("decl %%eax");
-			gen_assign_expr(expr->tokens.start, param);
+
+			if (!lval.done)
+			{
+				gen_copy_eax_to_lval(&lval);
+			}
+
+			//pop the un-incremented value back into eax
 			_gen_asm("popl %%eax");
+
 			break;
+		}
 		}
 	}
 	else if (expr->kind == expr_binary_op)
@@ -977,21 +915,18 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	assert(var);
 	if (var_decl->expr)
 	{
-		lval_data_t lval = _create_lval_data();
-		lval.type = var_decl->type;
+		lval_t lval;
+		memset(&lval, 0, sizeof(lval_t));
+		lval.kind = lval_stack;
 		lval.stack_offset = var->bsp_offset;
-
-		lval_data_t* prev_target = _cur_assign_target;
-		_cur_assign_target = &lval;
+		lval.type = var_decl->type;
 
 		gen_expression(var_decl->expr);
 
-		//move the value in eax to target
-		if (lval.type->size <= 4)
+		if (!lval.done)
 		{
-			gen_copy_eax_to_target();
+			gen_copy_eax_to_lval(&lval);
 		}
-		_cur_assign_target = prev_target;
 	}
 	else
 	{
@@ -1040,22 +975,6 @@ void gen_return_statement(ast_statement_t* smnt)
 			}
 			offset += 4;
 		}
-
-		
-		/*lval_data_t return_target;
-		memset(&return_target, 0, sizeof(lval_data_t));
-		return_target.type = _cur_fun->return_type;
-
-		lval_data_t* prev = _cur_assign_target;
-		lval_data_t ret_val = _create_lval_data();
-		ret_val.stack_offset = 8;
-		ret_val.deref = 1;
-		ret_val.type = _cur_fun->return_type;
-		
-		_cur_assign_target = &ret_val;
-		
-		gen_expression(smnt->data.expr);
-		_cur_assign_target = prev;*/
 	}
 	else
 	{
