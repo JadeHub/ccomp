@@ -111,6 +111,7 @@ void ensure_lval_in_reg(lval_t* lval)
 			else
 			{
 				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset + lval->offset);
+			//	lval->offset = 0;
 			}
 			break;
 		case lval_label:
@@ -122,20 +123,20 @@ void ensure_lval_in_reg(lval_t* lval)
 			else
 			{
 				_gen_asm("%s %s+%d, %%eax", _promoting_mov_instr(lval->type), lval->label, lval->offset);
+				//lval->offset = 0;
 			}
 			break;
 		case lval_address:
-
 			if (lval->type->kind != type_ptr && lval->type->size <= 4)
 			{
 				//we are managing a pointer in eax, now we need to dereference it
-				_gen_asm("movl (%%eax), %%eax");
+				_gen_asm("movl %d(%%eax), %%eax", lval->offset);
+				//lval->offset = 0;
 			}
 			else
 			{
 				//value already in eax
 			}
-
 			break;
 	}
 }
@@ -146,6 +147,8 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 	char label2[16];
 	_make_label_name(label1);
 	_make_label_name(label2);
+
+	
 
 	gen_expression1(expr->data.binary_op.lhs);
 
@@ -272,22 +275,8 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		assert(result->lval.kind != lval_none);
 		assert(result->lval.type->kind == type_ptr);
 
-		//move value to eax
-		switch (result->lval.kind)
-		{
-		case lval_label:
-			_gen_asm("movl %s, %%eax", result->lval.label);
-			result->lval.kind = lval_address;
-			break;
-		case lval_stack:
-			_gen_asm("movl %d(%%ebp), %%eax", result->lval.stack_offset);
-			result->lval.kind = lval_address;
-			break;
-		case lval_address:
-			//already an address in eax					
-			break;
-		}
-
+		ensure_lval_in_reg(&result->lval);
+		result->lval.kind = lval_address;
 		if (result->lval.type->ptr_type->kind == type_ptr)
 		{
 			_gen_asm("movl (%%eax), %%eax");
@@ -303,7 +292,8 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->ptr_type->user_type_spec,
 			expr->data.binary_op.rhs->data.var_reference.name);
 		assert(member);
-		result->lval.offset += member->offset;
+//		result->lval.offset += member->offset;
+		_gen_asm("addl $%d, %%eax", member->offset);
 		result->lval.type = member->type;
 		
 	}
@@ -341,7 +331,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		assert(result->lval.type->kind == type_ptr);
 
 		ensure_lval_in_reg(&result->lval);
-
+		result->lval.kind = lval_address;
 		if (result->lval.type->ptr_type->kind == type_ptr)
 		{
 			_gen_asm("movl (%%eax), %%eax");
@@ -389,17 +379,6 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			_gen_asm("sete %%al"); //if eax was 0 in cmpl, set al to 1
 			break;
 		case op_prefix_inc:
-			{
-				expr_result result;
-				memset(&result, 0, sizeof(expr_result));
-				result.lval.kind = lval_none;
-			
-				gen_expression(param, &result);
-				ensure_lval_in_reg(&result.lval);
-				_gen_asm("incl %%eax");
-				gen_copy_eax_to_lval(&result);				
-				break;
-			}
 		case op_prefix_dec:
 			{
 				expr_result result;
@@ -407,62 +386,51 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 				result.lval.kind = lval_none;
 
 				gen_expression(param, &result);
+
+				if (result.lval.kind == lval_address)
+					_gen_asm("pushl %%eax");
+
 				ensure_lval_in_reg(&result.lval);
-				_gen_asm("decl %%eax");
+
+				if (expr->data.unary_op.operation == op_prefix_inc)
+					_gen_asm("incl %%eax");
+				else
+					_gen_asm("decl %%eax");
+
+				if (result.lval.kind == lval_address)
+					_gen_asm("popl %%edx");
+
 				gen_copy_eax_to_lval(&result);
+
+				//if result.lval.kind is lval_address we are left with its address in eax, so we need to dereference it
+				ensure_lval_in_reg(&result.lval);
 				break;
 			}
 		}
 	}
 	else if (expr->kind == expr_postfix_op)
 	{
-		assert(expr->data.unary_op.expression->kind == expr_identifier);
 		ast_expression_t* param = expr->data.unary_op.expression;
-		switch (expr->data.unary_op.operation)
-		{
-			case op_postfix_inc:
-			{
-				//get the value of the parameter
-				expr_result result;
-				memset(&result, 0, sizeof(expr_result));
-				result.lval.kind = lval_none;
 
-				gen_expression(param, &result);
-				ensure_lval_in_reg(&result.lval);				
+		//get the value of the parameter
+		expr_result result;
+		memset(&result, 0, sizeof(expr_result));
+		result.lval.kind = lval_none;
 
-				//save the current value
-				_gen_asm("pushl %%eax");
+		gen_expression(param, &result);
+		ensure_lval_in_reg(&result.lval);
 
-				//increment
-				_gen_asm("incl %%eax");
-				gen_copy_eax_to_lval(&result);
+		//save the current value
+		_gen_asm("pushl %%eax");
 
-				//pop the un-incremented value back into eax
-				_gen_asm("popl %%eax");
-				break;
-			}
-			case op_postfix_dec:
-			{
-				//get the value of the parameter
-				expr_result result;
-				memset(&result, 0, sizeof(expr_result));
-				result.lval.kind = lval_none;
+		if (expr->data.unary_op.operation == op_postfix_inc)
+			_gen_asm("incl %%eax");
+		else
+			_gen_asm("decl %%eax");
 
-				gen_expression(param, &result);
-				ensure_lval_in_reg(&result.lval);
-
-				//save the current value
-				_gen_asm("pushl %%eax");
-
-				//increment
-				_gen_asm("decl %%eax");
-
-				gen_copy_eax_to_lval(&result);
-				//pop the un-incremented value back into eax
-				_gen_asm("popl %%eax");
-				break;
-			}
-		}
+		gen_copy_eax_to_lval(&result);
+		//pop the un-incremented value back into eax
+		_gen_asm("popl %%eax");
 	}
 	else if (expr->kind == expr_condition)
 	{
@@ -510,9 +478,8 @@ void gen_copy_eax_to_lval(expr_result* target)
 				_gen_asm("movl %%eax, %s", target->lval.label);
 			break;
 		case lval_address:
-
 			_gen_asm("movl %%eax, %d(%%edx)", target->lval.offset);			
-			//the result of the expression in now in edx, move to eax
+			//the result of the expression is now the address stored in edx, move to eax
 			_gen_asm("movl %%edx, %%eax");
 			break;
 		}
@@ -583,12 +550,12 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 	assert(result->lval.kind != lval_none);
 
 	if(result->lval.kind == lval_address)
-		_gen_asm("push %%eax");
+		_gen_asm("pushl %%eax");
 
 	gen_expression1(expr->data.assignment.expr);
 	
 	if (result->lval.kind == lval_address)
-		_gen_asm("pop %%edx");
+		_gen_asm("popl %%edx");
 	gen_copy_eax_to_lval(result);
 	//result->lval.kind = lval_none;
 }

@@ -13,7 +13,7 @@
 <declaration> :: = <var_declaration> ";"
 				| <type-specifier> ";"
 				| <function_declaration> ";"
-<var_declaration> ::= <declaration_specifiers> <id> [= <exp>]
+<var_declaration> ::= <declaration_specifiers> { "*" } <id> [= <exp>]
 <function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_param_list> ] ")"
 <function_param_list> ::= <declaration_specifiers> <id> { "," <declaration_specifiers> <id> }
 <function> ::= <function_declaration> "{" { <block-item> } "}"
@@ -365,6 +365,15 @@ ast_struct_member_t* parse_struct_member()
 	if (!result->type)
 	{
 		report_err(ERR_SYNTAX, "expected declaration specification");
+	}
+
+	while (current_is(tok_star))
+	{
+		next_tok();
+		//pointer
+		ast_type_spec_t* ptr_type = ast_make_ptr_type(result->type);
+		ptr_type->tokens.end = current();
+		result->type = ptr_type;
 	}
 
 	if (current_is(tok_identifier))
