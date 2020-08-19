@@ -113,6 +113,14 @@ source_range_t* src_init_source(const char* src, size_t len)
 const char* src_file_pos_str(file_pos_t pos)
 {
 	static char _buff[32];
-	sprintf(_buff, "%d, %d", pos.line, pos.col);
+	sprintf(_buff, "Ln: %d Ch: %d", pos.line, pos.col);
 	return _buff;
+}
+
+const char* src_extract(const char* start, const char* end)
+{
+	char* result = (char*)malloc(end - start + 1);
+	strncpy(result, start, end - start);
+	result[end - start] = '\0';
+	return result;
 }

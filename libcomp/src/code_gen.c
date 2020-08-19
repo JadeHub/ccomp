@@ -19,22 +19,22 @@ typedef struct
 		lval_none,
 		lval_stack,		//at stack_offset(%ebp) + offset
 		lval_address,	//address + offset
-		lval_label,		//global + offset
-		lval_push		//push to stack
+		lval_reg,		//the value is located in eax
+		lval_label		//label + offset
 	}kind;
 
 	union
 	{
-		char* label;
+		const char* label;
 		int32_t stack_offset;
 	};
 
+	ast_type_spec_t* type;
 	uint32_t offset;
 }lval_t;
 
 typedef struct
-{
-	ast_type_spec_t* type;
+{	
 	lval_t lval;
 }expr_result;
 
@@ -83,6 +83,89 @@ static void _make_label_name(char* name)
 	sprintf(name, "_label%d", ++_next_label);
 }
 
+static bool _is_unsigned_int_type(ast_type_spec_t* type)
+{
+	return type->kind == type_uint8 ||
+		type->kind == type_uint16 ||
+		type->kind == type_uint32;
+}
+
+static const char* _promoting_mov_instr(ast_type_spec_t* type)
+{
+	if (type->size == 4)
+		return "movl";
+
+	if (type->size == 2)
+		return _is_unsigned_int_type(type) ? "movzwl" : "movswl";
+
+	if (type->size == 1)
+		return _is_unsigned_int_type(type) ? "movzbl" : "movsbl";
+
+	assert(false);
+	return "";
+}
+
+void ensure_lval_in_reg(lval_t* lval)
+{
+	switch (lval->kind)
+	{
+		case lval_stack:
+			if (lval->type->size > 4)
+			{
+				assert(lval->offset == 0);
+				_gen_asm("leal %d(%%ebp), %%eax", lval->stack_offset);
+			}
+			else
+			{
+				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset + lval->offset);
+			}
+			break;
+		case lval_label:
+			if (lval->type->size > 4)
+			{
+				assert(lval->offset == 0);
+				_gen_asm("leal %s, %%eax", lval->label);
+			}
+			else
+			{
+				_gen_asm("%s %s+%d, %%eax", _promoting_mov_instr(lval->type), lval->label, lval->offset);
+			}
+			break;
+		case lval_reg:
+			break;
+	}
+	
+	/*return;
+
+	if (lval->type->size <= 4)
+	{
+		//ensure the result is in eax
+		if (lval->kind == lval_stack)
+		{
+			_gen_asm("movl %d(%%ebp), %%eax", lval->stack_offset + lval->offset);
+		}
+		else if (lval->kind == lval_label)
+		{
+			//todo global struct
+			_gen_asm("movl %s+%d, %%eax", lval->label, lval->offset);
+		}
+		else if (lval->kind == lval_address)
+		{
+			//if(result.type->kind == type_ptr)
+				//_gen_asm("movl (%%eax), %%eax");
+		}
+	}
+	else
+	{
+		if (lval->kind == lval_stack)
+			_gen_asm("leal %d(%%ebp), %%eax", lval->stack_offset);
+		else if (lval->kind == lval_label)
+			_gen_asm("leal %s, %%eax", lval->label);
+	}*/
+
+	//lval->kind = lval_reg;
+}
+
 void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 {
 	char label1[16];
@@ -120,30 +203,7 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 		_gen_asm("setne %%al"); //test flags of comparison
 		_gen_asm("%s:", label2);
 	}
-	result->type = uint32_type_spec;
-}
-
-
-static bool _is_unsigned_int_type(ast_type_spec_t* type)
-{
-	return type->kind == type_uint8 ||
-			type->kind == type_uint16 ||
-			type->kind == type_uint32;
-}
-
-static const char* _promoting_mov_instr(ast_type_spec_t* type)
-{
-	if (type->size == 4)
-		return "movl";
-
-	if (type->size == 2)
-		return _is_unsigned_int_type(type) ? "movzwl" : "movswl";
-
-	if (type->size == 1)
-		return _is_unsigned_int_type(type) ? "movzbl" : "movsbl";
-
-	assert(false);
-	return "";
+	result->lval.type = uint32_type_spec;
 }
 
 ast_declaration_t* _find_func_decl(const char* name)
@@ -169,8 +229,16 @@ static inline bool _is_unary_op(ast_expression_t* expr, op_kind op)
 	return expr->kind == expr_unary_op && expr->data.unary_op.operation == op;
 }
 
+void start_expr(ast_expression_t* expr)
+{
+	const char* src = src_extract(expr->tokens.start->loc, expr->tokens.end->loc);
+	_gen_asm("\n# Expr %s \"%s\"", src_file_pos_str(src_file_position(expr->tokens.start->loc)), src);
+	free(src);
+}
+
 void gen_expression(ast_expression_t* expr, expr_result* result)
 {
+	start_expr(expr);
 	if (expr->kind == expr_identifier)
 	{
 		var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
@@ -182,7 +250,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			return ;
 		}
 
-		result->type = var->data.decl->type;
+		result->lval.type = var->data.decl->type;
 
 		if (var->kind == var_global)
 		{
@@ -190,20 +258,20 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			result->lval.label = var->global_name;
 
 			//load the value, or the address of the value if greater than 4 bytes
-			if(result->type->size <= 4)
-				_gen_asm("%s %s, %%eax", _promoting_mov_instr(result->type), result->lval.label);
-			else
-				_gen_asm("leal %s, %%eax", result->lval.label);
+			if(result->lval.type->size <= 4)
+				_gen_asm("%s %s, %%eax", _promoting_mov_instr(result->lval.type), result->lval.label);
+			//else
+				//_gen_asm("leal %s, %%eax", result->lval.label);
 		}
 		else
 		{
 			result->lval.kind = lval_stack;
 			result->lval.stack_offset = var->bsp_offset;
 
-			if (result->type->size <= 4)
-				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(result->type), result->lval.stack_offset);
-			else
-				_gen_asm("leal %d(%%ebp), %%eax", result->lval.stack_offset);
+			if (result->lval.type->size <= 4)
+				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(result->lval.type), result->lval.stack_offset);
+			//else
+				//_gen_asm("leal %d(%%ebp), %%eax", result->lval.stack_offset);
 		}
 		//if (result->type->size > 4)
 //			result->lval.kind = lval_address;
@@ -212,7 +280,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	else if (expr->kind == expr_int_literal)
 	{
 		_gen_asm("movl $%d, %%eax", expr->data.int_literal.value);
-		result->type = expr->data.int_literal.type;
+		result->lval.type = expr->data.int_literal.type;
 	}
 	else if (expr->kind == expr_func_call)
 	{
@@ -223,11 +291,11 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		//lhs.rhs
 		gen_expression(expr->data.binary_op.lhs, result);
 
-		assert(result->type);
+		assert(result->lval.type);
 		//adjust result to indicate the member of lhs
 		assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
-		ast_struct_member_t* member = ast_find_struct_member(result->type->user_type_spec,
+		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->user_type_spec,
 									expr->data.binary_op.rhs->data.var_reference.name);
 		assert(member); 
 
@@ -241,7 +309,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		}*/
 
 		result->lval.offset += member->offset;
-		result->type = member->type;
+		result->lval.type = member->type;
 	}
 	else if (_is_binary_op(expr, op_ptr_member_access))
 	{
@@ -265,22 +333,22 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			break;
 		}
 
-		if (result->type->ptr_type->kind == type_ptr)
+		if (result->lval.type->ptr_type->kind == type_ptr)
 		{
 			_gen_asm("movl (%%eax), %%eax", result->lval.stack_offset);
 		}
 
-		assert(result->type);
-		assert(result->type->kind == type_ptr);
-		assert(result->type->ptr_type->kind == type_user);
+		assert(result->lval.type);
+		assert(result->lval.type->kind == type_ptr);
+		assert(result->lval.type->ptr_type->kind == type_user);
 		//adjust result to indicate the member of lhs
 		assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
-		ast_struct_member_t* member = ast_find_struct_member(result->type->ptr_type->user_type_spec,
+		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->ptr_type->user_type_spec,
 			expr->data.binary_op.rhs->data.var_reference.name);
 		assert(member);
 		result->lval.offset += member->offset;
-		result->type = member->type;
+		result->lval.type = member->type;
 	}
 	else if (_is_unary_op(expr, op_address_of))
 	{
@@ -305,7 +373,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			//_gen_asm("leal (%%eax), %%eax");
 			break;
 		}
-		result->type = ast_make_ptr_type(result->type);
+		result->lval.type = ast_make_ptr_type(result->lval.type);
 	}
 	else if (_is_unary_op(expr, op_dereference))
 	{
@@ -313,7 +381,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 
 		//must be a pointer type to be dereferenced
 		assert(result->lval.kind != lval_none);
-		assert(result->type->kind == type_ptr);
+		assert(result->lval.type->kind == type_ptr);
 				
 		//move value to eax
 		switch (result->lval.kind)
@@ -331,13 +399,14 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			break;
 		}
 
-		if (result->type->ptr_type->kind == type_ptr)
+		if (result->lval.type->ptr_type->size <= 4)
 		{
 			_gen_asm("movl (%%eax), %%eax");
+			result->lval.kind = lval_address;
 		}
 		
 		//adjust type
-		result->type = result->type->ptr_type;
+		result->lval.type = result->lval.type->ptr_type;
 		result->lval.kind = lval_address;
 	}
 	else if (expr->kind == expr_assign)
@@ -471,7 +540,7 @@ void gen_copy_eax_to_lval(expr_result* result)
 	* for types > 4 byte length, eax always represents an address and data is copied from there to the address at edx, or an address stored on the stack
 	* 
 	*/
-	if (result->type->size <= 4)
+	if (result->lval.type->size <= 4)
 	{
 		//copy from eax to the destination specified in lval
 		switch (result->lval.kind)
@@ -500,7 +569,7 @@ void gen_copy_eax_to_lval(expr_result* result)
 			//copy from (eax) -> (lval.stack_offset)
 			int32_t dest_off = result->lval.stack_offset; // += lval->offset?
 			uint32_t offset = 0;
-			while (offset < result->type->size)
+			while (offset < result->lval.type->size)
 			{
 				_gen_asm("movl %d(%%eax), %%edx", offset);
 				_gen_asm("movl %%edx, %d(%%ebp)", dest_off);
@@ -512,7 +581,7 @@ void gen_copy_eax_to_lval(expr_result* result)
 		{
 			//copy from label -> (lval.stack_offset)
 			uint32_t offset = 0;
-			while (offset < result->type->size)
+			while (offset < result->lval.type->size)
 			{
 				_gen_asm("movl %d(%%eax), %%edx", offset);
 				_gen_asm("movl %%edx, %s+%d", result->lval.label, offset);
@@ -536,13 +605,26 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 	*/
 	
 	gen_expression(expr->data.assignment.target, result);
+
+	switch (result->lval.kind)
+	{
+	case lval_stack:
+		_gen_asm("# assignment lhs type %s size %d target: stack offset: %d + %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.stack_offset, result->lval.offset);
+		break;
+	case lval_label:
+		_gen_asm("# assignment lhs type %s size %d target: label: %s + %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.label, result->lval.offset);
+		break;
+	case lval_reg:
+		_gen_asm("# assignment lhs type %s size %d target: reg: offset %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.offset);
+		break;
+	}
 		
 	assert(result->lval.kind != lval_none);
 
 	if(result->lval.kind == lval_address)
 		_gen_asm("push %%eax");
 
-	gen_expression1(expr->data.assignment.expr);
+	gen_expreseverythision1(expr->data.assignment.expr);
 	
 	if (result->lval.kind == lval_address)
 		_gen_asm("pop %%edx");
@@ -606,7 +688,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("addl $%d, %%esp", pushed);
 	}
-	result->type = decl->data.func.return_type;
+	result->lval.type = decl->data.func.return_type;
 }
 
 void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* result)
@@ -694,8 +776,7 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	{
 		MAKE_AND_PUSH_EXPR_RESULT
 
-		result.lval.kind = lval_none;
-		result.type = var_decl->type;
+		result.lval.type = var_decl->type;
 		result.lval.kind = lval_stack;
 		result.lval.stack_offset = var->bsp_offset;
 		
@@ -726,23 +807,9 @@ void gen_expression1(ast_expression_t* expr)
 	MAKE_AND_PUSH_EXPR_RESULT
 	gen_expression(expr, &result);
 
-	if (result.type && result.type->size == 4)
+	if (result.lval.type)
 	{
-		//ensure the result is in eax
-		if (result.lval.kind == lval_stack)
-		{
-			_gen_asm("movl %d(%%ebp), %%eax", result.lval.stack_offset + result.lval.offset);
-		}
-		else if (result.lval.kind == lval_label)
-		{
-			//todo global struct
-			_gen_asm("movl %s+%d, %%eax", result.lval.label, result.lval.offset);
-		}
-		else if (result.lval.kind == lval_address)
-		{
-			//if(result.type->kind == type_ptr)
-				//_gen_asm("movl (%%eax), %%eax");
-		}
+		ensure_lval_in_reg(&result.lval);
 	}
 }
 

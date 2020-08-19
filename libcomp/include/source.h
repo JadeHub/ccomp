@@ -16,7 +16,6 @@ typedef struct
 }file_pos_t;
 
 file_pos_t src_file_position(const char* pos);
-
 source_range_t* src_init_source(const char* src, size_t len);
-
 const char* src_file_pos_str(file_pos_t);
+const char* src_extract(const char* start, const char* end);

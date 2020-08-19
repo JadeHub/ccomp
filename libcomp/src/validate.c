@@ -79,12 +79,28 @@ static bool _user_type_is_definition(ast_user_type_spec_t* type)
 	return type->struct_members != NULL;
 }
 
+static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
+{
+	if (typeref->user_type_spec->kind == user_type_enum)
+		return 4;
+
+	uint32_t result = 0;
+	ast_struct_member_t* member = typeref->user_type_spec->struct_members;
+	while (member)
+	{
+		result += member->type->size;
+		member = member->next;
+	}
+	return result;
+}
+
 static void _add_user_type(ast_type_spec_t* typeref)
 {
 	if (typeref->user_type_spec->kind == user_type_enum)
 		_register_enum_constants(typeref->user_type_spec);
 	else
 		_resolve_struct_member_types(typeref->user_type_spec);
+	typeref->size = _calc_user_type_size(typeref);
 	idm_add_tag(_id_map, typeref);
 }
 
@@ -169,7 +185,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 				return NULL;
 			}
 			//update the existing declaration
-			exist->size = typeref->size;
+			exist->size = _calc_user_type_size(typeref);
 			if (typeref->user_type_spec->kind == user_type_enum)
 			{
 				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
