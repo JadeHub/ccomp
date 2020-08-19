@@ -117,7 +117,7 @@ const char* src_file_pos_str(file_pos_t pos)
 	return _buff;
 }
 
-const char* src_extract(const char* start, const char* end)
+char* src_extract(const char* start, const char* end)
 {
 	char* result = (char*)malloc(end - start + 1);
 	strncpy(result, start, end - start);
