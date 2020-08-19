@@ -57,13 +57,6 @@ static valid_trans_unit_t* _cur_tl = NULL;
 static const char* _cur_break_label = NULL;
 static const char* _cur_cont_label = NULL;
 
-
-#define MAKE_AND_PUSH_EXPR_RESULT	expr_result result;							\
-									memset(&result, 0, sizeof(expr_result));	\
-									result.lval.kind = lval_none;
-
-#define POP_EXPR_RESULT				
-
 static void _gen_asm(const char* format, ...)
 {
 	char buff[256];
@@ -145,36 +138,6 @@ void ensure_lval_in_reg(lval_t* lval)
 
 			break;
 	}
-	
-	/*return;
-
-	if (lval->type->size <= 4)
-	{
-		//ensure the result is in eax
-		if (lval->kind == lval_stack)
-		{
-			_gen_asm("movl %d(%%ebp), %%eax", lval->stack_offset + lval->offset);
-		}
-		else if (lval->kind == lval_label)
-		{
-			//todo global struct
-			_gen_asm("movl %s+%d, %%eax", lval->label, lval->offset);
-		}
-		else if (lval->kind == lval_address)
-		{
-			//if(result.type->kind == type_ptr)
-				//_gen_asm("movl (%%eax), %%eax");
-		}
-	}
-	else
-	{
-		if (lval->kind == lval_stack)
-			_gen_asm("leal %d(%%ebp), %%eax", lval->stack_offset);
-		else if (lval->kind == lval_label)
-			_gen_asm("leal %s, %%eax", lval->label);
-	}*/
-
-	//lval->kind = lval_reg;
 }
 
 void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
@@ -267,26 +230,12 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		{
 			result->lval.kind = lval_label;
 			result->lval.label = var->global_name;
-
-			//load the value, or the address of the value if greater than 4 bytes
-	//		if(result->lval.type->size <= 4)
-		//		_gen_asm("%s %s, %%eax", _promoting_mov_instr(result->lval.type), result->lval.label);
-			//else
-				//_gen_asm("leal %s, %%eax", result->lval.label);
 		}
 		else
 		{
 			result->lval.kind = lval_stack;
 			result->lval.stack_offset = var->bsp_offset;
-
-			//if (result->lval.type->size <= 4)
-//				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(result->lval.type), result->lval.stack_offset);
-			//else
-				//_gen_asm("leal %d(%%ebp), %%eax", result->lval.stack_offset);
 		}
-		//if (result->type->size > 4)
-//			result->lval.kind = lval_address;
-		
 	}
 	else if (expr->kind == expr_int_literal)
 	{
@@ -390,22 +339,8 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		//must be a pointer type to be dereferenced
 		assert(result->lval.kind != lval_none);
 		assert(result->lval.type->kind == type_ptr);
-				
-		//move value to eax
-		switch (result->lval.kind)
-		{
-		case lval_label:
-			_gen_asm("movl %s, %%eax", result->lval.label);
-			result->lval.kind = lval_address;
-			break;
-		case lval_stack:
-			_gen_asm("movl %d(%%ebp), %%eax", result->lval.stack_offset);
-			result->lval.kind = lval_address;
-			break;
-		case lval_address:
-			//already an address in eax					
-			break;
-		}
+
+		ensure_lval_in_reg(&result->lval);
 
 		if (result->lval.type->ptr_type->kind == type_ptr)
 		{
@@ -455,7 +390,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			break;
 		case op_prefix_inc:
 			{
-				MAKE_AND_PUSH_EXPR_RESULT
+				expr_result result;
+				memset(&result, 0, sizeof(expr_result));
+				result.lval.kind = lval_none;
 			
 				gen_expression(param, &result);
 				ensure_lval_in_reg(&result.lval);
@@ -465,7 +402,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			}
 		case op_prefix_dec:
 			{
-				MAKE_AND_PUSH_EXPR_RESULT
+				expr_result result;
+				memset(&result, 0, sizeof(expr_result));
+				result.lval.kind = lval_none;
 
 				gen_expression(param, &result);
 				ensure_lval_in_reg(&result.lval);
@@ -484,7 +423,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			case op_postfix_inc:
 			{
 				//get the value of the parameter
-				MAKE_AND_PUSH_EXPR_RESULT
+				expr_result result;
+				memset(&result, 0, sizeof(expr_result));
+				result.lval.kind = lval_none;
 
 				gen_expression(param, &result);
 				ensure_lval_in_reg(&result.lval);				
@@ -503,7 +444,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			case op_postfix_dec:
 			{
 				//get the value of the parameter
-				MAKE_AND_PUSH_EXPR_RESULT
+				expr_result result;
+				memset(&result, 0, sizeof(expr_result));
+				result.lval.kind = lval_none;
 
 				gen_expression(param, &result);
 				ensure_lval_in_reg(&result.lval);
@@ -603,7 +546,13 @@ void gen_copy_eax_to_lval(expr_result* target)
 		}
 		else
 		{
-			assert(false); //todo - copy mem to mem?
+			uint32_t offset = 0;
+			while (offset < target->lval.type->size)
+			{
+				_gen_asm("movl %d(%%eax), %%ecx", offset);
+				_gen_asm("movl %%ecx, %d(%%edx)", offset);
+				offset += 4;
+			}
 		}
 	}
 }
@@ -790,8 +739,8 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	assert(var);
 	if (var_decl->expr)
 	{
-		MAKE_AND_PUSH_EXPR_RESULT
-
+		expr_result result;
+		memset(&result, 0, sizeof(expr_result));
 		result.lval.type = var_decl->type;
 		result.lval.kind = lval_stack;
 		result.lval.stack_offset = var->bsp_offset;
@@ -820,7 +769,10 @@ void gen_scope_block_leave()
 
 void gen_expression1(ast_expression_t* expr)
 {
-	MAKE_AND_PUSH_EXPR_RESULT
+	expr_result result;
+	memset(&result, 0, sizeof(expr_result));
+	result.lval.kind = lval_none;
+
 	gen_expression(expr, &result);
 
 	if (result.lval.type)

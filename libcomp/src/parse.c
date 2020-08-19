@@ -941,14 +941,14 @@ ast_expression_t* try_parse_primary_expr()
 
 	if (current_is(tok_identifier))
 	{
-		//<factor> ::= <id>
 		expr = parse_identifier();
 	}
 	else if (current_is(tok_l_paren))
 	{
-		//<factor ::= "(" <exp> ")"
+		token_t* start = current();
 		next_tok();
 		expr = parse_expression();
+		expr->tokens.start = start; //otherwise we miss the initial '('
 		expect_cur(tok_r_paren);
 		next_tok();
 	}
