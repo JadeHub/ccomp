@@ -9,6 +9,11 @@ const char* tok_kind_spelling(tok_kind k)
 {
 	switch (k)
 	{
+		case tok_eof: return "";
+	}
+
+	switch (k)
+	{
 	case tok_eof:
 		return "eof";
 	case tok_l_brace:
@@ -99,6 +104,12 @@ const char* tok_kind_spelling(tok_kind k)
 		return "enum";
 	case tok_sizeof:
 		return "sizeof";
+	case tok_switch:
+		return "switch";
+	case tok_case:
+		return "case";
+	case tok_default:
+		return "default";
 	case tok_comma:
 		return ",";
 	case tok_void:

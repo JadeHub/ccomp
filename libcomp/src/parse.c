@@ -28,11 +28,16 @@
 			  | "do" <statement> "while" <exp> ";"
 			  | "break" ";"
 			  | "continue" ";"
+			  | <switch-smnt>
 			  | <var_declaration> ";"
+
+<switch-smnt> ::= "switch" "(" <exp> ")" <switch_case> | { "{" <switch_case> "}" }
+<switch_case> ::= "case" <constant-exp> ":" <statement> | "default" ":" <statement>
 <exp> ::= <assignment-exp>
 <assignment-exp> ::= <unary-exp> "=" <assignment-exp>
 				| <conditional-exp>
 <conditional-exp> ::= <logical-or-exp> "?" <exp> ":" <conditional-exp>
+<constant-exp> ::= <conditional-exp>
 <logical-or-exp> ::= <logical-and-exp> { "||" <logical-and-exp> }
 <logical-and-exp> ::= <bitwise-or> { "&&" <bitwise-or> }
 <bitwise-or> ::= <bitwise-xor> { ("|") <bitwise-xor> }
@@ -89,6 +94,7 @@
 <enum_specifier> ::= "enum" [ <id> ] [ "{" { <id> [ = <int> ] } "}" ]
 */
 
+ast_statement_t* parse_statement();
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
 ast_expression_t* parse_unary_expr();
@@ -328,21 +334,26 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 {
 	token_t* start = current();
 	ast_expression_t* expr = sub_parse();
+	if (_parse_err)
+	{
+		ast_destroy_expression(expr);
+		return NULL;
+	}
 	while (tok_in_set(current()->kind, op_set))
 	{
-	op_kind op = _get_binary_operator(current());
-	next_tok();
-	ast_expression_t* rhs_expr = sub_parse();
+		op_kind op = _get_binary_operator(current());
+		next_tok();
+		ast_expression_t* rhs_expr = sub_parse();
 
-	//our two sides are now expr and rhs_expr
-	//build a new binary op expression for expr
-	ast_expression_t* cur_expr = expr;
-	expr = _alloc_expr();
-	expr->tokens.start = start;
-	expr->kind = expr_binary_op;
-	expr->data.binary_op.operation = op;
-	expr->data.binary_op.lhs = cur_expr;
-	expr->data.binary_op.rhs = rhs_expr;
+		//our two sides are now expr and rhs_expr
+		//build a new binary op expression for expr
+		ast_expression_t* cur_expr = expr;
+		expr = _alloc_expr();
+		expr->tokens.start = start;
+		expr->kind = expr_binary_op;
+		expr->data.binary_op.operation = op;
+		expr->data.binary_op.lhs = cur_expr;
+		expr->data.binary_op.rhs = rhs_expr;
 	}
 	if (_parse_err)
 	{
@@ -1267,6 +1278,14 @@ ast_expression_t* parse_conditional_expression()
 }
 
 /*
+<constant-exp> :: = <conditional-exp>
+*/
+ast_expression_t* parse_constant_expression()
+{
+	return parse_conditional_expression();
+}
+
+/*
 <assignment-exp> ::= <id> "=" <exp> | <conditional-or-exp>
 <assignment-exp> ::= <unary-exp> "=" <assignment-exp>
 				| <conditional-exp>
@@ -1335,6 +1354,66 @@ ast_expression_t* parse_optional_expression(tok_kind term_tok)
 }
 
 /*
+<switch_case> ::= "case" <constant-exp> ":" <statement> | "default" ":" <statement>
+*/
+ast_switch_case_data_t* parse_switch_case()
+{
+	bool def = current_is(tok_default);
+	next_tok();
+
+	ast_switch_case_data_t* result = (ast_switch_case_data_t*)malloc(sizeof(ast_switch_case_data_t));
+	memset(result, 0, sizeof(ast_switch_case_data_t));
+
+	if (!def)
+	{
+		result->const_expr = parse_constant_expression();
+	}
+
+	expect_cur(tok_colon);
+	next_tok();
+
+	if (_parse_err)
+		return NULL;
+	
+	//statement is optional if this is not the default case
+	if (!current_is(tok_case) && !current_is(tok_default) && !current_is(tok_r_brace))
+		result->statement = parse_statement();
+	return result;
+}
+
+/*void parse_switch_case(ast_switch_smnt_data_t* smnt)
+{
+	if (current_is(tok_default) && smnt->default_case != NULL)
+	{
+		report_err(ERR_SYNTAX, "Multiple default cases in switch statement");
+		return;
+	}
+	
+	ast_switch_case_data_t* case_data = (ast_switch_case_data_t*)malloc(sizeof(ast_switch_case_data_t));
+	memset(case_data, 0, sizeof(ast_switch_case_data_t));
+	
+	if (current_is(tok_default))
+	{
+		next_tok();
+		smnt->default_case = case_data;
+	}
+	else
+	{
+		case_data->next = smnt->cases;
+		smnt->cases = case_data;
+		next_tok();
+		case_data->const_expr = parse_constant_expression();
+	}
+	
+	expect_cur(tok_colon);
+	next_tok();
+
+	//statement is optional
+	if(!current_is(tok_case) && !current_is(tok_default) && !current_is(tok_r_brace))
+		case_data->statement = parse_statement();
+}*/
+
+/*
 <statement> ::= "return" <exp> ";"
 			  | <exp-option> ";"
 			  | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
@@ -1345,6 +1424,7 @@ ast_expression_t* parse_optional_expression(tok_kind term_tok)
 			  | "do" <statement> "while" <exp> ";"
 			  | "break" ";"
 			  | "continue" ";"
+			  | <switch-smnt>
 */
 ast_statement_t* parse_statement()
 {
@@ -1466,6 +1546,58 @@ ast_statement_t* parse_statement()
 		}
 		next_tok();
 	}
+	else if (current_is(tok_switch))
+	{
+		next_tok();
+		result->kind = smnt_switch;
+
+		expect_cur(tok_l_paren);
+		next_tok();
+		result->data.switch_smnt.expr = parse_expression();
+		expect_cur(tok_r_paren);
+		next_tok();
+
+		if (current_is(tok_l_brace))
+		{
+			next_tok();
+
+			while (current_is(tok_case) || current_is(tok_default))
+			{
+				bool def = current_is(tok_default);
+				ast_switch_case_data_t* case_data = parse_switch_case();
+
+				if (!case_data)
+				{
+					goto parse_err;
+				}
+
+				if (def)
+				{
+					if (result->data.switch_smnt.default_case)
+					{
+						report_err(ERR_SYNTAX, "Multiple default cases in switch statement");
+						goto parse_err;
+					}
+					result->data.switch_smnt.default_case = case_data;
+				}
+				else
+				{
+					case_data->next = result->data.switch_smnt.cases;
+					result->data.switch_smnt.cases = case_data;
+				}				
+
+				if (current_is(tok_r_brace))
+				{
+					next_tok();
+					break;
+				}
+			}
+		}
+		else if (current_is(tok_case) || current_is(tok_default))
+		{
+			parse_switch_case(&result->data.switch_smnt);
+		}
+	}
 	else
 	{
 		//<statement ::= <exp-option> ";"
@@ -1474,13 +1606,14 @@ ast_statement_t* parse_statement()
 		expect_cur(tok_semi_colon);
 		next_tok();
 	}
-	if (_parse_err)
+	if (!_parse_err)
 	{
-		ast_destroy_statement(result);
-		return NULL;
+		result->tokens.end = current();
+		return result;
 	}
-	result->tokens.end = current();
-	return result;
+parse_err:
+	ast_destroy_statement(result);
+	return NULL;
 }
 
 /*

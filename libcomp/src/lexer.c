@@ -112,87 +112,87 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 	ADV_POS(sr, &pos);
 
 	int base = 0;
-if (*pos == 'x')
-{
-	//hex
-	ADV_POS(sr, &pos);
-	result->len++;
-
-	base = 16;
-}
-else if (_is_octal_digit_char(*pos))
-{
-	//octal
-	base = 8;
-}
-
-if (base > 0)
-{
-	int i = 0;
-	do
+	if (*pos == 'x')
 	{
-		i = i * base + _get_char_int_val(*pos);
-		result->len++;
+		//hex
 		ADV_POS(sr, &pos);
-	} while (_is_valid_num_char(base, *pos));
+		result->len++;
 
-	if (i > 255)
+		base = 16;
+	}
+	else if (_is_octal_digit_char(*pos))
 	{
-		diag_err(result, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
-		result->kind = tok_eof;
+		//octal
+		base = 8;
+	}
+
+	if (base > 0)
+	{
+		int i = 0;
+		do
+		{
+			i = i * base + _get_char_int_val(*pos);
+			result->len++;
+			ADV_POS(sr, &pos);
+		} while (_is_valid_num_char(base, *pos));
+
+		if (i > 255)
+		{
+			diag_err(result, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
+			result->kind = tok_eof;
+			return;
+		}
+
+		result->data = (void*)i;
 		return;
 	}
 
-	result->data = (void*)i;
-	return;
-}
+	switch (*pos)
+	{
+	case '\\':
+	case '\'':
+	case '\"':
+	case '?':
+		result->data = (void*)*pos;
+		result->len++;
+		return;
+	case 'a':
+		result->data = (void*)0x07; //bell
+		result->len++;
+		return;
+	case 'b':
+		result->data = (void*)0x08; //backspace
+		result->len++;
+		return;
+	case 'f':
+		result->data = (void*)0x0C; //form feed
+		result->len++;
+		return;
+	case 'n':
+		result->data = (void*)0x0A; //new line
+		result->len++;
+		return;
 
-switch (*pos)
-{
-case '\\':
-case '\'':
-case '\"':
-case '?':
-	result->data = (void*)*pos;
-	result->len++;
-	return;
-case 'a':
-	result->data = (void*)0x07; //bell
-	result->len++;
-	return;
-case 'b':
-	result->data = (void*)0x08; //backspace
-	result->len++;
-	return;
-case 'f':
-	result->data = (void*)0x0C; //form feed
-	result->len++;
-	return;
-case 'n':
-	result->data = (void*)0x0A; //new line
-	result->len++;
-	return;
+	case 'r':
+		result->data = (void*)0x0D; //carriage return
+		result->len++;
+		return;
 
-case 'r':
-	result->data = (void*)0x0D; //carriage return
-	result->len++;
-	return;
-
-case 't':
-	result->data = (void*)0x09; //tab
-	result->len++;
-	return;
-case 'v':
-	result->data = (void*)0x0B; //vert tab
-	result->len++;
-	return;
-case '0':
-	result->data = 0;
-	result->len++;
-	return;
-}
-diag_err(result, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
-result->kind = tok_eof;
+	case 't':
+		result->data = (void*)0x09; //tab
+		result->len++;
+		return;
+	case 'v':
+		result->data = (void*)0x0B; //vert tab
+		result->len++;
+		return;
+	case '0':
+		result->data = 0;
+		result->len++;
+		return;
+	}
+	diag_err(result, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
+	result->kind = tok_eof;
 }
 
 static inline bool _is_valid_string_literal_char(char c)
@@ -383,6 +383,12 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_enum;
 	else if (tok_spelling_cmp(result, "sizeof"))
 		result->kind = tok_sizeof;
+	else if (tok_spelling_cmp(result, "switch"))
+		result->kind = tok_switch;
+	else if (tok_spelling_cmp(result, "case"))
+		result->kind = tok_case;
+	else if (tok_spelling_cmp(result, "default"))
+		result->kind = tok_default;
 }
 
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)

@@ -62,6 +62,9 @@ typedef enum
     tok_union,
     tok_enum,
     tok_sizeof,
+    tok_switch,
+    tok_case,
+    tok_default,
 
     //type specifiers
     tok_char,

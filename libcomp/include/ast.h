@@ -316,6 +316,7 @@ typedef enum
 	smnt_do,
 	smnt_break,
 	smnt_continue,
+	smnt_switch
 }statement_kind;
 
 typedef struct
@@ -350,6 +351,21 @@ typedef struct
 	struct ast_statement* statement;
 }ast_for_smnt_data_t;
 
+typedef struct ast_switch_case_data
+{
+	ast_expression_t* const_expr;
+	struct ast_statement* statement;
+	struct ast_switch_case_data* next;
+}ast_switch_case_data_t;
+
+typedef struct
+{
+	ast_expression_t* expr;
+	ast_switch_case_data_t* default_case;
+	ast_switch_case_data_t* cases;
+
+}ast_switch_smnt_data_t;
+
 typedef struct ast_statement
 {
 	token_range_t tokens;
@@ -362,6 +378,7 @@ typedef struct ast_statement
 		ast_compound_smnt_data_t compound;
 		ast_while_smnt_data_t while_smnt;
 		ast_for_smnt_data_t for_smnt;
+		ast_switch_smnt_data_t switch_smnt;
 	}data;
 }ast_statement_t;
 

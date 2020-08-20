@@ -111,7 +111,7 @@ void ensure_lval_in_reg(lval_t* lval)
 			else
 			{
 				_gen_asm("%s %d(%%ebp), %%eax", _promoting_mov_instr(lval->type), lval->stack_offset + lval->offset);
-			//	lval->offset = 0;
+				lval->offset = 0;
 			}
 			break;
 		case lval_label:
@@ -123,15 +123,16 @@ void ensure_lval_in_reg(lval_t* lval)
 			else
 			{
 				_gen_asm("%s %s+%d, %%eax", _promoting_mov_instr(lval->type), lval->label, lval->offset);
-				//lval->offset = 0;
+				lval->offset = 0;
 			}
 			break;
 		case lval_address:
 			if (lval->type->kind != type_ptr && lval->type->size <= 4)
 			{
 				//we are managing a pointer in eax, now we need to dereference it
+				lval->offset = 0;
 				_gen_asm("movl %d(%%eax), %%eax", lval->offset);
-				//lval->offset = 0;
+				
 			}
 			else
 			{
@@ -261,8 +262,10 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->user_type_spec,
 									expr->data.binary_op.rhs->data.var_reference.name);
 		assert(member);
-
-		result->lval.offset += member->offset;
+		if (result->lval.kind == lval_address)
+			_gen_asm("addl $%d, %%eax", member->offset);
+		else
+			result->lval.offset += member->offset;
 		result->lval.type = member->type;
 	}
 	else if (_is_binary_op(expr, op_ptr_member_access))
@@ -277,12 +280,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 
 		ensure_lval_in_reg(&result->lval);
 		result->lval.kind = lval_address;
-		if (result->lval.type->ptr_type->kind == type_ptr)
-		{
-			_gen_asm("movl (%%eax), %%eax");
-			result->lval.kind = lval_address;
-		}
-
+		
 		assert(result->lval.type);
 		assert(result->lval.type->kind == type_ptr);
 		assert(result->lval.type->ptr_type->kind == type_user);
@@ -292,8 +290,16 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->ptr_type->user_type_spec,
 			expr->data.binary_op.rhs->data.var_reference.name);
 		assert(member);
-//		result->lval.offset += member->offset;
+
 		_gen_asm("addl $%d, %%eax", member->offset);
+		if (member->type->kind == type_ptr)
+		{
+			_gen_asm("movl (%%eax), %%eax");
+			result->lval.kind = lval_address;
+		}
+
+
+		
 		result->lval.type = member->type;
 		
 	}
@@ -532,7 +538,7 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 		B) types greater than 4 bytes in length are copied to a stack location or to an address stored in a stack location
 	*/
 	
-	gen_expression(expr->data.assignment.target, result);
+ 	gen_expression(expr->data.assignment.target, result);
 
 	switch (result->lval.kind)
 	{

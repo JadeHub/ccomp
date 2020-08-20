@@ -694,6 +694,37 @@ bool process_for_statement(ast_statement_t* smnt)
 	return true;
 }
 
+bool process_switch_statement(ast_statement_t * smnt)
+{
+	if (!smnt->data.switch_smnt.default_case && !smnt->data.switch_smnt.cases)
+	{
+		_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+			"switch statement has no case or default statement");
+		return false;
+	}
+
+	if (smnt->data.switch_smnt.cases && smnt->data.switch_smnt.cases->statement == NULL)
+	{
+		/*last item must have statement
+
+		This is fine:
+		case 1:
+		case 2:
+			return;
+
+		This is an error:
+		case 1:
+			return;
+		case 2:			
+		*/
+		_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+			"invalid case in switch");
+		return false;
+	}
+
+	return true;
+}
+
 bool process_return_statement(ast_statement_t* smnt)
 {
 	assert(_cur_func);
@@ -759,6 +790,8 @@ bool process_statement(ast_statement_t* smnt)
 		break;
 	case smnt_return:
 		return process_return_statement(smnt);
+	case smnt_switch:
+		return process_switch_statement(smnt);
 	}
 
 	return true;
