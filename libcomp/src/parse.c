@@ -1381,38 +1381,6 @@ ast_switch_case_data_t* parse_switch_case()
 	return result;
 }
 
-/*void parse_switch_case(ast_switch_smnt_data_t* smnt)
-{
-	if (current_is(tok_default) && smnt->default_case != NULL)
-	{
-		report_err(ERR_SYNTAX, "Multiple default cases in switch statement");
-		return;
-	}
-	
-	ast_switch_case_data_t* case_data = (ast_switch_case_data_t*)malloc(sizeof(ast_switch_case_data_t));
-	memset(case_data, 0, sizeof(ast_switch_case_data_t));
-	
-	if (current_is(tok_default))
-	{
-		next_tok();
-		smnt->default_case = case_data;
-	}
-	else
-	{
-		case_data->next = smnt->cases;
-		smnt->cases = case_data;
-		next_tok();
-		case_data->const_expr = parse_constant_expression();
-	}
-	
-	expect_cur(tok_colon);
-	next_tok();
-
-	//statement is optional
-	if(!current_is(tok_case) && !current_is(tok_default) && !current_is(tok_r_brace))
-		case_data->statement = parse_statement();
-}*/
-
 /*
 <statement> ::= "return" <exp> ";"
 			  | <exp-option> ";"
@@ -1561,6 +1529,7 @@ ast_statement_t* parse_statement()
 		{
 			next_tok();
 
+			ast_switch_case_data_t* last_case = NULL;
 			while (current_is(tok_case) || current_is(tok_default))
 			{
 				bool def = current_is(tok_default);
@@ -1582,9 +1551,14 @@ ast_statement_t* parse_statement()
 				}
 				else
 				{
-					case_data->next = result->data.switch_smnt.cases;
-					result->data.switch_smnt.cases = case_data;
-				}				
+					//maintain list order
+					if (last_case == NULL)
+						result->data.switch_smnt.cases = case_data;
+					else
+						last_case->next = case_data;
+					last_case = case_data;
+					result->data.switch_smnt.case_count++;
+				}
 
 				if (current_is(tok_r_brace))
 				{

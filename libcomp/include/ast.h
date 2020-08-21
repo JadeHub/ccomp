@@ -363,7 +363,7 @@ typedef struct
 	ast_expression_t* expr;
 	ast_switch_case_data_t* default_case;
 	ast_switch_case_data_t* cases;
-
+	uint32_t case_count;
 }ast_switch_smnt_data_t;
 
 typedef struct ast_statement

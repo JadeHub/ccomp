@@ -18,8 +18,7 @@ typedef struct
 	{
 		lval_none,
 		lval_stack,		//at stack_offset(%ebp) + offset
-		lval_address,	//address + offset
-//		lval_reg,		//the value is located in eax
+		lval_address,	//address in in eax
 		lval_label		//label + offset
 	}kind;
 
@@ -38,6 +37,7 @@ typedef struct
 	lval_t lval;
 }expr_result;
 
+void gen_statement(ast_statement_t* smnt);
 void gen_expression(ast_expression_t* expr, expr_result* result);
 void gen_block_item(ast_block_item_t* bi);
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result);
@@ -754,6 +754,63 @@ void gen_expression1(ast_expression_t* expr)
 	}
 }
 
+void gen_switch_statement(ast_statement_t* smnt)
+{
+	char lbl_end[16];
+	char lbl_default[16];
+
+	_make_label_name(lbl_end);
+	_make_label_name(lbl_default);
+
+	gen_expression1(smnt->data.switch_smnt.expr);
+
+	char** case_labels = (char**)malloc(smnt->data.switch_smnt.case_count * sizeof(char*));
+
+	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
+	for (uint32_t case_idx = 0; case_idx < smnt->data.switch_smnt.case_count; case_idx++)
+	{
+		case_labels[case_idx] = (char*)malloc(16);
+		_make_label_name(case_labels[case_idx]);
+
+		_gen_asm("cmpl $%d, %%eax", case_data->const_expr->data.int_literal.value);
+		_gen_asm("je %s", case_labels[case_idx]);
+
+		case_data = case_data->next;
+	}
+
+	if (smnt->data.switch_smnt.default_case)
+	{
+		_gen_asm("jmp %s", lbl_default);
+	}
+	else
+	{
+		_gen_asm("jmp %s", lbl_end);
+	}
+
+	const char* prev_break_lbl = _cur_break_label;
+	_cur_break_label = lbl_end;
+
+	case_data = smnt->data.switch_smnt.cases;
+	for (uint32_t case_idx = 0; case_idx < smnt->data.switch_smnt.case_count; case_idx++)
+	{
+		_gen_asm("%s:", case_labels[case_idx]);
+		if(case_data->statement)
+			gen_statement(case_data->statement);
+	
+		free(case_labels[case_idx]);
+		case_data = case_data->next;
+	}
+
+	if (smnt->data.switch_smnt.default_case)
+	{
+		_gen_asm("%s:", lbl_default);
+		gen_statement(smnt->data.switch_smnt.default_case->statement);
+	}
+	_gen_asm("%s:", lbl_end);
+	_cur_break_label = prev_break_lbl;
+	free(case_labels);
+}
+
 void gen_return_statement(ast_statement_t* smnt)
 {
 	if (_cur_fun->return_type->size > 4)
@@ -808,7 +865,11 @@ void gen_statement(ast_statement_t* smnt)
 	const char* cur_break = _cur_break_label;
 	const char* cur_cont = _cur_cont_label;
 
-	if (smnt->kind == smnt_return)
+	if (smnt->kind == smnt_switch)
+	{
+		gen_switch_statement(smnt);
+	}
+	else if (smnt->kind == smnt_return)
 	{
 		gen_return_statement(smnt);
 	}
@@ -956,9 +1017,9 @@ void gen_statement(ast_statement_t* smnt)
 	}
 	else if (smnt->kind == smnt_continue)
 	{
-	if (!_cur_cont_label)
-		diag_err(smnt->tokens.start, ERR_SYNTAX, "Invalid continue");
-	_gen_asm("jmp %s", _cur_cont_label);
+		if (!_cur_cont_label)
+			diag_err(smnt->tokens.start, ERR_SYNTAX, "Invalid continue");
+		_gen_asm("jmp %s", _cur_cont_label);
 	}
 	//if, break, continue,  etc
 

@@ -722,6 +722,19 @@ bool process_switch_statement(ast_statement_t * smnt)
 		return false;
 	}
 
+	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
+	while (case_data)
+	{
+		if (case_data->const_expr->kind != expr_int_literal)
+		{
+			_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+				"case must be a constant expression");
+			return false;
+		}
+		case_data = case_data->next;
+	}
+
+
 	return true;
 }
 
