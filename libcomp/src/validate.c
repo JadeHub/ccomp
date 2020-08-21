@@ -504,17 +504,35 @@ bool process_member_access_expression(ast_expression_t* expr)
 		{
 			_report_err(expr->tokens.start,
 				ERR_INCOMPATIBLE_TYPE,
-				"-> must be applied to a pointer type");
+				"'->' must be applied to a pointer type");
 			return false;
 		}
 		user_type_spec = user_type_spec->ptr_type;
+	}
+	else
+	{
+		if (user_type_spec->kind == type_ptr)
+		{
+			_report_err(expr->tokens.start,
+				ERR_INCOMPATIBLE_TYPE,
+				"'.' cannot be applied to a pointer type");
+			return false;
+		}
 	}
 	
 	if (user_type_spec->kind != type_user)
 	{
 		_report_err(expr->tokens.start,
 			ERR_INCOMPATIBLE_TYPE,
-			"-> or . can only be applied to user defined types");
+			"'->' or '.' can only be applied to user defined types");
+		return false;
+	}
+
+	if (expr->data.binary_op.rhs->kind != expr_identifier)
+	{
+		_report_err(expr->tokens.start,
+			ERR_INCOMPATIBLE_TYPE,
+			"operand of '->' or '.' must be an identifier");
 		return false;
 	}
 
@@ -703,25 +721,6 @@ bool process_switch_statement(ast_statement_t * smnt)
 		return false;
 	}
 
-	if (smnt->data.switch_smnt.cases && smnt->data.switch_smnt.cases->statement == NULL)
-	{
-		/*last item must have statement
-
-		This is fine:
-		case 1:
-		case 2:
-			return;
-
-		This is an error:
-		case 1:
-			return;
-		case 2:			
-		*/
-		_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
-			"invalid case in switch");
-		return false;
-	}
-
 	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
 	while (case_data)
 	{
@@ -731,9 +730,28 @@ bool process_switch_statement(ast_statement_t * smnt)
 				"case must be a constant expression");
 			return false;
 		}
+
+		if (case_data->next == NULL && case_data->statement == NULL)
+		{
+			/*last item must have statement
+
+			This is fine:
+			case 1:
+			case 2:
+				return;
+
+			This is an error:
+			case 1:
+				return;
+			case 2:
+			*/
+			_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+				"invalid case in switch");
+			return false;
+		}
+
 		case_data = case_data->next;
 	}
-
 
 	return true;
 }

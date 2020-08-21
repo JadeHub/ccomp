@@ -204,3 +204,56 @@ TEST_F(StructValidationTest, err_declare_define_new_scope)
 
 	ExpectError(code, ERR_TYPE_INCOMPLETE);
 }
+
+TEST_F(StructValidationTest, err_ptr_member_op_not_ptr)
+{
+	std::string code = R"(
+	void foo()
+	{		
+		struct A {int i;} a;
+
+		a->i = 1;
+	})";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(StructValidationTest, err_member_op_ptr)
+{
+	std::string code = R"(
+	void foo()
+	{		
+		struct A {int i;}* a;
+
+		a.i = 1;
+	})";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(StructValidationTest, err_member_op_not_user_type)
+{
+	std::string code = R"(
+	void foo()
+	{		
+		int a;
+
+		a.i = 1;
+	})";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(StructValidationTest, err_member_op_member_not_id)
+{
+	std::string code = R"(
+	void foo()
+	{		
+		int a;
+		int x;
+
+		a.x = 1;
+	})";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
