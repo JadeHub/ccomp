@@ -143,7 +143,7 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 			return;
 		}
 
-		result->data = (void*)i;
+		result->data = i;
 		return;
 	}
 
@@ -153,37 +153,37 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 	case '\'':
 	case '\"':
 	case '?':
-		result->data = (void*)*pos;
+		result->data = *pos;
 		result->len++;
 		return;
 	case 'a':
-		result->data = (void*)0x07; //bell
+		result->data = 0x07; //bell
 		result->len++;
 		return;
 	case 'b':
-		result->data = (void*)0x08; //backspace
+		result->data = 0x08; //backspace
 		result->len++;
 		return;
 	case 'f':
-		result->data = (void*)0x0C; //form feed
+		result->data = 0x0C; //form feed
 		result->len++;
 		return;
 	case 'n':
-		result->data = (void*)0x0A; //new line
+		result->data = 0x0A; //new line
 		result->len++;
 		return;
 
 	case 'r':
-		result->data = (void*)0x0D; //carriage return
+		result->data = 0x0D; //carriage return
 		result->len++;
 		return;
 
 	case 't':
-		result->data = (void*)0x09; //tab
+		result->data = 0x09; //tab
 		result->len++;
 		return;
 	case 'v':
-		result->data = (void*)0x0B; //vert tab
+		result->data = 0x0B; //vert tab
 		result->len++;
 		return;
 	case '0':
@@ -229,7 +229,7 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	char* buff = (char*)malloc(result->len - 1); // -2 for the quotes, +1 for the null
 	memset(buff, 0, result->len - 1);
 	memcpy(buff, result->loc + 1, result->len - 2);
-	result->data = buff;
+	result->data = (uint32_t)buff;
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -256,7 +256,7 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	}
 	else
 	{
-		result->data = (void*)(*pos);
+		result->data = (*pos);
 		result->len++;
 		ADV_POS_ERR(result, sr, &pos);
 	}
@@ -304,7 +304,7 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 		result->len++;
 		ADV_POS(sr, &pos);
 	} while (_is_valid_num_char(base, *pos));
-	result->data = (void*)(long)i;
+	result->data = (uint32_t)i;
 
 	while (_is_valid_num_suffix(*pos))
 	{
@@ -687,7 +687,7 @@ void lex_init()
 	_invalid_tok.kind = tok_invalid;
 	_invalid_tok.loc = NULL;
 	_invalid_tok.len = 0;
-	_invalid_tok.data = NULL;
+	_invalid_tok.data = 0;
 	_invalid_tok.next = NULL;
 	_invalid_tok.prev = NULL;
 }

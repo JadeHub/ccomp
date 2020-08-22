@@ -257,10 +257,21 @@ typedef struct ast_var_decl
 	ast_expression_t* expr;
 }ast_var_decl_t;
 
+typedef struct ast_func_param_decl
+{
+	struct ast_declaration* decl;
+
+	struct ast_func_param_decl* next, * prev;
+}ast_func_param_decl_t;
+
 typedef struct ast_func_decl
 {
 	char name[MAX_LITERAL_NAME];
-	struct ast_declaration* params;
+
+	//struct ast_declaration* params;
+
+	ast_func_param_decl_t* first_param;
+	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
 	ast_type_spec_t* return_type;
 

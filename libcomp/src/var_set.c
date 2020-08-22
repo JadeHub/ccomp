@@ -59,10 +59,9 @@ var_set_t* var_init_set()
 void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 {
 	/* add the function parameters */
-	if (fn->params)
+	if (fn->first_param)
 	{
-		//ast_function_param_t* param = fn->params;
-		ast_declaration_t* param = fn->params;
+		ast_func_param_decl_t* param = fn->first_param;
 
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
@@ -72,13 +71,13 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 
 		while (param)
 		{			
-			var_data_t* var = _make_stack_var(offset, param->data.var.name);
+			var_data_t* var = _make_stack_var(offset, param->decl->data.var.name);
 			var->kind = var_param;
-			var->data.decl = &param->data.var;
+			var->data.decl = &param->decl->data.var;
 			var->next = vars->vars;
 			vars->vars = var;
 
-			offset += param->data.var.type->size < 4 ? 4 : param->data.var.type->size;
+			offset += param->decl->data.var.type->size < 4 ? 4 : param->decl->data.var.type->size;
 			param = param->next;
 		}
 	}
@@ -144,10 +143,18 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 		return NULL;
 	}
 	
-	vars->bsp_offset -= var_decl->type->size;
-	var = _make_stack_var(vars->bsp_offset, var_decl->name);
+	//vars->bsp_offset -= var_decl->type->size;
+	var = _make_stack_var(vars->bsp_offset - var_decl->type->size, var_decl->name);
 	var->kind = var_stack;
 	var->data.decl = var_decl;
+
+	int t = (var_decl->type->size + 0x01) & ~0x01;
+	vars->bsp_offset -= (var_decl->type->size + 0x01) & ~0x01;
+	
+	/*if (var_decl->type->size < 4)
+	{
+		vars->bsp_offset -= (4 - var_decl->type->size);
+	}*/
 	
 	// add to start of list
 	var->next = vars->vars;

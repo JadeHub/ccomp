@@ -83,6 +83,21 @@ static bool _is_unsigned_int_type(ast_type_spec_t* type)
 		type->kind == type_uint32;
 }
 
+static const char* _sized_mov(ast_type_spec_t* type)
+{
+	if (type->size == 4)
+		return "movl";
+
+	if (type->size == 2)
+		return "movw";
+
+	if (type->size == 1)
+		return "movb";
+
+	assert(false);
+	return "";
+}
+
 static const char* _promoting_mov_instr(ast_type_spec_t* type)
 {
 	if (type->size == 4)
@@ -475,18 +490,18 @@ void gen_copy_eax_to_lval(expr_result* target)
 		switch (target->lval.kind)
 		{
 		case lval_stack:
-			_gen_asm("movl %%eax, %d(%%ebp)", target->lval.stack_offset + target->lval.offset);
+			_gen_asm("%s %%eax, %d(%%ebp)", _sized_mov(target->lval.type), target->lval.stack_offset + target->lval.offset);
 			break;
 		case lval_label:
 			if (target->lval.offset)
-				_gen_asm("movl %%eax, %s + %d", target->lval.label, target->lval.offset);
+				_gen_asm("%s %%eax, %s + %d", _sized_mov(target->lval.type), target->lval.label, target->lval.offset);
 			else
-				_gen_asm("movl %%eax, %s", target->lval.label);
+				_gen_asm("%s %%eax, %s", _sized_mov(target->lval.type), target->lval.label);
 			break;
 		case lval_address:
-			_gen_asm("movl %%eax, %d(%%edx)", target->lval.offset);			
+			_gen_asm("%s %%eax, %d(%%edx)", _sized_mov(target->lval.type), target->lval.offset);
 			//the result of the expression is now the address stored in edx, move to eax
-			_gen_asm("movl %%edx, %%eax");
+			_gen_asm("%s %%edx, %%eax", _sized_mov(target->lval.type));
 			break;
 		}
 	}
@@ -563,7 +578,6 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 	if (result->lval.kind == lval_address)
 		_gen_asm("popl %%edx");
 	gen_copy_eax_to_lval(result);
-	//result->lval.kind = lval_none;
 }
 
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
@@ -574,7 +588,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		return;
 
 	ast_expression_t* param = expr->data.func_call.params;
-	ast_declaration_t* param_decl = decl->data.func.params;
+	ast_func_param_decl_t* param_decl = decl->data.func.last_param;
 	uint32_t pushed = 0;
 
 	if (decl->data.func.return_type->size > 4)
@@ -589,28 +603,40 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		gen_expression1(param);
 
-		if (param_decl->data.var.type->size <= 4)
+		if (param_decl->decl->data.var.type->size == 1)
+		{
+			_gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type));
+			_gen_asm("pushl %%edx");
+			pushed += 4;
+		}
+		else if (param_decl->decl->data.var.type->size == 2)
+		{
+			_gen_asm("%s %%ax, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type));
+			_gen_asm("pushl %%edx");
+			pushed += 4;
+		}
+		else if (param_decl->decl->data.var.type->size == 4)
 		{
 			_gen_asm("pushl %%eax");
-			pushed += 4; //todo < 4?
+			pushed += 4;
 		}
 		else
 		{
 			//address is in eax
 
-			uint32_t offset = param_decl->data.var.type->size - 4;
-			size_t sz = param_decl->data.var.type->size;
+			uint32_t offset = param_decl->decl->data.var.type->size - 4;
+			size_t sz = param_decl->decl->data.var.type->size;
 			while (sz > 0)
 			{
 				_gen_asm("pushl %d(%%eax)", offset);
 				offset -= 4;
 				sz -= 4;
 			}
-			pushed += param_decl->data.var.type->size;
+			pushed += param_decl->decl->data.var.type->size;
 		}
 
 		param = param->next;
-		param_decl = param_decl->next;
+		param_decl = param_decl->prev;
 	}
 
 	if (decl->data.func.return_type->size > 4)

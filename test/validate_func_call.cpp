@@ -147,3 +147,23 @@ TEST_F(FnCallValidationTest, int_param)
 	ExpectNoError(code);
 }
 
+TEST_F(FnCallValidationTest, char_short_param)
+{
+	std::string code = R"(
+	int foo(char c, short s)
+	{
+		return  c + s;
+	}
+
+	int main()
+	{
+		char c = -12;
+		short s = -2;
+
+		return foo(c, s);
+	}
+	)";
+
+	ExpectNoError(code);
+}
+

@@ -465,7 +465,7 @@ bool process_func_call(ast_expression_t* expr)
 	*/
 
 	ast_expression_t* call_param = expr->data.func_call.params;
-	ast_declaration_t* func_param = decl->data.func.params;
+	ast_func_param_decl_t* func_param = decl->data.func.last_param;
 
 	int p_count = 1;
 	while (call_param && func_param)
@@ -473,17 +473,17 @@ bool process_func_call(ast_expression_t* expr)
 		if (!process_expression(call_param))
 			return false;
 
-		if (!_can_convert_type(func_param->data.var.type, _resolve_expr_type(call_param)))
+		if (!_can_convert_type(func_param->decl->data.var.type, _resolve_expr_type(call_param)))
 		{
 			_report_err(expr->tokens.start,
 				ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(func_param->data.var.type));
+				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type));
 			return false;
 		}
 
 		call_param = call_param->next;
-		func_param = func_param->next;
+		func_param = func_param->prev;
 		p_count++;
 	}
 
@@ -864,29 +864,29 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	}
 	
 	//parameter types
-	ast_declaration_t* param = func->params;
+	ast_func_param_decl_t* param = func->first_param;
 	while (param)
 	{
-		if (param->data.var.type->kind == type_void)
+		if (param->decl->data.var.type->kind == type_void)
 		{
-			_report_err(param->tokens.start, ERR_INVALID_PARAMS,
+			_report_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
 				"function param '%s' of void type",
-				param->data.var.name);
+				param->decl->data.var.name);
 			return false;
 		}
 
-		ast_type_spec_t* param_type = _resolve_type(param->data.var.type);
+		ast_type_spec_t* param_type = _resolve_type(param->decl->data.var.type);
 		if (!param_type)
 			return false;
-		param->data.var.type = param_type;
+		param->decl->data.var.type = param_type;
 
 		if (_is_fn_definition(decl) && 
 			param_type->kind != type_void &&
 			param_type->size == 0)
 		{
-			_report_err(param->tokens.start, ERR_TYPE_INCOMPLETE,
+			_report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
 				"function param '%s' returns incomplete type '%s'",
-				param->data.var.name, param_type->user_type_spec->name);
+				param->decl->data.var.name, param_type->user_type_spec->name);
 			return false;
 		}
 		
@@ -915,18 +915,18 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 		return false;
 	}
 
-	ast_declaration_t* p_exist = exist->data.func.params;
-	ast_declaration_t* p_func = func->data.func.params;
+	ast_func_param_decl_t* p_exist = exist->data.func.first_param;
+	ast_func_param_decl_t* p_func = func->data.func.first_param;
 
 	int p_count = 1;
 	while (p_exist && p_func)
 	{
-		if (p_exist->data.var.type != _resolve_type(p_func->data.var.type))
+		if (p_exist->decl->data.var.type != _resolve_type(p_func->decl->data.var.type))
 		{
 			_report_err(func->tokens.start,
 				ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(func), ast_type_name(p_exist->data.var.type));
+				p_count, ast_declaration_name(func), ast_type_name(p_exist->decl->data.var.type));
 			return false;
 		}
 

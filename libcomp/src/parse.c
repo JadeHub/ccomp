@@ -782,27 +782,48 @@ ast_type_spec_t* try_parse_decl_spec()
 void parse_function_parameters(ast_function_decl_t* func)
 {
 	ast_type_spec_t* type;
-	ast_declaration_t* last_param = NULL;
 
 	while ((type = try_parse_decl_spec()))
 	{
-		ast_declaration_t* param = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-		memset(param, 0, sizeof(ast_declaration_t));
-		param->tokens = type->tokens;
-		param->kind = decl_var;
-		param->data.var.type = type;
+		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
+		memset(decl, 0, sizeof(ast_declaration_t));
+		decl->tokens = type->tokens;
+
+		decl->kind = decl_var;
+		decl->data.var.type = type;
+
+		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
+		memset(param, 0, sizeof(ast_func_param_decl_t));
+		param->decl = decl;		
 
 		if (current_is(tok_identifier))
 		{
-			tok_spelling_cpy(current(), param->data.var.name, MAX_LITERAL_NAME);
+			tok_spelling_cpy(current(), decl->data.var.name, MAX_LITERAL_NAME);
 			next_tok();
 		}
-		param->tokens.end = current();
-		if (last_param)
+		decl->tokens.end = current();
+
+		if (!func->first_param)
+		{
+			func->first_param = func->last_param = param;
+		}
+		else
+		{
+			param->prev = func->last_param;
+			func->last_param->next = param;
+			func->last_param = param;
+		}
+
+
+		/*if (last_param)
 			last_param->next = param;
 		else
 			func->params = param;
-		last_param = param;
+		last_param = param;*/
+
+		/*param->next = func->params;
+		func->params = param;*/
+
 		func->param_count++;
 
 		if (!current_is(tok_comma))
@@ -811,10 +832,10 @@ void parse_function_parameters(ast_function_decl_t* func)
 	}
 
 	// if single void param remove it
-	if (func->param_count == 1 && func->params->data.var.type->kind == type_void)
+	if (func->param_count == 1 && func->first_param->decl->data.var.type->kind == type_void)
 	{
-		free(func->params);
-		func->params = NULL;
+		free(func->first_param);
+		func->first_param = func->last_param = NULL;
 		func->param_count = 0;
 	}
 }

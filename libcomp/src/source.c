@@ -1,5 +1,6 @@
 #include "source.h"
 
+#include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -117,10 +118,26 @@ const char* src_file_pos_str(file_pos_t pos)
 	return _buff;
 }
 
+static bool _is_white_space(const char c)
+{
+	return c == ' ' ||
+		c == '\t' ||
+		c == '\n' ||
+		c == '\r';
+}
+
 char* src_extract(const char* start, const char* end)
 {
-	char* result = (char*)malloc(end - start + 1);
-	strncpy(result, start, end - start);
-	result[end - start] = '\0';
+	size_t len = end - start;
+	char* result = (char*)malloc(len + 1);
+	strncpy(result, start, len);
+	result[len] = '\0';
+
+	while (len > 0 && _is_white_space(result[len - 1]))
+	{
+		result[len - 1] = '\0';
+		len--;
+	}	
+
 	return result;
 }

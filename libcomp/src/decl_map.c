@@ -130,10 +130,10 @@ void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn)
 {
 	idm_enter_block(map);
 
-	ast_declaration_t* param = fn->params;
+	ast_func_param_decl_t* param = fn->first_param;
 	while (param)
 	{
-		idm_add_id(map, param);
+		idm_add_id(map, param->decl);
 		param = param->next;
 	}
 }

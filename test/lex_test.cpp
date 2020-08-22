@@ -47,7 +47,7 @@ public:
 	void ExpectIntLiteral(const token_t& t, T val)
 	{
 		EXPECT_EQ(t.kind, tok_num_literal);
-		EXPECT_EQ(t.data, (void*)val);
+		EXPECT_EQ(t.data, (uint32_t)val);
 	}
 
 	void ExpectStringLiteral(const token_t& t, const char* expected)
