@@ -243,7 +243,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			return ;
 		}
 
-		result->lval.type = var->data.decl->type;
+		result->lval.type = var->data.decl->type_ref->spec;
 
 		if (var->kind == var_global)
 		{
@@ -281,7 +281,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			_gen_asm("addl $%d, %%eax", member->offset);
 		else
 			result->lval.offset += member->offset;
-		result->lval.type = member->type;
+		result->lval.type = member->type_ref->spec;
 	}
 	else if (_is_binary_op(expr, op_ptr_member_access))
 	{
@@ -307,15 +307,12 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		assert(member);
 
 		_gen_asm("addl $%d, %%eax", member->offset);
-		if (member->type->kind == type_ptr)
+		if (member->type_ref->spec->kind == type_ptr)
 		{
 			_gen_asm("movl (%%eax), %%eax");
 			result->lval.kind = lval_address;
 		}
-
-
-		
-		result->lval.type = member->type;
+		result->lval.type = member->type_ref->spec;
 		
 	}
 	else if (_is_unary_op(expr, op_address_of))
@@ -591,11 +588,11 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	ast_func_param_decl_t* param_decl = decl->data.func.last_param;
 	uint32_t pushed = 0;
 
-	if (decl->data.func.return_type->size > 4)
+	if (decl->data.func.return_type_ref->spec->size > 4)
 	{
 		//allocate space for return value on the stack
 
-		_gen_asm("subl $%d, %%esp", decl->data.func.return_type->size);
+		_gen_asm("subl $%d, %%esp", decl->data.func.return_type_ref->spec->size);
 		_gen_asm("movl %%esp, %%ebx"); //store the return ptr
 	}
 
@@ -603,19 +600,19 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		gen_expression1(param);
 
-		if (param_decl->decl->data.var.type->size == 1)
+		if (param_decl->decl->data.var.type_ref->spec->size == 1)
 		{
-			_gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type));
+			_gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type_ref->spec));
 			_gen_asm("pushl %%edx");
 			pushed += 4;
 		}
-		else if (param_decl->decl->data.var.type->size == 2)
+		else if (param_decl->decl->data.var.type_ref->spec->size == 2)
 		{
-			_gen_asm("%s %%ax, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type));
+			_gen_asm("%s %%ax, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type_ref->spec));
 			_gen_asm("pushl %%edx");
 			pushed += 4;
 		}
-		else if (param_decl->decl->data.var.type->size == 4)
+		else if (param_decl->decl->data.var.type_ref->spec->size == 4)
 		{
 			_gen_asm("pushl %%eax");
 			pushed += 4;
@@ -624,22 +621,22 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		{
 			//address is in eax
 
-			uint32_t offset = param_decl->decl->data.var.type->size - 4;
-			size_t sz = param_decl->decl->data.var.type->size;
+			uint32_t offset = param_decl->decl->data.var.type_ref->spec->size - 4;
+			size_t sz = param_decl->decl->data.var.type_ref->spec->size;
 			while (sz > 0)
 			{
 				_gen_asm("pushl %d(%%eax)", offset);
 				offset -= 4;
 				sz -= 4;
 			}
-			pushed += param_decl->decl->data.var.type->size;
+			pushed += param_decl->decl->data.var.type_ref->spec->size;
 		}
 
 		param = param->next;
 		param_decl = param_decl->prev;
 	}
 
-	if (decl->data.func.return_type->size > 4)
+	if (decl->data.func.return_type_ref->spec->size > 4)
 	{
 		_gen_asm("push %%ebx");
 		result->lval.kind = lval_address;
@@ -650,7 +647,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("addl $%d, %%esp", pushed);
 	}
-	result->lval.type = decl->data.func.return_type;
+	result->lval.type = decl->data.func.return_type_ref->spec;
 	if(result->lval.type->kind == type_ptr)
 		result->lval.kind = lval_address;
 }
@@ -740,7 +737,7 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	{
 		expr_result result;
 		memset(&result, 0, sizeof(expr_result));
-		result.lval.type = var_decl->type;
+		result.lval.type = var_decl->type_ref->spec;
 		result.lval.kind = lval_stack;
 		result.lval.stack_offset = var->bsp_offset;
 		
@@ -749,7 +746,7 @@ void gen_var_decl(ast_var_decl_t* var_decl)
 	}
 	else
 	{
-		for (uint32_t i = 0; i < var_decl->type->size / 4; i++)
+		for (uint32_t i = 0; i < var_decl->type_ref->spec->size / 4; i++)
 		{
 			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}
@@ -839,7 +836,7 @@ void gen_switch_statement(ast_statement_t* smnt)
 
 void gen_return_statement(ast_statement_t* smnt)
 {
-	if (_cur_fun->return_type->size > 4)
+	if (_cur_fun->return_type_ref->spec->size > 4)
 	{
 		gen_expression1(smnt->data.expr);
 
@@ -851,7 +848,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		
 		//source address is in eax, dest in edx
 		uint32_t offset = 0;
-		while (offset < _cur_fun->return_type->size)
+		while (offset < _cur_fun->return_type_ref->spec->size)
 		{
 			if (offset)
 			{
@@ -872,7 +869,7 @@ void gen_return_statement(ast_statement_t* smnt)
 	}
 
 	//function epilogue
-	if (_cur_fun->return_type->size > 4)
+	if (_cur_fun->return_type_ref->spec->size > 4)
 	{
 		_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
  		_gen_asm("leave");
@@ -1125,7 +1122,7 @@ void gen_global_var(ast_var_decl_t* var)
 		_gen_asm(".bss"); //bss section
 		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".zero %d", var->type->size); //data length		
+		_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
 	}
 	_gen_asm(".text"); //back to text section
 	_gen_asm("\n");

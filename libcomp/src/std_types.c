@@ -1,15 +1,14 @@
 #include "std_types.h"
 
 /*built in types */
-/* {{token_range_t}, kind, size, flags, user_type_spec} */
-static ast_type_spec_t _void_type = { {NULL, NULL}, type_void,		0, NULL };
-static ast_type_spec_t _char_type = { {NULL, NULL}, type_int8,		1, NULL };
-static ast_type_spec_t _uchar_type = { {NULL, NULL}, type_uint8,	1, NULL };
-static ast_type_spec_t _short_type = { {NULL, NULL}, type_int16,	2, NULL };
-static ast_type_spec_t _ushort_type = { {NULL, NULL}, type_uint16,	2, NULL };
-static ast_type_spec_t _int_type = { {NULL, NULL}, type_int32,		4, NULL };
-static ast_type_spec_t _uint_type = { {NULL, NULL}, type_uint32,	4, NULL };
-
+/* {kind, size, flags, user_type_spec} */
+static ast_type_spec_t _void_type =		{ type_void,		0, NULL };
+static ast_type_spec_t _char_type =		{ type_int8,		1, NULL };
+static ast_type_spec_t _uchar_type =	{ type_uint8,		1, NULL };
+static ast_type_spec_t _short_type =	{ type_int16,		2, NULL };
+static ast_type_spec_t _ushort_type =	{ type_uint16,		2, NULL };
+static ast_type_spec_t _int_type =		{ type_int32,		4, NULL };
+static ast_type_spec_t _uint_type =		{ type_uint32,		4, NULL };
 
 ast_type_spec_t* void_type_spec = NULL;
 ast_type_spec_t* int8_type_spec = NULL;

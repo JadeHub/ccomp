@@ -167,47 +167,6 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl)
 	free(tl);
 }
 
-/*bool ast_visit_statement_helper(ast_statement_t* smnt, ast_visitor_cb_t* cb)
-{
-	switch (smnt->kind)
-	{
-	case smnt_return:
-		if (cb->on_return_smnt && !cb->on_return_smnt(smnt, cb))
-			return false;
-		break;
-	case smnt_expr:
-		if (cb->on_expr_smnt && !cb->on_expr_smnt(smnt, cb))
-			return false;
-		break;
-	case smnt_if:
-		if (cb->on_if_smnt && !cb->on_if_smnt(smnt, cb))
-			return false;
-		break;
-
-	};
-}*/
-
-
-/*bool ast_visit_statement_expressions(ast_statement_t* smnt, ast_expr_visitor_cb cb)
-{
-	switch (smnt->kind)
-	{
-	case smnt_expr:
-		return cb(smnt->data.expr);
-		break;
-	case smnt_do:
-	case smnt_while:
-		if (!cb(smnt->data.while_smnt.condition))
-			return false;
-		if (!cb(ast_visit_statement_expressions(smnt->data.while_smnt.statement, cb)))
-			return false;
-		break;
-	case smnt_for:
-
-	}
-	return true;
-}
-*/
 bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb cb)
 {
 	ast_block_item_t* block = blocks;
@@ -221,6 +180,11 @@ bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb c
 		block = next;
 	}
 	return true;
+}
+
+const char* ast_type_ref_name(ast_type_ref_t* ref)
+{ 
+	return ast_type_name(ref->spec); 
 }
 
 const char* ast_type_name(ast_type_spec_t* type)
@@ -285,7 +249,7 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member)
 {
 	if (member->bit_size > 0)
 		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
-	return member->type->size;
+	return member->type_ref->spec->size;
 }
 
 uint32_t ast_struct_size(ast_user_type_spec_t* spec)
@@ -310,7 +274,6 @@ ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
 {
 	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
 	memset(result, 0, sizeof(ast_type_spec_t));
-	result->tokens = ptr_type->tokens;
 	result->kind = type_ptr;
 	result->size = 4;
 	result->ptr_type = ptr_type;

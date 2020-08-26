@@ -244,7 +244,7 @@ TEST_F(LexTest, ErrCharConstantUnterminated2)
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
 }
-
+/*
 TEST_F(LexTest, StringConstant)
 {
 	std::string code = R"(int x = "abc";)";
@@ -277,3 +277,4 @@ TEST_F(LexTest, ErrStringConstantUnterminated2)
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
 }
+*/

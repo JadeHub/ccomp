@@ -25,6 +25,7 @@ typedef enum
 proc_decl_result process_function_decl(ast_declaration_t* decl);
 bool process_expression(ast_expression_t* expr);
 bool process_statement(ast_statement_t* smnt);
+static bool _resolve_type_ref(ast_type_ref_t* ref);
 
 static void _report_err(token_t* tok, int err, const char* format, ...)
 {
@@ -46,7 +47,7 @@ static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 	ast_struct_member_t* member = user_type_spec->struct_members;
 	while (member)
 	{
-		member->type = _resolve_type(member->type);
+		_resolve_type_ref(member->type_ref);
 		member = member->next;
 	}
 }
@@ -88,7 +89,7 @@ static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 	ast_struct_member_t* member = typeref->user_type_spec->struct_members;
 	while (member)
 	{
-		result += member->type->size;
+		result += member->type_ref->spec->size;
 		member = member->next;
 	}
 	return result;
@@ -104,45 +105,28 @@ static void _add_user_type(ast_type_spec_t* typeref)
 	idm_add_tag(_id_map, typeref);
 }
 
+static bool _resolve_type_ref(ast_type_ref_t* ref)
+{
+	assert(ref->spec);
+	ast_type_spec_t* spec = _resolve_type(ref->spec);
+	if (spec)
+	{
+		ref->spec = spec;
+		return true;
+	}
+	return false;
+}
+
 static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 {
-	switch (typeref->kind)
+	if (typeref->kind == type_ptr)
 	{
-	case type_void:
-		if (typeref != void_type_spec)
-			ast_destroy_type_spec(typeref);
-		return void_type_spec;
-	case type_int8:
-		if (typeref != int8_type_spec)
-			ast_destroy_type_spec(typeref);
-		return int8_type_spec;
-	case type_uint8:
-		if (typeref != uint8_type_spec)
-			ast_destroy_type_spec(typeref);
-		return uint8_type_spec;
-	case type_int16:
-		if (typeref != int16_type_spec)
-			ast_destroy_type_spec(typeref);
-		return int16_type_spec;
-	case type_uint16:
-		if (typeref != uint16_type_spec)
-			ast_destroy_type_spec(typeref);
-		return uint16_type_spec;
-	case type_int32:
-		if (typeref != int32_type_spec)
-			ast_destroy_type_spec(typeref);
-		return int32_type_spec;
-	case type_uint32:
-		if (typeref != uint32_type_spec)
-			ast_destroy_type_spec(typeref);
-		return uint32_type_spec;
-	case type_ptr:
 		typeref->ptr_type = _resolve_type(typeref->ptr_type);
 		return typeref;
-		break;
-	case type_user:
-		break;
 	}
+
+	if (typeref->kind != type_user)
+		return typeref;
 
 	/*
 	structs, unions & enums
@@ -157,6 +141,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		If found: return
 		If not found: Add to id_map
 	*/
+	token_t* loc = typeref->user_type_spec->tokens.start;
 	if (_user_type_is_definition(typeref->user_type_spec))
 	{
 		ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->user_type_spec->name);
@@ -167,7 +152,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		{
 			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
 			{
-				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
 					user_type_kind_name(exist->user_type_spec->kind),
 					typeref->user_type_spec->name,
@@ -178,7 +163,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 			if (_user_type_is_definition(exist->user_type_spec))
 			{
 				//multiple definitions
-				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s'",
 					user_type_kind_name(typeref->user_type_spec->kind),
 					typeref->user_type_spec->name);
@@ -214,7 +199,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		{
 			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
 			{
-				_report_err(typeref->tokens.start, ERR_DUP_TYPE_DEF,
+				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
 					user_type_kind_name(exist->user_type_spec->kind),
 					typeref->user_type_spec->name,
@@ -272,16 +257,15 @@ bool process_variable_declaration(ast_declaration_t* decl)
 		return false;
 	}
 
-	ast_type_spec_t* type = _resolve_type(var->type);
-	if (!type || type->size == 0)
+	if(!_resolve_type_ref(var->type_ref) || var->type_ref->spec->size == 0)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
 			ast_declaration_name(decl));
 		return false;
 	}
-	var->type = type;
+
 	idm_add_id(_id_map, decl);
-	_cur_func->required_stack_size += var->type->size;
+	_cur_func->required_stack_size += var->type_ref->spec->size;
 
 	return process_expression(decl->data.var.expr);
 }
@@ -310,14 +294,15 @@ bool process_variable_reference(ast_expression_t* expr)
 	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
 	if (decl)
 	{
-		ast_type_spec_t* type = _resolve_type(decl->data.var.type);
-		if (!type || type->size == 0)
+		//ast_type_spec_t* type = _resolve_type(decl->data.var.type);
+		//if (!type || type->size == 0)
+		if(decl->data.var.type_ref->spec->size == 0)
 		{
 			_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
 				ast_declaration_name(decl));
 			return false;
 		}
-		decl->data.var.type = type;
+		//decl->data.var.type = type;
 		return true;
 	}
 
@@ -367,8 +352,11 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			// a.b (lhs.rhs)
 			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
 			assert(user_type_spec);
-			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
-			return _resolve_type(member_spec);
+			ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
+			assert(member);
+//			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
+			//return _resolve_type(member_spec);
+			return member->type_ref->spec;
 		}
 
 		if (expr->data.binary_op.operation == op_ptr_member_access)
@@ -376,8 +364,9 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			// a->b (lhs.rhs)
 			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
 			assert(user_type_spec);
-			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->ptr_type->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
-			return _resolve_type(member_spec);
+			ast_struct_member_t* member = ast_find_struct_member(user_type_spec->ptr_type->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
+			assert(member);
+			return member->type_ref->spec;
 		}
 		
 		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
@@ -408,7 +397,7 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	{
 		ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
 		if (decl)
-			return _resolve_type(decl->data.var.type);
+			return decl->data.var.type_ref->spec;
 		return NULL;
 	}
 	
@@ -423,7 +412,7 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	{
 		ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_func);
 		if (decl)
-			return _resolve_type(decl->data.func.return_type);
+			return decl->data.func.return_type_ref->spec;
 		return NULL;
 	}
 	case expr_sizeof:
@@ -473,12 +462,12 @@ bool process_func_call(ast_expression_t* expr)
 		if (!process_expression(call_param))
 			return false;
 
-		if (!_can_convert_type(func_param->decl->data.var.type, _resolve_expr_type(call_param)))
+		if (!_can_convert_type(func_param->decl->data.var.type_ref->spec, _resolve_expr_type(call_param)))
 		{
 			_report_err(expr->tokens.start,
 				ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type));
+				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type_ref->spec));
 			return false;
 		}
 
@@ -765,14 +754,14 @@ bool process_return_statement(ast_statement_t* smnt)
 
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!_can_convert_type(_cur_func->return_type, _resolve_expr_type(smnt->data.expr)))
+		if (!_can_convert_type(_cur_func->return_type_ref->spec, _resolve_expr_type(smnt->data.expr)))
 		{
 			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
 			return false;
 		}
 	}
-	else if (_cur_func->return_type->kind != type_void)
+	else if (_cur_func->return_type_ref->spec->kind != type_void)
 	{
 		_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 			"function must return a value");
@@ -847,12 +836,11 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	ast_function_decl_t* func = &decl->data.func;
 
 	//return type
-	ast_type_spec_t* ret_type = _resolve_type(func->return_type);
-	if (!ret_type)
+	if (!_resolve_type_ref(func->return_type_ref))
 		return false;
 	
-	func->return_type = ret_type;
-	
+	ast_type_spec_t* ret_type = func->return_type_ref->spec;
+
 	if (_is_fn_definition(decl) && 
 		ret_type->kind != type_void && 
 		ret_type->size == 0)
@@ -867,7 +855,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	ast_func_param_decl_t* param = func->first_param;
 	while (param)
 	{
-		if (param->decl->data.var.type->kind == type_void)
+		if (param->decl->data.var.type_ref->spec->kind == type_void)
 		{
 			_report_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
 				"function param '%s' of void type",
@@ -875,11 +863,11 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			return false;
 		}
 
-		ast_type_spec_t* param_type = _resolve_type(param->decl->data.var.type);
-		if (!param_type)
+		if (!_resolve_type_ref(param->decl->data.var.type_ref))
 			return false;
-		param->decl->data.var.type = param_type;
 
+		ast_type_spec_t* param_type = param->decl->data.var.type_ref->spec;
+		
 		if (_is_fn_definition(decl) && 
 			param_type->kind != type_void &&
 			param_type->size == 0)
@@ -897,12 +885,12 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
 {
-	if (exist->data.func.return_type != _resolve_type(func->data.func.return_type))
+	if (exist->data.func.return_type_ref->spec != func->data.func.return_type_ref->spec)
 	{
 		_report_err(func->tokens.start,
 			ERR_INVALID_PARAMS,
 			"differing return type in declaration of function '%s'. Expected '%s'",
-			ast_declaration_name(func), ast_type_name(exist->data.func.return_type));
+			ast_declaration_name(func), ast_type_ref_name(exist->data.func.return_type_ref));
 		return false;
 	}
 
@@ -921,12 +909,12 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 	int p_count = 1;
 	while (p_exist && p_func)
 	{
-		if (p_exist->decl->data.var.type != _resolve_type(p_func->decl->data.var.type))
+		if (p_exist->decl->data.var.type_ref->spec != _resolve_type(p_func->decl->data.var.type_ref->spec))
 		{
 			_report_err(func->tokens.start,
 				ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(func), ast_type_name(p_exist->decl->data.var.type));
+				p_count, ast_declaration_name(func), ast_type_ref_name(p_exist->decl->data.var.type_ref));
 			return false;
 		}
 
@@ -951,6 +939,9 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 		return proc_decl_error;
 	}
 
+	if (!resolve_function_decl_types(decl))
+		return proc_decl_error;
+
 	ast_declaration_t* exist = idm_find_decl(_id_map, name, decl_func);
 	if (exist)
 	{
@@ -961,23 +952,19 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 				"redefinition of function '%s'", name);
 			return proc_decl_error;
 		}
-
+		
 		if (!_compare_func_decls(exist, decl))
 			return proc_decl_error;
 
 		if (!_is_fn_definition(exist) && _is_fn_definition(decl))
 		{
 			//update definition
-			if (!resolve_function_decl_types(decl))
-				return proc_decl_error;
-
+			//exist->data.func
 			idm_update_decl(_id_map, decl);
 		}
 	}
 	else
 	{
-		if (!resolve_function_decl_types(decl))
-			return proc_decl_error;
 		idm_add_id(_id_map, decl);
 	}
 
@@ -1002,11 +989,20 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		return proc_decl_error;
 	}
 
+	if (!_resolve_type_ref(decl->data.var.type_ref))
+	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"global var '%s' uses incomplete type '%s'",
+			name, ast_type_ref_name(decl->data.var.type_ref));
+		return proc_decl_error;
+	}
+
+	ast_type_spec_t* type = decl->data.var.type_ref->spec;
 	ast_declaration_t* exist = idm_find_decl(_id_map, name, decl_var);
 	if (exist)
-	{
+	{		
 		//multiple declarations are allowed
-		if (exist->data.var.type != _resolve_type(decl->data.var.type))
+		if (!type || exist->data.var.type_ref->spec != type)
 		{
 			//different types
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
@@ -1033,21 +1029,6 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		return proc_decl_ignore;
 	}
 
-	ast_type_spec_t* type = _resolve_type(decl->data.var.type);
-	if (!type)
-	{
-		return proc_decl_error;
-	}
-
-	if (type->size == 0)
-	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"global var '%s' uses incomplete type '%s'",
-			name, type->user_type_spec->name);
-		return proc_decl_error;
-	}
-
-	decl->data.var.type = type;
 	idm_add_id(_id_map, decl);
 	return proc_decl_new_def;
 }

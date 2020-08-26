@@ -66,7 +66,7 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
 
-		if (fn->return_type->size > 4)
+		if (fn->return_type_ref->spec->size > 4)
 			offset += 4; //add 4 bytes for the return value pointer
 
 		while (param)
@@ -77,7 +77,7 @@ void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
 			var->next = vars->vars;
 			vars->vars = var;
 
-			offset += param->decl->data.var.type->size < 4 ? 4 : param->decl->data.var.type->size;
+			offset += param->decl->data.var.type_ref->spec->size < 4 ? 4 : param->decl->data.var.type_ref->spec->size;
 			param = param->next;
 		}
 	}
@@ -144,12 +144,12 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 	}
 	
 	//vars->bsp_offset -= var_decl->type->size;
-	var = _make_stack_var(vars->bsp_offset - var_decl->type->size, var_decl->name);
+	var = _make_stack_var(vars->bsp_offset - var_decl->type_ref->spec->size, var_decl->name);
 	var->kind = var_stack;
 	var->data.decl = var_decl;
 
-	int t = (var_decl->type->size + 0x01) & ~0x01;
-	vars->bsp_offset -= (var_decl->type->size + 0x01) & ~0x01;
+	int t = (var_decl->type_ref->spec->size + 0x01) & ~0x01;
+	vars->bsp_offset -= (var_decl->type_ref->spec->size + 0x01) & ~0x01;
 	
 	/*if (var_decl->type->size < 4)
 	{

@@ -280,6 +280,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         NMHDR* nmhdr = (NMHDR*)lParam;
 
+        static bool selecting;
+
+        if (selecting)
+            break;
+        selecting = true;
+
         if(nmhdr->code == TVN_SELCHANGED && nmhdr->hwndFrom == hWndTree)
         {
             NMTREEVIEW* info;
@@ -291,21 +297,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             SELCHANGE* info = (SELCHANGE*)nmhdr;
 
-            static bool selecting;
-
-            if (selecting)
-                return 0;
-
-            selecting = true;
-
             token_t* tok = SrcFindTokenContaining(theSourceFile, info->chrg.cpMin);
             if (tok)
             {
                 AstTree_SelectToken(tok);
             }
-
-            selecting = false;
         }
+        selecting = false;
         break;
     }
     default:

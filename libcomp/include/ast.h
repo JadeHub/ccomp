@@ -190,7 +190,7 @@ typedef enum
 typedef struct ast_struct_member
 {
 	token_range_t tokens;
-	struct ast_type_spec* type;
+	struct ast_type_ref* type_ref;
 	char name[MAX_LITERAL_NAME]; //name is optional
 	uint32_t bit_size; //eg, the 1 in 'int p : 1'
 
@@ -225,6 +225,7 @@ static inline const char* user_type_kind_name(user_type_kind k)
 
 typedef struct ast_user_type_spec
 {
+	token_range_t tokens;
 	char name[MAX_LITERAL_NAME]; //name is optional
 	user_type_kind kind;
 
@@ -237,7 +238,6 @@ typedef struct ast_user_type_spec
 
 typedef struct ast_type_spec
 {
-	token_range_t tokens;
 	type_kind kind;
 	uint32_t size;
 
@@ -248,11 +248,17 @@ typedef struct ast_type_spec
 	};
 }ast_type_spec_t;
 
+typedef struct ast_type_ref
+{
+	token_range_t tokens;
+	ast_type_spec_t* spec;
+}ast_type_ref_t;
+
 /* Declaration */
 
 typedef struct ast_var_decl
 {
-	ast_type_spec_t* type;
+	ast_type_ref_t* type_ref;
 	char name[MAX_LITERAL_NAME];
 	ast_expression_t* expr;
 }ast_var_decl_t;
@@ -268,12 +274,11 @@ typedef struct ast_func_decl
 {
 	char name[MAX_LITERAL_NAME];
 
-	//struct ast_declaration* params;
-
 	ast_func_param_decl_t* first_param;
 	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
-	ast_type_spec_t* return_type;
+	
+	ast_type_ref_t* return_type_ref;
 
 	uint32_t required_stack_size;
 
@@ -426,6 +431,7 @@ void ast_print(ast_trans_unit_t* tl);
 const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
 const char* ast_type_name(ast_type_spec_t* type);
+const char* ast_type_ref_name(ast_type_ref_t* ref);
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
 uint32_t ast_struct_size(ast_user_type_spec_t*);
 uint32_t ast_struct_member_size(ast_struct_member_t* member);
