@@ -65,6 +65,7 @@ typedef enum
     tok_switch,
     tok_case,
     tok_default,
+    tok_goto,
 
     //type specifiers
     tok_char,

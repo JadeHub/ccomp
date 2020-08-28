@@ -1,7 +1,7 @@
 #include "validate.h"
 #include "diag.h"
 #include "var_set.h"
-#include "decl_map.h"
+#include "id_map.h"
 #include "nps.h"
 
 #include "std_types.h"
@@ -475,7 +475,7 @@ bool process_func_call(ast_expression_t* expr)
 		func_param = func_param->prev;
 		p_count++;
 	}
-
+	expr->data.func_call.func_decl = decl;
 	return true;
 }
 
@@ -701,6 +701,21 @@ bool process_for_statement(ast_statement_t* smnt)
 	return true;
 }
 
+bool process_label_statement(ast_statement_t* smnt)
+{
+	if (idm_label_declared(_id_map, smnt->data.label_smnt.label))
+	{
+		_report_err(smnt->tokens.start, ERR_DUP_LABEL,
+			"dupliate label '%s' in function '%s'",
+			smnt->data.label_smnt.label, _cur_func->name);
+		return false;
+	}
+
+	idm_add_label(_id_map, smnt->data.label_smnt.label);
+
+	return process_statement(smnt->data.label_smnt.smnt);
+}
+
 bool process_switch_statement(ast_statement_t * smnt)
 {
 	if (!smnt->data.switch_smnt.default_case && !smnt->data.switch_smnt.cases)
@@ -812,6 +827,11 @@ bool process_statement(ast_statement_t* smnt)
 		return process_return_statement(smnt);
 	case smnt_switch:
 		return process_switch_statement(smnt);
+	case smnt_label:
+		return process_label_statement(smnt);
+		
+	case smnt_goto:
+		break;
 	}
 
 	return true;

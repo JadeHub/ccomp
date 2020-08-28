@@ -579,7 +579,7 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 {
-	ast_declaration_t* decl = _find_func_decl(expr->data.func_call.name);
+	ast_declaration_t* decl = expr->data.func_call.func_decl;// _find_func_decl(expr->data.func_call.name);
 	assert(decl);
 	if (!decl)
 		return;
@@ -1044,7 +1044,15 @@ void gen_statement(ast_statement_t* smnt)
 			diag_err(smnt->tokens.start, ERR_SYNTAX, "Invalid continue");
 		_gen_asm("jmp %s", _cur_cont_label);
 	}
-	//if, break, continue,  etc
+	else if (smnt->kind == smnt_label)
+	{
+		_gen_asm("%s:", smnt->data.label_smnt.label);
+		gen_statement(smnt->data.label_smnt.smnt);
+	}
+	else if (smnt->kind == smnt_goto)
+	{
+		_gen_asm("jmp %s", smnt->data.goto_smnt.label);
+	}
 
 	_cur_break_label = cur_break;
 	_cur_cont_label = cur_cont;

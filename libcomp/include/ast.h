@@ -117,6 +117,8 @@ typedef struct
 	struct ast_expression* target; //todo - unused
 	struct ast_expression* params;
 	uint32_t param_count;
+
+	struct ast_declaration* func_decl; //set during validation
 }ast_expr_func_call_t;
 
 typedef struct
@@ -332,7 +334,9 @@ typedef enum
 	smnt_do,
 	smnt_break,
 	smnt_continue,
-	smnt_switch
+	smnt_switch,
+	smnt_label,
+	smnt_goto
 }statement_kind;
 
 typedef struct
@@ -382,6 +386,17 @@ typedef struct
 	uint32_t case_count;
 }ast_switch_smnt_data_t;
 
+typedef struct
+{
+	char label[MAX_LITERAL_NAME];
+	struct ast_statement* smnt;
+}ast_label_smnt_data_t;
+
+typedef struct
+{
+	char label[MAX_LITERAL_NAME];
+}ast_goto_smnt_data_t;
+
 typedef struct ast_statement
 {
 	token_range_t tokens;
@@ -395,6 +410,8 @@ typedef struct ast_statement
 		ast_while_smnt_data_t while_smnt;
 		ast_for_smnt_data_t for_smnt;
 		ast_switch_smnt_data_t switch_smnt;
+		ast_label_smnt_data_t label_smnt;
+		ast_goto_smnt_data_t goto_smnt;
 	}data;
 }ast_statement_t;
 
@@ -442,11 +459,3 @@ void ast_destroy_statement(ast_statement_t*);
 void ast_destroy_expression(ast_expression_t*);
 void ast_destroy_declaration(ast_declaration_t*);
 void ast_destroy_type_spec(ast_type_spec_t*);
-
-
-
-typedef bool (*ast_fn_decl_visitor_cb)(ast_function_decl_t*);
-typedef bool (*ast_block_item_visitor_cb)(ast_block_item_t*);
-typedef bool (*ast_expr_visitor_cb)(ast_expression_t*);
-
-bool ast_visit_block_items(ast_block_item_t*, ast_block_item_visitor_cb cb);

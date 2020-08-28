@@ -110,6 +110,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "case";
 	case tok_default:
 		return "default";
+	case tok_goto:
+		return "goto";
 	case tok_comma:
 		return ",";
 	case tok_void:

@@ -25,6 +25,7 @@ extern "C"
 #define ERR_UNKNOWN_MEMBER_REF 14
 #define ERR_UNSUPPORTED 15
 #define ERR_INVALID_SWITCH 16 //switch statmement is not valid
+#define ERR_DUP_LABEL 17
 
 struct token;
 

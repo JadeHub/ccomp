@@ -1,4 +1,4 @@
-#include "decl_map.h"
+#include "id_map.h"
 
 #include <assert.h>
 #include <string.h>
@@ -13,9 +13,18 @@ identfier_map_t* idm_create()
 }
 
 void idm_destroy(identfier_map_t* map)
-{
-	
+{	
 	free(map);
+}
+
+void idm_add_label(identfier_map_t* map, const char* label)
+{
+	label_t* l = (label_t*)malloc(sizeof(label_t));
+	memset(l, 0, sizeof(label_t));
+
+	l->label = label;
+	l->next = map->labels;
+	map->labels = l;
 }
 
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* type)
@@ -126,6 +135,19 @@ ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, a
 	return NULL;
 }
 
+bool idm_label_declared(identfier_map_t* map, const char* name)
+{
+	label_t* l = map->labels;
+
+	while (l)
+	{
+		if (strcmp(name, l->label) == 0)
+			return true;
+		l = l->next;
+	}
+	return false;
+}
+
 void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn)
 {
 	idm_enter_block(map);
@@ -141,6 +163,15 @@ void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn)
 void idm_leave_function(identfier_map_t* map)
 {
 	idm_leave_block(map);
+
+	label_t* l = map->labels;
+	while (l)
+	{
+		label_t* next = l->next;
+		free(l);
+		l = next;
+	}
+	map->labels = NULL;
 }
 
 void idm_enter_block(identfier_map_t* map)

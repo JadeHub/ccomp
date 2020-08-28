@@ -167,21 +167,6 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl)
 	free(tl);
 }
 
-bool ast_visit_block_items(ast_block_item_t* blocks, ast_block_item_visitor_cb cb)
-{
-	ast_block_item_t* block = blocks;
-	ast_block_item_t* next;
-
-	while (block)
-	{
-		next = block->next;
-		if (!cb(block))
-			return false;
-		block = next;
-	}
-	return true;
-}
-
 const char* ast_type_ref_name(ast_type_ref_t* ref)
 { 
 	return ast_type_name(ref->spec); 

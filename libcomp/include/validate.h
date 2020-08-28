@@ -1,8 +1,6 @@
 #pragma once
 
 #include "ast.h"
-#include "decl_map.h"
-#include "nps.h"
 
 typedef struct
 {

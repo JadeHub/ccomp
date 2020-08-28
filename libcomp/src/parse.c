@@ -31,7 +31,9 @@
 			  | "continue" ";"
 			  | <switch-smnt>
 			  | <var_declaration> ";"
+			  | <label_smnt>
 
+<label_smnt> ::= { <id> ":" } <statement>
 <switch-smnt> ::= "switch" "(" <exp> ")" <switch_case> | { "{" <switch_case> "}" }
 <switch_case> ::= "case" <constant-exp> ":" <statement> | "default" ":" <statement>
 <exp> ::= <assignment-exp>
@@ -1343,14 +1345,17 @@ Note: the following is used to parse the 'step' expression in a for loop
 */
 ast_expression_t* parse_optional_expression(tok_kind term_tok)
 {
+
 	ast_expression_t* result = NULL;
+
+	
 	if (current_is(term_tok))
 	{
 		result = _alloc_expr();
 		result->kind = expr_null;
 		return result;
 	}
-	result = parse_expression();
+j:	result = parse_expression();
 	if (_parse_err)
 	{
 		ast_destroy_expression(result);
@@ -1399,7 +1404,8 @@ ast_switch_case_data_t* parse_switch_case()
 			  | "do" <statement> "while" <exp> ";"
 			  | "break" ";"
 			  | "continue" ";"
-			  | <switch-smnt>
+			  | <switch_smnt>
+			  | <label_smnt>
 */
 ast_statement_t* parse_statement()
 {
@@ -1578,6 +1584,23 @@ ast_statement_t* parse_statement()
 		{
 			parse_switch_case(&result->data.switch_smnt);
 		}
+	}
+	else if (current_is(tok_identifier) && next_is(tok_colon))
+	{		
+		//statement ::= <label_smnt>
+		result->kind = smnt_label;
+		tok_spelling_cpy(current(), result->data.label_smnt.label, MAX_LITERAL_NAME);
+		next_tok(); //identifier
+		next_tok(); //colon
+		result->data.label_smnt.smnt = parse_statement();
+	}
+	else if (current_is(tok_goto))
+	{
+		next_tok();
+		expect_cur(tok_identifier);
+		result->kind = smnt_goto;
+		tok_spelling_cpy(current(), result->data.goto_smnt.label, MAX_LITERAL_NAME);
+		next_tok();
 	}
 	else
 	{

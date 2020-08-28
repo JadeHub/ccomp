@@ -389,6 +389,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_case;
 	else if (tok_spelling_cmp(result, "default"))
 		result->kind = tok_default;
+	else if (tok_spelling_cmp(result, "goto"))
+		result->kind = tok_goto;
 }
 
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
