@@ -12,7 +12,7 @@ extern "C"
 #include <libcomp/include/diag.h>
 #include <libcomp/include/lexer.h>
 #include <libcomp/include/parse.h>
-#include <libcomp/include/validate.h>
+#include <libcomp/include/sema.h>
 }
 
 using namespace ::testing;
@@ -84,7 +84,7 @@ public:
 	{
 		if (ast)
 		{
-			tl = tl_validate(ast);			
+			tl = sem_analyse(ast);
 		}
 	}
 

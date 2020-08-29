@@ -1,10 +1,12 @@
-#include "validate.h"
+#include "sema.h"
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
 #include "nps.h"
 
 #include "std_types.h"
+
+#include <libj/include/hash_table.h>
 
 #include <stdio.h>
 #include <assert.h>
@@ -13,7 +15,19 @@
 #include <stdlib.h>
 
 static identfier_map_t* _id_map;
-static ast_function_decl_t* _cur_func = NULL;
+
+typedef struct
+{
+	ast_function_decl_t* decl;
+
+	//set goto statements found in the function
+	hash_table_t* goto_smnts;
+
+	//set of strings used as labels
+	hash_table_t* labels;
+}func_context_t;
+
+static func_context_t _cur_func_ctx;
 
 typedef enum
 {
@@ -170,7 +184,6 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 				return NULL;
 			}
 			//update the existing declaration
-			exist->size = _calc_user_type_size(typeref);
 			if (typeref->user_type_spec->kind == user_type_enum)
 			{
 				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
@@ -184,6 +197,8 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 				typeref->user_type_spec->struct_members = NULL;
 				_resolve_struct_member_types(exist->user_type_spec);
 			}
+			exist->size = _calc_user_type_size(exist);
+			ast_destroy_type_spec(typeref);
 			return exist;
 		}
 		else
@@ -206,6 +221,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 					user_type_kind_name(typeref->user_type_spec->kind));
 				return NULL;
 			}
+			ast_destroy_type_spec(typeref);
 			return exist;
 		}
 
@@ -265,7 +281,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	}
 
 	idm_add_id(_id_map, decl);
-	_cur_func->required_stack_size += var->type_ref->spec->size;
+	_cur_func_ctx.decl->required_stack_size += var->type_ref->spec->size;
 
 	return process_expression(decl->data.var.expr);
 }
@@ -281,7 +297,7 @@ bool process_declaration(ast_declaration_t* decl)
 	case decl_func:
 		return process_function_decl(decl) != proc_decl_error;
 	case decl_type:
-		return _resolve_type(&decl->data.type);		
+		return _resolve_type(decl->data.type);		
 	}
 	return true;
 }
@@ -294,8 +310,6 @@ bool process_variable_reference(ast_expression_t* expr)
 	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
 	if (decl)
 	{
-		//ast_type_spec_t* type = _resolve_type(decl->data.var.type);
-		//if (!type || type->size == 0)
 		if(decl->data.var.type_ref->spec->size == 0)
 		{
 			_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
@@ -701,17 +715,22 @@ bool process_for_statement(ast_statement_t* smnt)
 	return true;
 }
 
+bool process_goto_statement(ast_statement_t* smnt)
+{
+	phs_insert(_cur_func_ctx.goto_smnts, smnt);
+	return true;
+}
+
 bool process_label_statement(ast_statement_t* smnt)
 {
-	if (idm_label_declared(_id_map, smnt->data.label_smnt.label))
+	if(sht_contains(_cur_func_ctx.labels, smnt->data.label_smnt.label))
 	{
 		_report_err(smnt->tokens.start, ERR_DUP_LABEL,
 			"dupliate label '%s' in function '%s'",
-			smnt->data.label_smnt.label, _cur_func->name);
+			smnt->data.label_smnt.label, _cur_func_ctx.decl->name);
 		return false;
 	}
-
-	idm_add_label(_id_map, smnt->data.label_smnt.label);
+	sht_insert(_cur_func_ctx.labels, smnt->data.label_smnt.label, 0);
 
 	return process_statement(smnt->data.label_smnt.smnt);
 }
@@ -762,21 +781,21 @@ bool process_switch_statement(ast_statement_t * smnt)
 
 bool process_return_statement(ast_statement_t* smnt)
 {
-	assert(_cur_func);
+	assert(_cur_func_ctx.decl);
 
 	if (!process_expression(smnt->data.expr))
 		return false;
 
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!_can_convert_type(_cur_func->return_type_ref->spec, _resolve_expr_type(smnt->data.expr)))
+		if (!_can_convert_type(_cur_func_ctx.decl->return_type_ref->spec, _resolve_expr_type(smnt->data.expr)))
 		{
 			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
 			return false;
 		}
 	}
-	else if (_cur_func->return_type_ref->spec->kind != type_void)
+	else if (_cur_func_ctx.decl->return_type_ref->spec->kind != type_void)
 	{
 		_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 			"function must return a value");
@@ -829,8 +848,8 @@ bool process_statement(ast_statement_t* smnt)
 		return process_switch_statement(smnt);
 	case smnt_label:
 		return process_label_statement(smnt);
-		
 	case smnt_goto:
+		return process_goto_statement(smnt);
 		break;
 	}
 
@@ -839,9 +858,37 @@ bool process_statement(ast_statement_t* smnt)
 
 bool process_function_definition(ast_function_decl_t* decl)
 {
-	_cur_func = decl;
+	//set up function data
+	idm_enter_function(_id_map, decl);
+	_cur_func_ctx.decl = decl;
+	_cur_func_ctx.labels = sht_create(64);
+	_cur_func_ctx.goto_smnts = phs_create(64);
+	
 	bool ret = process_block_list(decl->blocks);
-	_cur_func = NULL;
+
+	//check that any goto statements reference valid labels
+	phs_iterator_t it = phs_begin(_cur_func_ctx.goto_smnts);
+	while (!phs_end(_cur_func_ctx.goto_smnts, &it))
+	{
+		ast_statement_t* goto_smnt = (ast_statement_t*)it.val;
+
+		if (!sht_contains(_cur_func_ctx.labels, goto_smnt->data.goto_smnt.label))
+		{
+			_report_err(goto_smnt->tokens.start, ERR_UNKNOWN_LABEL,
+				"goto statement references unknown label '%s'",
+				goto_smnt->data.goto_smnt.label);
+
+		}
+		phs_next(_cur_func_ctx.goto_smnts, &it);
+	}
+
+	ht_destroy(_cur_func_ctx.goto_smnts);
+	_cur_func_ctx.goto_smnts = NULL;
+	ht_destroy(_cur_func_ctx.labels);
+	_cur_func_ctx.labels = NULL;
+	_cur_func_ctx.decl = NULL;
+
+	idm_leave_function(_id_map);
 	return ret;
 }
 
@@ -1010,10 +1057,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 	}
 
 	if (!_resolve_type_ref(decl->data.var.type_ref))
-	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"global var '%s' uses incomplete type '%s'",
-			name, ast_type_ref_name(decl->data.var.type_ref));
+	{		
 		return proc_decl_error;
 	}
 
@@ -1049,24 +1093,58 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		return proc_decl_ignore;
 	}
 
+	if (type->size == 0)
+	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"global var '%s' uses incomplete type '%s'",
+			name, ast_type_ref_name(decl->data.var.type_ref));
+	}
 	idm_add_id(_id_map, decl);
 	return proc_decl_new_def;
 }
 
-valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
+static void _add_fn_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
+{
+	tl_decl_t* tl_decl = (tl_decl_t*)malloc(sizeof(tl_decl_t));
+	memset(tl_decl, 0, sizeof(tl_decl_t));
+	tl_decl->decl = fn;
+	tl_decl->next = tl->fn_decls;
+	tl->fn_decls = tl_decl;
+}
+
+static void _add_var_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
+{
+	tl_decl_t* tl_decl = (tl_decl_t*)malloc(sizeof(tl_decl_t));
+	memset(tl_decl, 0, sizeof(tl_decl_t));
+	tl_decl->decl = fn;
+	tl_decl->next = tl->var_decls;
+	tl->var_decls = tl_decl;
+}
+
+static void _add_type_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
+{
+	tl_decl_t* tl_decl = (tl_decl_t*)malloc(sizeof(tl_decl_t));
+	memset(tl_decl, 0, sizeof(tl_decl_t));
+	tl_decl->decl = fn;
+	tl_decl->next = tl->type_decls;
+	tl->type_decls = tl_decl;
+}
+
+valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 {
 	types_init();
-
 	_id_map = idm_create();
 
-	ast_declaration_t* fns = NULL;
-	ast_declaration_t* vars = NULL;
-	ast_declaration_t* types = NULL;
-	
+	_cur_func_ctx.decl = NULL;
+	_cur_func_ctx.labels = NULL;
+
+	hash_table_t* types = phs_create(128);
+
+	valid_trans_unit_t* tl = (valid_trans_unit_t*)malloc(sizeof(valid_trans_unit_t));
+	memset(tl, 0, sizeof(valid_trans_unit_t));
+	tl->ast = ast;
+
 	ast_declaration_t* decl = ast->decls;
-
-	struct ptr_set* typePtrSet = ps_create();
-
 	while (decl)
 	{
 		ast_declaration_t* next = decl->next;
@@ -1078,8 +1156,7 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 				return NULL;
 			if (result == proc_decl_new_def)
 			{
-				decl->next = vars;
-				vars = decl;
+				_add_var_decl(tl, decl);
 			}
 		}
 		else if (decl->kind == decl_func)
@@ -1089,43 +1166,34 @@ valid_trans_unit_t* tl_validate(ast_trans_unit_t* ast)
 				return NULL;
 			if (result == proc_decl_new_def)
 			{
-				decl->next = fns;
-				fns = decl;
+				_add_fn_decl(tl, decl);
+
 				if (decl->data.func.blocks)
 				{
-					idm_enter_function(_id_map, &decl->data.func);
 					if (!process_function_definition(&decl->data.func))
 					{
 						return NULL;
 					}
-					idm_leave_function(_id_map);
+					
 				}
 			}
 		}
 		else if (decl->kind == decl_type)
 		{
-			ast_type_spec_t* type = _resolve_type(&decl->data.type);
+			ast_type_spec_t* type = _resolve_type(decl->data.type);
 
-			if (!ps_lookup(typePtrSet, type))
+			if (!ht_contains(types, type))
 			{
-				ps_insert(typePtrSet, type);
-				decl->next = types;
-				types = decl;
+				phs_insert(types, type);
+				_add_type_decl(tl, decl);
 			}
 		}
 		decl = next;
 	}
-
-	valid_trans_unit_t* result = (valid_trans_unit_t*)malloc(sizeof(valid_trans_unit_t));
-	memset(result, 0, sizeof(valid_trans_unit_t));
-	result->ast = ast;
-	result->functions = fns;
-	result->variables = vars;
-	result->types = types;
-	ps_destroy(typePtrSet);
+	ht_destroy(types);
 	idm_destroy(_id_map);
 	_id_map = NULL;	
-	return result;
+	return tl;
 }
 
 void tl_destroy(valid_trans_unit_t* tl)

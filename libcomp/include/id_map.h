@@ -22,17 +22,10 @@ typedef struct type
 	struct type* next;
 }type_t;
 
-typedef struct label
-{
-	const char* label;
-	struct label* next;
-}label_t;
-
 typedef struct {
 
 	identifier_t* identifiers;
 	type_t* tags;
-	label_t* labels;
 }identfier_map_t;
 
 identfier_map_t* idm_create();
@@ -40,12 +33,10 @@ void idm_destroy(identfier_map_t*);
 
 void idm_add_id(identfier_map_t* map, ast_declaration_t* decl);
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* typeref);
-void idm_add_label(identfier_map_t* map, const char* label);
 
 ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl);
 ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
 ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
-bool idm_label_declared(identfier_map_t* map, const char* name);
 
 ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name);

@@ -199,19 +199,6 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 	result->lval.type = uint32_type_spec;
 }
 
-ast_declaration_t* _find_func_decl(const char* name)
-{
-	ast_declaration_t* decl = _cur_tl->functions;
-
-	while (decl)
-	{
-		if (strcmp(name, decl->data.func.name) == 0)
-			return decl;
-		decl = decl->next;
-	}
-	return NULL;
-}
-
 static inline bool _is_binary_op(ast_expression_t* expr, op_kind op)
 {
 	return expr->kind == expr_binary_op && expr->data.binary_op.operation == op;
@@ -579,7 +566,7 @@ void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
 
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 {
-	ast_declaration_t* decl = expr->data.func_call.func_decl;// _find_func_decl(expr->data.func_call.name);
+	ast_declaration_t* decl = expr->data.func_call.func_decl;
 	assert(decl);
 	if (!decl)
 		return;
@@ -1143,7 +1130,27 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 	_cur_tl = tl;
 	_var_set = var_init_set();
 
-	ast_declaration_t* var = tl->variables;
+	tl_decl_t* var_decl = tl->var_decls;
+	while (var_decl)
+	{
+		var_decl_global_var(_var_set, &var_decl->decl->data.var);
+		gen_global_var(&var_decl->decl->data.var);
+		var_decl = var_decl->next;
+	}
+
+	tl_decl_t* fn_decl = tl->fn_decls;
+	while (fn_decl)
+	{
+		if (fn_decl->decl->data.func.blocks)
+		{
+			var_enter_function(_var_set, &fn_decl->decl->data.func);
+			gen_function(&fn_decl->decl->data.func);
+			var_leave_function(_var_set);
+		}
+		fn_decl = fn_decl->next;
+	}
+
+	/*ast_declaration_t* var = tl->variables;
 	while (var)
 	{
 		var_decl_global_var(_var_set, &var->data.var);
@@ -1162,7 +1169,7 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 		}
 
 		fn = fn->next;
-	}
+	}*/
 	var_destory_set(_var_set);
 	_cur_tl = NULL;
 	_var_set = NULL;

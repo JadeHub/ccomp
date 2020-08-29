@@ -7,7 +7,7 @@
 #include <libcomp/include/lexer.h>
 #include <libcomp/include/parse.h>
 #include <libcomp/include/code_gen.h>
-#include <libcomp/include/validate.h>
+#include <libcomp/include/sema.h>
 
 static const char* _src = "int main() { struct A {int b; int c; }a; a.c = 5; return a.c;}";
 
@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
 
   
     ast_trans_unit_t* ast = parse_translation_unit(toks);
-    valid_trans_unit_t* tl = tl_validate(ast);
+    valid_trans_unit_t* tl = sem_analyse(ast);
     if (!tl)
     {
         printf("Failed to validate\n");

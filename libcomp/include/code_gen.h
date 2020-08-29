@@ -1,7 +1,7 @@
 #pragma once
 
 #include "diag.h"
-#include "validate.h"
+#include "sema.h"
 
 typedef void (*write_asm_cb)(const char* line, void* data);
 

@@ -33,7 +33,7 @@ enable_testing()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDebug")
 
-
+add_subdirectory(libj)
 add_subdirectory(libcomp)
 add_subdirectory(compiler)
 add_subdirectory(test)

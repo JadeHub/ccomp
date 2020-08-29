@@ -14,7 +14,7 @@
 #include "lexer.h"
 #include "parse.h"
 #include "code_gen.h"
-#include "validate.h"
+#include "sema.h"
 
 
 #endif //PCH_H

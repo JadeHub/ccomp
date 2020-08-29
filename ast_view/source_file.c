@@ -108,7 +108,7 @@ SourceFile* LoadSourceFile(LPCTSTR path)
     sf->pTokens = lex_source(&sr);
     sf->pAst = parse_translation_unit(sf->pTokens);
     if (sf->pAst)
-        sf->pTransUnit = tl_validate(sf->pAst);
+        sf->pTransUnit = sem_analyse(sf->pAst);
 
     if (sf->pTransUnit)
     {

@@ -28,6 +28,31 @@ l1:	;
 	ExpectError(code, ERR_DUP_LABEL);
 }
 
+TEST_F(GotoValidationTest, err_unknown_label)
+{
+	std::string code = R"(
+	void foo()
+	{
+		goto unknown;
+	}
+	)";
+
+	ExpectError(code, ERR_UNKNOWN_LABEL);
+}
+
+TEST_F(GotoValidationTest, goto_before_label)
+{
+	std::string code = R"(
+	void foo()
+	{
+		goto l1;
+l1: ;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(GotoValidationTest, dup_label_different_fn)
 {
 	std::string code = R"(

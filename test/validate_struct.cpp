@@ -257,3 +257,13 @@ TEST_F(StructValidationTest, err_member_op_member_not_id)
 
 	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
+
+TEST_F(StructValidationTest, inline_decl)
+{
+	std::string code = R"(
+	struct A {int i;}; 
+	struct A j;
+	)";
+
+	ExpectNoError(code);
+}

@@ -892,7 +892,7 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 	{
 		//type-spec
 		result->kind = decl_type;
-		result->data.type = *type;
+		result->data.type = type;
 	}
 
 	if (found_semi)

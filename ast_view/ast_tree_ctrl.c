@@ -238,7 +238,7 @@ void InsertDeclaration(HTREEITEM parent, ast_declaration_t* decl, const char* pr
         InsertFunctionDeclaration(parent, decl, prefix);
         break;
     case decl_type:
-        InsertTypeSpec(parent, &decl->data.type, prefix);
+        InsertTypeSpec(parent, decl->data.type, prefix);
         break;
     }
 }
@@ -341,25 +341,25 @@ void InsertTranslationUnit(HTREEITEM parent, LPCTSTR file_name, valid_trans_unit
     sprintf_s(item->name, 128,"TranslationUnit: %s", file_name);
     HTREEITEM tree_item = TreeInsert(parent, item);
 
-    ast_declaration_t* decl = tl->types;
-    while (decl)
+    tl_decl_t* type_decl = tl->type_decls;
+    while (type_decl)
     {
-        InsertDeclaration(tree_item, decl, "");
-        decl = decl->next;
+        InsertDeclaration(tree_item, type_decl->decl, "");
+        type_decl = type_decl->next;
     }
 
-    decl = tl->variables;
-    while (decl)
+    tl_decl_t* var_decl = tl->var_decls;
+    while (var_decl)
     {
-        InsertDeclaration(tree_item, decl, "Global ");
-        decl = decl->next;
+        InsertDeclaration(tree_item, var_decl->decl, "Global ");
+        var_decl = var_decl->next;
     }
 
-    decl = tl->functions;
-    while (decl)
+    tl_decl_t* fn_decl = tl->fn_decls;
+    while (fn_decl)
     {
-        InsertDeclaration(tree_item, decl, "Global ");
-        decl = decl->next;
+        InsertDeclaration(tree_item, fn_decl->decl, "");
+        fn_decl = fn_decl->next;
     }
 }
 

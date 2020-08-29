@@ -313,7 +313,7 @@ typedef struct ast_declaration
 	{
 		ast_var_decl_t var;
 		ast_function_decl_t func;
-		ast_type_spec_t type;
+		ast_type_spec_t* type;
 		ast_const_decl_t const_val;
 	}data;
 

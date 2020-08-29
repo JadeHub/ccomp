@@ -5,6 +5,7 @@
 #include <string.h>
 
 void ast_destroy_statement(ast_statement_t* smnt);
+void ast_destroy_type_ref(ast_type_ref_t* type_ref);
 
 void ast_destroy_expression(ast_expression_t* expr)
 {
@@ -41,25 +42,63 @@ void ast_destroy_expression(ast_expression_t* expr)
 	free(expr);
 }
 
-void ast_destroy_type_spec(ast_type_spec_t* type)
+void ast_destroy_struct_member(ast_struct_member_t* member)
 {
-//	if (!type)
-		return;
+	ast_destroy_type_ref(member->type_ref);
+	free(member);
+}
 
-	/*if (type->kind == type_struct)
+void ast_destroy_enum_member(ast_enum_member_t* member)
+{
+	ast_destroy_expression(member->const_value);
+	free(member);
+}
+
+void ast_destroy_user_type(ast_user_type_spec_t* user_type)
+{
+	if (user_type->kind == user_type_enum)
 	{
-		ast_struct_member_t* member = type->user_type_spec->members;
-
+		ast_enum_member_t* member = user_type->enum_members;
+		while (member)
+		{
+			ast_enum_member_t* next = member->next;
+			ast_destroy_enum_member(member);
+			member = next;
+		}
+	}
+	else
+	{
+		ast_struct_member_t* member = user_type->struct_members;
 		while (member)
 		{
 			ast_struct_member_t* next = member->next;
-			ast_destroy_type_spec(member->type);
-			free(member);
+			ast_destroy_struct_member(member);
 			member = next;
 		}
-		free(type->user_type_spec);
+	}
+	free(user_type);
+}
+
+void ast_destroy_type_spec(ast_type_spec_t* type)
+{
+	/*if (!type) return;
+
+	if (type->kind == type_ptr)
+	{
+		ast_destroy_type_spec(type->ptr_type);
+		free(type);
+	}
+	else if (type->kind == type_user)
+	{
+		ast_destroy_user_type(type->user_type_spec);
 	}*/
-	free(type);
+}
+
+void ast_destroy_type_ref(ast_type_ref_t* type_ref)
+{
+	if (!type_ref) return;
+	//we dont destroy the type here, that happens when we destroy the declaration
+	free(type_ref);
 }
 
 void ast_destroy_declaration(ast_declaration_t* decl)
@@ -69,10 +108,16 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 	switch (decl->kind)
 	{
 	case decl_var:
+		ast_destroy_type_ref(decl->data.var.type_ref);
 		ast_destroy_expression(decl->data.var.expr);
 		break;
 	case decl_func:
 		//ast_destroy_expression(decl->data.func.params);
+		break;
+	case decl_type:
+		ast_destroy_type_spec(decl->data.type);
+		break;
+	case decl_const:
 		break;
 	}
 	free(decl);
@@ -163,7 +208,16 @@ void ast_destroy_function_decl(ast_function_decl_t* fn)
 void ast_destory_translation_unit(ast_trans_unit_t* tl)
 {
 	if (!tl) return;
-	//ast_destroy_function_decl(tl->functions);
+	
+	ast_declaration_t* decl = tl->decls;
+
+	while (decl)
+	{
+		ast_declaration_t* next = decl->next;
+		ast_destroy_declaration(decl);
+		decl = next;
+	}
+
 	free(tl);
 }
 
@@ -207,7 +261,7 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 	case decl_func:
 		return decl->data.func.name;
 	case decl_type:
-		return ast_type_name(&decl->data.type);
+		return ast_type_name(decl->data.type);
 	case decl_const:
 		return decl->data.const_val.name;
 	}
