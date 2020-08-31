@@ -53,7 +53,8 @@ typedef struct
 
 hash_table_t* sht_create(size_t sz);
 void sht_insert(hash_table_t* ht, const char* key, void* val);
-inline bool sht_contains(hash_table_t* ht, const char* key) { return ht_contains(ht, (void*)key); }
+bool sht_contains(hash_table_t* ht, const char* key);
+bool sht_remove(hash_table_t* ht, const char* key);
 sht_iterator_t sht_begin(hash_table_t* ht);
 bool sht_end(hash_table_t* ht, sht_iterator_t* it);
 bool sht_next(hash_table_t* ht, sht_iterator_t* it);

@@ -67,27 +67,21 @@ TEST_F(GlobalVarsValidationTest, struct_referenced)
 	ExpectNoError(code);
 }
 
-/*TEST_F(GlobalVarsValidationTest, invalid_init)
+TEST_F(GlobalVarsValidationTest, invalid_init)
 {
 	std::string code = R"(
 	int fooA = 4;
 	int foo = fooA;	)";
 
 	ExpectError(code, ERR_INVALID_INIT);
+}
 
-	parse(code);
-	validate();
-}*/
-
-/*TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
+TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
 {
 	std::string code = R"(
 	int foo = 5;	
 	int foo(int a);)";
 
 	ExpectError(code, ERR_DUP_SYMBOL);
-
-	parse(code);
-	validate();
-}*/
+}
 

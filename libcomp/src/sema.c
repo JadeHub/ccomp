@@ -2,7 +2,6 @@
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
-#include "nps.h"
 
 #include "std_types.h"
 
@@ -20,7 +19,7 @@ typedef struct
 {
 	ast_function_decl_t* decl;
 
-	//set goto statements found in the function
+	//set of goto statements found in the function
 	hash_table_t* goto_smnts;
 
 	//set of strings used as labels
@@ -421,6 +420,7 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 		//if (!process_expression(expr->data.condition.true_branch))
 		//	return false;
 		//return process_expression(expr->data.condition.false_branch);
+		return uint32_type_spec;
 		break;
 	case expr_func_call:
 	{

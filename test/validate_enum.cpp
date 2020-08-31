@@ -112,7 +112,7 @@ TEST_F(EnumValidationTest, var_assign)
 	ExpectNoError(code);
 }
 
-/*TEST_F(EnumValidationTest, var_assign_same_name)
+TEST_F(EnumValidationTest, var_assign_same_name)
 {
 	std::string code = R"(	
 	enum foo {foo1,	foo2};
@@ -124,5 +124,5 @@ TEST_F(EnumValidationTest, var_assign)
 	)";
 
 	ExpectNoError(code);
-}*/
+}
 

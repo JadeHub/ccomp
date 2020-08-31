@@ -22,13 +22,13 @@ TEST(StringHashTable, insert_iter)
 	sht_insert(ht, "Test40", (void*)4);
 	sht_insert(ht, "Test50", (void*)5);
 
-	EXPECT_TRUE(ht_contains(ht, "Test1"));
-	EXPECT_TRUE(ht_contains(ht, "Test2"));
-	EXPECT_TRUE(ht_contains(ht, "Test3"));
-	EXPECT_TRUE(ht_contains(ht, "Test4"));
-	EXPECT_TRUE(ht_contains(ht, "Test5"));
+	EXPECT_TRUE(sht_contains(ht, "Test1"));
+	EXPECT_TRUE(sht_contains(ht, "Test2"));
+	EXPECT_TRUE(sht_contains(ht, "Test3"));
+	EXPECT_TRUE(sht_contains(ht, "Test4"));
+	EXPECT_TRUE(sht_contains(ht, "Test5"));
 
-	EXPECT_FALSE(ht_contains(ht, "Test6"));
+	EXPECT_FALSE(sht_contains(ht, "Test6"));
 
 	sht_iterator_t it = sht_begin(ht);
 
@@ -51,7 +51,7 @@ TEST(StringHashTable, insert_remove)
 	sht_insert(ht, "Test1", (void*)1);
 	EXPECT_FALSE(ht_empty(ht));
 	EXPECT_EQ(1, ht_count(ht));
-	ht_remove(ht, "Test1");
+	sht_remove(ht, "Test1");
 	EXPECT_TRUE(ht_empty(ht));
 	EXPECT_EQ(0, ht_count(ht));
 	ht_destroy(ht);

@@ -85,7 +85,7 @@
 					| "float"					//todo
 					| "double"					//todo
 					| <user_type_specifier>
-					| <enum_specifier>			//todo
+					| <enum_specifier>
 <storage_class_specifier> ::= "typedef"		//todo
 							| "extern"			//todo
 							| "static"			//todo

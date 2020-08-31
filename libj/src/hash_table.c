@@ -231,6 +231,16 @@ void sht_insert(hash_table_t* ht, const char* key, void* val)
 	ht_insert(ht, keydup, val);
 }
 
+bool sht_contains(hash_table_t* ht, const char* key)
+{
+	return ht_contains(ht, (void*)key);
+}
+
+bool sht_remove(hash_table_t* ht, const char* key)
+{
+	return ht_remove(ht, (void*)key);
+}
+
 sht_iterator_t sht_begin(hash_table_t* ht)
 {
 	sht_iterator_t result;
