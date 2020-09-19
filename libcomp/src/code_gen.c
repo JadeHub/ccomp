@@ -1167,29 +1167,16 @@ void gen_global_var(ast_var_decl_t* var)
 {	
 	_gen_asm(".globl _var_%s", var->name); //export symbol
 
-	if (var->expr && var->expr->kind == expr_int_literal)
+	if (var->expr && var->expr->kind == expr_int_literal && var->expr->data.int_literal.value != 0)
 	{
-		if (var->expr->data.int_literal.value != 0)
-		{
-			//initialised var goes in .data section
-			_gen_asm(".data"); //data section
-			_gen_asm(".align 4");
-			_gen_asm("_var_%s:", var->name); //label
-			//todo?	
-			_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
-			_gen_asm(".text"); //back to text section
-			_gen_asm("\n");
-		}
-		else
-		{
-			//0 or uninitialised var goes in .BSS section
-			_gen_asm(".bss"); //bss section
-			_gen_asm(".align 4");
-			_gen_asm("_var_%s:", var->name); //label
-			_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
-			_gen_asm(".text"); //back to text section
-			_gen_asm("\n");
-		}
+		//initialised var goes in .data section
+		_gen_asm(".data"); //data section
+		_gen_asm(".align 4");
+		_gen_asm("_var_%s:", var->name); //label
+		//todo?	
+		_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
+		_gen_asm(".text"); //back to text section
+		_gen_asm("\n");
 	}
 	else if (var->expr && var->expr->kind == expr_str_literal)
 	{
@@ -1199,8 +1186,16 @@ void gen_global_var(ast_var_decl_t* var)
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
 	}
-	
-	
+	else
+	{
+		//0 or uninitialised var goes in .BSS section
+		_gen_asm(".bss"); //bss section
+		_gen_asm(".align 4");
+		_gen_asm("_var_%s:", var->name); //label
+		_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
+		_gen_asm(".text"); //back to text section
+		_gen_asm("\n");
+	}	
 }
 
 void gen_string_literal(const char* value, const char* label)
@@ -1224,12 +1219,12 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 		var_decl = var_decl->next;
 	}
 
-	sht_iterator_t it = sht_begin(tl->string_literals);
+	/*sht_iterator_t it = sht_begin(tl->string_literals);
 	while (!sht_end(tl->string_literals, &it))
 	{
 		gen_string_literal(it.key, ((string_literal_t*)it.val)->label);
 		sht_next(tl->string_literals, &it);
-	}
+	}*/
 	
 	tl_decl_t* fn_decl = tl->fn_decls;
 	while (fn_decl)
