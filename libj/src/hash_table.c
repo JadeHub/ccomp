@@ -1,8 +1,9 @@
 #include "hash_table.h"
 
+#include <stdio.h>
 #include <string.h>
 
-hash_table_t* ht_create(size_t sz, ht_hash_fn hash, ht_key_comp_fn key_comp, ht_destroy_item_fn destroy_item)
+hash_table_t* ht_create(uint32_t sz, ht_hash_fn hash, ht_key_comp_fn key_comp, ht_destroy_item_fn destroy_item)
 {
 	hash_table_t* ht = (hash_table_t*)malloc(sizeof(hash_table_t));
 	memset(ht, 0, sizeof(hash_table_t));
@@ -18,7 +19,7 @@ hash_table_t* ht_create(size_t sz, ht_hash_fn hash, ht_key_comp_fn key_comp, ht_
 
 void ht_destroy(hash_table_t* ht)
 {
-	for (size_t i = 0;i < ht->sz; i++)
+	for (uint32_t i = 0;i < ht->sz; i++)
 	{
 		ht_node_t* node = ht->table[i];
 
@@ -37,7 +38,7 @@ void ht_destroy(hash_table_t* ht)
 
 void ht_insert(hash_table_t* ht, void* key, void* val)
 {
-	size_t h = ht->hash(key) % ht->sz;
+	uint32_t h = ht->hash(key) % ht->sz;
 
 	ht_node_t* node = (ht_node_t*)malloc(sizeof(ht_node_t));
 	node->key = key;
@@ -56,7 +57,7 @@ void ht_insert(hash_table_t* ht, void* key, void* val)
 
 bool ht_contains(hash_table_t* ht, void* key)
 {
-	size_t h = ht->hash(key) % ht->sz;
+	uint32_t h = ht->hash(key) % ht->sz;
 	ht_node_t* node = ht->table[h];
 
 	while (node)
@@ -70,7 +71,7 @@ bool ht_contains(hash_table_t* ht, void* key)
 
 void* ht_lookup(hash_table_t* ht, void* key)
 {
-	size_t h = ht->hash(key) % ht->sz;
+	uint32_t h = ht->hash(key) % ht->sz;
 	ht_node_t* node = ht->table[h];
 
 	while (node)
@@ -84,7 +85,7 @@ void* ht_lookup(hash_table_t* ht, void* key)
 
 bool ht_empty(hash_table_t* ht)
 {
-	for (size_t i = 0; i < ht->sz; i++)
+	for (uint32_t i = 0; i < ht->sz; i++)
 	{
 		if (ht->table[i])
 			return false;
@@ -92,10 +93,10 @@ bool ht_empty(hash_table_t* ht)
 	return true;
 }
 
-size_t ht_count(hash_table_t* ht)
+uint32_t ht_count(hash_table_t* ht)
 {
-	size_t nodes = 0;
-	for (size_t i = 0; i < ht->sz; i++)
+	uint32_t nodes = 0;
+	for (uint32_t i = 0; i < ht->sz; i++)
 	{
 		ht_node_t* node = ht->table[i];
 		while (node)
@@ -109,9 +110,9 @@ size_t ht_count(hash_table_t* ht)
 
 bool ht_remove(hash_table_t* ht, void* key)
 {
-	size_t h = ht->hash(key) % ht->sz;
+	uint32_t h = ht->hash(key) % ht->sz;
 	
-	if (!ht->table[h]) return;
+	if (!ht->table[h]) return false;
 
 	bool found = false;
 	ht_node_t* node = ht->table[h];
@@ -139,7 +140,7 @@ bool ht_remove(hash_table_t* ht, void* key)
 ht_iterator_t ht_begin(hash_table_t* ht)
 {
 	ht_iterator_t result = { 0, NULL };
-	for (size_t i = 0; i < ht->sz; i++)
+	for (uint32_t i = 0; i < ht->sz; i++)
 	{
 		if (ht->table[i])
 		{
@@ -178,14 +179,14 @@ bool ht_next(hash_table_t* ht, ht_iterator_t* it)
 
 void ht_print_stats(hash_table_t* ht)
 {
-	size_t nodes = 0;
-	size_t max_depth = 0;
+	uint32_t nodes = 0;
+	uint32_t max_depth = 0;
 
-	for (size_t i = 0; i < ht->sz; i++)
+	for (uint32_t i = 0; i < ht->sz; i++)
 	{
 		ht_node_t* node = ht->table[i];
 
-		size_t depth = 0;
+		uint32_t depth = 0;
 		while (node)
 		{
 			nodes++;
@@ -220,7 +221,7 @@ static void _sht_destroy_item(void* key, void* val)
 	free(key);
 }
 
-hash_table_t* sht_create(size_t sz)
+hash_table_t* sht_create(uint32_t sz)
 {
 	return ht_create(sz, &_sht_hash, &_sht_comp, &_sht_destroy_item);
 }
@@ -239,6 +240,11 @@ bool sht_contains(hash_table_t* ht, const char* key)
 bool sht_remove(hash_table_t* ht, const char* key)
 {
 	return ht_remove(ht, (void*)key);
+}
+
+void* sht_lookup(hash_table_t* ht, const char* key)
+{
+	return ht_lookup(ht, (void*)key);
 }
 
 sht_iterator_t sht_begin(hash_table_t* ht)
@@ -275,7 +281,7 @@ bool sht_next(hash_table_t* ht, sht_iterator_t* it)
 /* pointer hash set */
 static size_t _phs_hash(void* key)
 {
-	return key;
+	return (size_t)key;
 }
 
 static bool _phs_comp(void* lhs, void* rhs)
@@ -287,14 +293,14 @@ static void _phs_destroy_item(void* key, void* val)
 {
 }
 
-hash_table_t* phs_create(size_t sz)
+hash_table_t* phs_create(uint32_t sz)
 {
 	return ht_create(sz, &_phs_hash, &_phs_comp, &_phs_destroy_item);
 }
 
 void phs_insert(hash_table_t* ht, void* ptr)
 {
-	ht_insert(ht, ptr, 1);
+	ht_insert(ht, ptr, (void*)1);
 }
 
 phs_iterator_t phs_begin(hash_table_t* ht)

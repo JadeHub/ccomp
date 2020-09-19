@@ -24,19 +24,16 @@ void print_tokens(token_t* toks)
 
 void asm_print(const char* line, void* data)
 {
-    printf("%s\n", line);
+    if(line[0] != '\n' && line[0] != '#')
+        printf("%s\n", line);
 }
 
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 {
-    //file_pos_t pos = src_file_position(tok->loc);
-
     fprintf(stderr, "%s(%s): Err %d: %s\n",
         "file.c",
         diag_pos_str(tok),
         err, msg);
-
-    //printf("%s at line %d col %d\n", msg, pos.line, pos.col);
     exit(1); 
 }
 

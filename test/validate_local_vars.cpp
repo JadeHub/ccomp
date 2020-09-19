@@ -60,6 +60,20 @@ TEST_F(LocalVarsValidationTest, err_incorrect_type_assign)
 	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
+TEST_F(LocalVarsValidationTest, err_incorrect_type_initialisation)
+{
+	std::string code = R"(
+	struct A{int a;};
+	void main()
+	{
+		struct A a;
+		int i = a;
+	}	
+	)";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
 TEST_F(LocalVarsValidationTest, char_variable)
 {
 	std::string code = R"(

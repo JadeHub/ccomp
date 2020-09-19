@@ -244,26 +244,26 @@ TEST_F(LexTest, ErrCharConstantUnterminated2)
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
 }
-/*
+
 TEST_F(LexTest, StringConstant)
 {
-	std::string code = R"(int x = "abc";)";
+	std::string code = R"(char* c = "abc";)";
 
 	Lex(code);
-	ExpectStringLiteral(tokens[3], "abc");
+	ExpectStringLiteral(tokens[4], "abc");
 }
 
 TEST_F(LexTest, EmptyStringConstant)
 {
-	std::string code = R"(int x = "";)";
+	std::string code = R"(char* c = "";)";
 
 	Lex(code);
-	ExpectStringLiteral(tokens[3], "");
+	ExpectStringLiteral(tokens[4], "");
 }
 
 TEST_F(LexTest, ErrStringConstantUnterminated)
 {
-	std::string code = R"(int x = "abc;)";
+	std::string code = R"(char* c = "abc;)";
 
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
@@ -271,10 +271,9 @@ TEST_F(LexTest, ErrStringConstantUnterminated)
 
 TEST_F(LexTest, ErrStringConstantUnterminated2)
 {
-	std::string code = R"(int x = "abc;
+	std::string code = R"(char* c = "abc;
 							")";
 
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
 }
-*/

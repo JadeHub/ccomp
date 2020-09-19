@@ -229,7 +229,7 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	char* buff = (char*)malloc(result->len - 1); // -2 for the quotes, +1 for the null
 	memset(buff, 0, result->len - 1);
 	memcpy(buff, result->loc + 1, result->len - 2);
-	result->data = (uint32_t)buff;
+	result->data = (size_t)buff;
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)

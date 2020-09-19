@@ -32,6 +32,7 @@ typedef enum
 
 	op_member_access,
 	op_ptr_member_access,
+	op_array_subscript,
 
 	//logical operators
 	op_and,
@@ -139,12 +140,19 @@ typedef struct
 	struct ast_type_spec* type;
 }ast_int_literal_t;
 
+typedef struct
+{
+	const char* value;
+	const char* label;
+}ast_string_literal_t;
+
 typedef enum
 {
 	expr_postfix_op,
 	expr_unary_op,
 	expr_binary_op,
 	expr_int_literal,
+	expr_str_literal,
 	expr_assign,
 	expr_identifier,
 	expr_condition,
@@ -162,6 +170,7 @@ typedef struct ast_expression
 		ast_expr_unary_op_t unary_op;
 		ast_expr_binary_op_t binary_op;
 		ast_int_literal_t int_literal;
+		ast_string_literal_t str_literal;
 		ast_expr_assign_t assignment;
 		ast_expr_identifier_t var_reference;
 		ast_cond_expr_data_t condition;
@@ -246,8 +255,13 @@ typedef struct ast_type_spec
 	union
 	{
 		ast_user_type_spec_t* user_type_spec;
+
+		/*
+		type pointed to if kind is type_ptr or type_array
+		*/
 		struct ast_type_spec* ptr_type;
 	};
+
 }ast_type_spec_t;
 
 typedef struct ast_type_ref
@@ -263,6 +277,7 @@ typedef struct ast_var_decl
 	ast_type_ref_t* type_ref;
 	char name[MAX_LITERAL_NAME];
 	ast_expression_t* expr;
+	ast_expression_t* array_sz;
 }ast_var_decl_t;
 
 typedef struct ast_func_param_decl

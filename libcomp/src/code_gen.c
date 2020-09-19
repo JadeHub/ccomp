@@ -2,6 +2,7 @@
 #include "var_set.h"
 #include "source.h"
 
+#include "id_map.h"
 #include "std_types.h"
 
 #include <stdbool.h>
@@ -165,7 +166,6 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 	_make_label_name(label2);
 
 	
-
 	gen_expression1(expr->data.binary_op.lhs);
 
 	if (expr->data.binary_op.operation == op_or)
@@ -247,6 +247,11 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("movl $%d, %%eax", expr->data.int_literal.value);
 		result->lval.type = expr->data.int_literal.type;
+	}
+	else if (expr->kind == expr_str_literal)
+	{
+		_gen_asm("leal .%s, %%eax", expr->data.str_literal.label);
+		result->lval.type = ast_make_ptr_type(int8_type_spec);
 	}
 	else if (expr->kind == expr_func_call)
 	{
@@ -347,6 +352,49 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		result->lval.type = result->lval.type->ptr_type;
 		result->lval.kind = lval_address;
 	}
+	else if (_is_binary_op(expr, op_array_subscript))
+	{
+		//generate the lhs which should result in a pointer in eax
+		//push the pointer
+		//generate rhs (the index) which should result in an int
+		//multiply by size of the item pointed to
+		//pop the pointer from the stack and add the offset
+
+		gen_expression(expr->data.binary_op.lhs, result);
+
+		if ((result->lval.kind == lval_stack || result->lval.kind == lval_label) &&
+			expr->data.binary_op.rhs->kind == expr_int_literal)
+		{
+			result->lval.offset += expr->data.binary_op.rhs->data.int_literal.value * result->lval.type->ptr_type->size;
+			result->lval.type = result->lval.type->ptr_type;
+		}
+		else
+		{
+			ensure_lval_in_reg(&result->lval);
+			//lhs must be a pointer
+			_gen_asm("pushl %%eax");
+
+			//index
+			gen_expression1(expr->data.binary_op.rhs);
+			//todo multiply
+
+
+
+			_gen_asm("popl %%ecx");
+			_gen_asm("addl %%ecx, %%eax");
+
+			if (result->lval.type->ptr_type->kind == type_ptr)
+			{
+				_gen_asm("movl (%%eax), %%eax");
+				result->lval.kind = lval_address;
+			}
+
+			//adjust type
+			result->lval.type = result->lval.type->ptr_type;
+			result->lval.kind = lval_address;
+		}
+
+	}
 	else if (expr->kind == expr_assign)
 	{
 		gen_assignment_expression_impl(expr, result);
@@ -386,29 +434,37 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		case op_prefix_inc:
 		case op_prefix_dec:
 			{
-				expr_result result;
-				memset(&result, 0, sizeof(expr_result));
-				result.lval.kind = lval_none;
+				expr_result exp_result;
+				memset(&exp_result, 0, sizeof(expr_result));
+				exp_result.lval.kind = lval_none;
 
-				gen_expression(param, &result);
+				gen_expression(param, &exp_result);
 
-				if (result.lval.kind == lval_address)
+				if (exp_result.lval.kind == lval_address)
 					_gen_asm("pushl %%eax");
 
-				ensure_lval_in_reg(&result.lval);
+				ensure_lval_in_reg(&exp_result.lval);
 
 				if (expr->data.unary_op.operation == op_prefix_inc)
 					_gen_asm("incl %%eax");
 				else
 					_gen_asm("decl %%eax");
 
-				if (result.lval.kind == lval_address)
+				if (exp_result.lval.kind == lval_address)
 					_gen_asm("popl %%edx");
 
-				gen_copy_eax_to_lval(&result);
+				gen_copy_eax_to_lval(&exp_result);
 
 				//if result.lval.kind is lval_address we are left with its address in eax, so we need to dereference it
-				ensure_lval_in_reg(&result.lval);
+				ensure_lval_in_reg(&exp_result.lval);
+
+				if (exp_result.lval.type->kind == type_ptr)
+				{
+					result->lval.kind = lval_address;
+					result->lval.type = exp_result.lval.type;
+					result->lval.offset = 0;
+				}
+
 				break;
 			}
 		}
@@ -418,12 +474,12 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		ast_expression_t* param = expr->data.unary_op.expression;
 
 		//get the value of the parameter
-		expr_result result;
-		memset(&result, 0, sizeof(expr_result));
-		result.lval.kind = lval_none;
+		expr_result exp_result;
+		memset(&exp_result, 0, sizeof(expr_result));
+		exp_result.lval.kind = lval_none;
 
-		gen_expression(param, &result);
-		ensure_lval_in_reg(&result.lval);
+		gen_expression(param, &exp_result);
+		ensure_lval_in_reg(&exp_result.lval);
 
 		//save the current value
 		_gen_asm("pushl %%eax");
@@ -433,9 +489,17 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		else
 			_gen_asm("decl %%eax");
 
-		gen_copy_eax_to_lval(&result);
+		gen_copy_eax_to_lval(&exp_result);
 		//pop the un-incremented value back into eax
 		_gen_asm("popl %%eax");
+
+		if (exp_result.lval.type->kind == type_ptr)
+		{
+			result->lval.kind = lval_address;
+			result->lval.type = exp_result.lval.type;
+			result->lval.offset = 0;
+		}
+
 	}
 	else if (expr->kind == expr_condition)
 	{
@@ -485,7 +549,7 @@ void gen_copy_eax_to_lval(expr_result* target)
 		case lval_address:
 			_gen_asm("%s %%eax, %d(%%edx)", _sized_mov(target->lval.type), target->lval.offset);
 			//the result of the expression is now the address stored in edx, move to eax
-			_gen_asm("%s %%edx, %%eax", _sized_mov(target->lval.type));
+			_gen_asm("movl %%edx, %%eax");
 			break;
 		}
 	}
@@ -1102,25 +1166,47 @@ void gen_function(ast_function_decl_t* fn)
 void gen_global_var(ast_var_decl_t* var)
 {	
 	_gen_asm(".globl _var_%s", var->name); //export symbol
-	if (var->expr && var->expr->data.int_literal.value != 0)
+
+	if (var->expr && var->expr->kind == expr_int_literal)
 	{
-		//initialised var goes in .data section
+		if (var->expr->data.int_literal.value != 0)
+		{
+			//initialised var goes in .data section
+			_gen_asm(".data"); //data section
+			_gen_asm(".align 4");
+			_gen_asm("_var_%s:", var->name); //label
+			//todo?	
+			_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
+			_gen_asm(".text"); //back to text section
+			_gen_asm("\n");
+		}
+		else
+		{
+			//0 or uninitialised var goes in .BSS section
+			_gen_asm(".bss"); //bss section
+			_gen_asm(".align 4");
+			_gen_asm("_var_%s:", var->name); //label
+			_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
+			_gen_asm(".text"); //back to text section
+			_gen_asm("\n");
+		}
+	}
+	else if (var->expr && var->expr->kind == expr_str_literal)
+	{
 		_gen_asm(".data"); //data section
-		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
-		//todo?	
-		_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
+		_gen_asm(".long .%s", var->expr->data.str_literal.label); //label
+		_gen_asm(".text"); //back to text section
+		_gen_asm("\n");
 	}
-	else
-	{
-		//0 or uninitialised var goes in .BSS section
-		_gen_asm(".bss"); //bss section
-		_gen_asm(".align 4");
-		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
-	}
-	_gen_asm(".text"); //back to text section
-	_gen_asm("\n");
+	
+	
+}
+
+void gen_string_literal(const char* value, const char* label)
+{
+	_gen_asm(".%s:", label);
+	_gen_asm(".string \"%s\"", value);
 }
 
 void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
@@ -1138,6 +1224,13 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 		var_decl = var_decl->next;
 	}
 
+	sht_iterator_t it = sht_begin(tl->string_literals);
+	while (!sht_end(tl->string_literals, &it))
+	{
+		gen_string_literal(it.key, ((string_literal_t*)it.val)->label);
+		sht_next(tl->string_literals, &it);
+	}
+	
 	tl_decl_t* fn_decl = tl->fn_decls;
 	while (fn_decl)
 	{

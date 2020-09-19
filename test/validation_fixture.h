@@ -115,6 +115,23 @@ public:
 		EXPECT_EQ(ast, nullptr);
 	}
 
+	ast_function_decl_t* AstFunction(const std::string& name)
+	{
+		tl_decl_t* fn = tl->fn_decls;
+
+		while (fn)
+		{
+			if (name == fn->decl->data.func.name)
+			{
+				return &fn->decl->data.func;
+			}
+			fn = fn->next;
+		}
+		//FAIL() << "failed to find function " << name;
+		//return NULL;
+		//ASSERT_EQ(1, 2);
+	}
+
 	std::vector<token_t> tokens;
 	ast_trans_unit_t* ast = nullptr;
 	valid_trans_unit_t* tl = nullptr;

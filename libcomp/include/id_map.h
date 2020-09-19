@@ -2,6 +2,8 @@
 
 #include "ast.h"
 
+#include <libj/include/hash_table.h>
+
 /*
 Types (struct, unions)
 enums
@@ -22,10 +24,19 @@ typedef struct type
 	struct type* next;
 }type_t;
 
+typedef struct string_literal
+{
+	const char* label;
+	struct string_literal* next;
+}string_literal_t;
+
 typedef struct {
 
 	identifier_t* identifiers;
 	type_t* tags;
+	
+	//map literal value to label
+	hash_table_t* string_literals;
 }identfier_map_t;
 
 identfier_map_t* idm_create();
@@ -46,3 +57,5 @@ void idm_leave_function(identfier_map_t* map);
 
 void idm_enter_block(identfier_map_t* map);
 void idm_leave_block(identfier_map_t* map);
+
+const char* idm_add_string_literal(identfier_map_t* map, const char* literal);

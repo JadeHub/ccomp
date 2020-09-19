@@ -2,6 +2,8 @@
 
 #include "ast.h"
 
+#include <libj/include/hash_table.h>
+
 typedef struct tl_decl
 {
 	ast_declaration_t* decl;
@@ -20,9 +22,8 @@ typedef struct
 	//used by ast_view
 	tl_decl_t* type_decls;
 
-	/*ast_declaration_t* functions;
-	ast_declaration_t* variables;
-	ast_declaration_t* types;*/
+	hash_table_t* string_literals;
+	
 }valid_trans_unit_t;
 
 valid_trans_unit_t* sem_analyse(ast_trans_unit_t*);

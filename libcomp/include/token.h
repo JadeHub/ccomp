@@ -99,7 +99,7 @@ typedef struct token
     const char* loc;
     size_t len;
     tok_kind kind;
-    uint32_t data;
+    size_t data;
     //uint8_t flags;
     struct token* next;
     struct token* prev;

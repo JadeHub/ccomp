@@ -3,18 +3,41 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <stdio.h>
 
 identfier_map_t* idm_create()
 {
 	identfier_map_t* result = (identfier_map_t*)malloc(sizeof(identfier_map_t));
 	memset(result, 0, sizeof(identfier_map_t));
+	result->string_literals = sht_create(32);
 	return result;
 }
 
 void idm_destroy(identfier_map_t* map)
 {	
 	free(map);
+}
+
+static const char* _alloc_label()
+{
+	static uint32_t count = 0;
+
+	char* ret = (char*)malloc(16);
+	memset(ret, 0, 16);
+	sprintf(ret, "SC%d", count++);
+	return ret;
+}
+
+const char* idm_add_string_literal(identfier_map_t* map, const char* literal)
+{
+	string_literal_t* sl = (string_literal_t*)sht_lookup(map->string_literals, literal);
+	if (!sl)
+	{
+		sl = (string_literal_t*)malloc(sizeof(string_literal_t));
+		sl->label = _alloc_label();
+		sht_insert(map->string_literals, literal, sl);
+	}
+	return sl->label;
 }
 
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* type)

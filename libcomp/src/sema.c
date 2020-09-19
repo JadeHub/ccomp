@@ -39,6 +39,7 @@ proc_decl_result process_function_decl(ast_declaration_t* decl);
 bool process_expression(ast_expression_t* expr);
 bool process_statement(ast_statement_t* smnt);
 static bool _resolve_type_ref(ast_type_ref_t* ref);
+static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr);
 
 static void _report_err(token_t* tok, int err, const char* format, ...)
 {
@@ -137,6 +138,11 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		typeref->ptr_type = _resolve_type(typeref->ptr_type);
 		return typeref;
 	}
+	/*else if (typeref->kind == type_array)
+	{
+		typeref->ptr_type = _resolve_type(typeref->ptr_type);
+		return typeref;
+	}*/
 
 	if (typeref->kind != type_user)
 		return typeref;
@@ -279,10 +285,26 @@ bool process_variable_declaration(ast_declaration_t* decl)
 		return false;
 	}
 
+	if (decl->data.var.expr)
+	{
+		if (!process_expression(decl->data.var.expr))
+			return false;
+		ast_type_spec_t* init_type = _resolve_expr_type(decl->data.var.expr);
+
+		if (!_can_convert_type(var->type_ref->spec, init_type))
+		{
+			_report_err(decl->data.var.expr->tokens.start,
+				ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(var->type_ref->spec));
+			return false;
+		}
+	}
+
 	idm_add_id(_id_map, decl);
 	_cur_func_ctx.decl->required_stack_size += var->type_ref->spec->size;
 
-	return process_expression(decl->data.var.expr);
+	return true;
 }
 
 bool process_declaration(ast_declaration_t* decl)
@@ -315,10 +337,10 @@ bool process_variable_reference(ast_expression_t* expr)
 				ast_declaration_name(decl));
 			return false;
 		}
-		//decl->data.var.type = type;
 		return true;
 	}
 
+	//enum value?
 	decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_const);
 	if (decl)
 	{
@@ -355,7 +377,6 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			assert(expr_type->kind == type_ptr);
 			return expr_type->ptr_type;
 		}
-
 		//todo handle signed/unisgned here, eg uint32 x = 5; int32 y = -x;
 		return _resolve_expr_type(expr->data.unary_op.expression);
 	case expr_binary_op:
@@ -367,8 +388,6 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			assert(user_type_spec);
 			ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
 			assert(member);
-//			ast_type_spec_t* member_spec = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name)->type;
-			//return _resolve_type(member_spec);
 			return member->type_ref->spec;
 		}
 
@@ -381,6 +400,16 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 			assert(member);
 			return member->type_ref->spec;
 		}
+		if (expr->data.unary_op.operation == op_array_subscript)
+		{
+			//lhs = array
+			//rhs = subscript
+			ast_type_spec_t* array_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
+			assert(array_type_spec);
+			assert(array_type_spec->kind == type_ptr);
+			return array_type_spec->ptr_type;
+		}
+
 		
 		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
 		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
@@ -404,6 +433,8 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	case expr_int_literal:
 		assert(expr->data.int_literal.type);
 		return expr->data.int_literal.type;
+	case expr_str_literal:
+		return ast_make_ptr_type(int8_type_spec);
 	case expr_assign:
 		return _resolve_expr_type(expr->data.assignment.target);
 	case expr_identifier:
@@ -486,10 +517,39 @@ bool process_func_call(ast_expression_t* expr)
 		}
 
 		call_param = call_param->next;
-		func_param = func_param->prev;
+ 		func_param = func_param->prev;
 		p_count++;
 	}
 	expr->data.func_call.func_decl = decl;
+	return true;
+}
+
+bool process_array_subscript_expression(ast_expression_t* expr)
+{
+	if (!process_expression(expr->data.binary_op.lhs))
+		return false;
+
+	ast_type_spec_t* type = _resolve_expr_type(expr->data.binary_op.lhs);
+	if (type->kind != type_ptr)
+	{
+		_report_err(expr->tokens.start,
+			ERR_INCOMPATIBLE_TYPE,
+			"'[]' must be applied to a pointer type");
+		return false;
+	}
+
+	if (!process_expression(expr->data.binary_op.rhs))
+		return false;
+
+	ast_type_spec_t* idx_type = _resolve_expr_type(expr->data.binary_op.rhs);
+	if (!_can_convert_type(uint32_type_spec, idx_type))
+	{
+		_report_err(expr->data.binary_op.rhs->tokens.start,
+			ERR_INCOMPATIBLE_TYPE,
+			"'[]' subscript must be an integer");
+		return false;
+	}
+
 	return true;
 }
 
@@ -612,6 +672,12 @@ bool process_sizeof_expr(ast_expression_t* expr)
 	return process_expression(expr);
 }
 
+bool process_str_literal(ast_expression_t* expr)
+{
+	expr->data.str_literal.label = idm_add_string_literal(_id_map, expr->data.str_literal.value);
+	return true;
+}
+
 bool process_int_literal(ast_expression_t* expr)
 {
 	if (expr->data.int_literal.value < 0xFF)
@@ -642,12 +708,16 @@ bool process_expression(ast_expression_t* expr)
 		case expr_binary_op:
 			if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
 				return process_member_access_expression(expr);
-			
+			if (expr->data.binary_op.operation == op_array_subscript)
+				return process_array_subscript_expression(expr);	
+
 			if (!process_expression(expr->data.binary_op.lhs))
 				return false;
 			return process_expression(expr->data.binary_op.rhs);
 		case expr_int_literal:
 			return process_int_literal(expr);
+		case expr_str_literal:
+			return process_str_literal(expr);
 		case expr_assign:
 			return process_assignment_expression(expr);
 		case expr_identifier:
@@ -1089,6 +1159,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 			//update definition
 			exist->data.var.expr = decl->data.var.expr;
 			decl->data.var.expr = NULL;
+			process_expression(exist->data.var.expr);
 		}
 		return proc_decl_ignore;
 	}
@@ -1099,6 +1170,10 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 			"global var '%s' uses incomplete type '%s'",
 			name, ast_type_ref_name(decl->data.var.type_ref));
 	}
+
+	if (decl->data.var.expr)
+		process_expression(decl->data.var.expr);
+
 	idm_add_id(_id_map, decl);
 	return proc_decl_new_def;
 }
@@ -1143,7 +1218,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 	valid_trans_unit_t* tl = (valid_trans_unit_t*)malloc(sizeof(valid_trans_unit_t));
 	memset(tl, 0, sizeof(valid_trans_unit_t));
 	tl->ast = ast;
-
+	tl->string_literals = _id_map->string_literals;
 	ast_declaration_t* decl = ast->decls;
 	while (decl)
 	{

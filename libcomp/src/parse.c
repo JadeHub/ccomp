@@ -14,9 +14,11 @@
 <declaration> :: = <var_declaration> ";"
 				| <type-specifier> ";"
 				| <function_declaration> ";"
-<var_declaration> ::= <declaration_specifiers> { "*" } <id> [= <exp>]
-<function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_param_list> ] ")"
-<function_param_list> ::= <declaration_specifiers> <id> { "," <declaration_specifiers> <id> }
+<var_declaration> ::= <ptr_decl_spec> <id> [ <array_decl> ] [= <exp>]
+<array_decl> ::= "[" [ <constant-exp> ] "]"
+<function_declaration> ::= <ptr_decl_spec> <id> "(" [ <function_param_list> ] ")"
+<function_param_list> ::= <function_param_decl> { "," <function_param_decl> }
+<function_param_decl> ::= <ptr_decl_spec> <id> [ <array_decl> ]
 <function> ::= <function_declaration> "{" { <block-item> } "}"
 <block-item> ::= [ <statement> | <declaration> ]
 <statement> ::= "return" <exp> ";"
@@ -68,10 +70,12 @@
 
 <literal> ::= <int>
 			| "'" <char> "'"
+			| <string_literal>
 
 <unary_op> ::= "!" | "~" | "-" | "++" | "--" | "&" | "*"
 
 <declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifier> ) }
+<ptr_decl_spec> ::= <declaration_specifiers> { "*" }
 
 <type_qualifier> ::= "const"					//todo
 					| "volatile"				//todo
@@ -93,7 +97,7 @@
 							| "register"		//todo
 <user_type_specifier> ::= ("struct" | "union") [ <id> ] [ "{" <struct_decl_list> "}" ]
 <struct_decl_list> ::= <struct_decl> ["," <struct_decl_list> ]
-<struct_decl> ::= <declaration_specifiers> [ <id> ] [ ":" <int> ]
+<struct_decl> ::= <ptr_decl_spec> [ <id> ] [ ":" <int> ]
 <enum_specifier> ::= "enum" [ <id> ] [ "{" { <id> [ = <int> ] } "}" ]
 */
 
@@ -101,7 +105,8 @@ ast_statement_t* parse_statement();
 ast_expression_t* parse_expression();
 ast_block_item_t* parse_block_item();
 ast_expression_t* parse_unary_expr();
-ast_type_spec_t* try_parse_decl_spec();
+ast_expression_t* parse_constant_expression();
+ast_type_spec_t* try_parse_pointer_decl_spec();
 ast_expression_t* try_parse_literal();
 
 static token_t* _cur_tok = NULL;
@@ -386,7 +391,7 @@ ast_struct_member_t* parse_struct_member()
 	memset(result, 0, sizeof(ast_struct_member_t));
 	result->tokens.start = current();
 
-	ast_type_spec_t* type = try_parse_decl_spec();
+	ast_type_spec_t* type = try_parse_pointer_decl_spec();
 	if (!type)
 	{
 		report_err(ERR_SYNTAX, "expected declaration specification");
@@ -771,14 +776,63 @@ ast_type_spec_t* try_parse_decl_spec()
 }
 
 /*
-<function_params> ::= [ <type-specifier> [<id>] { "," <type-specifier> [<id>] } ]
+<ptr_decl_spec> ::= <declaration_specifiers> { "*" }
+*/
+ast_type_spec_t* try_parse_pointer_decl_spec()
+{
+	ast_type_spec_t* type_spec = try_parse_decl_spec();
+	if (!type_spec)
+		return NULL;
+
+	while (current_is(tok_star))
+	{
+		//pointer
+		next_tok();
+		ast_type_spec_t* ptr_type = ast_make_ptr_type(type_spec);
+		type_spec = ptr_type;
+	}
+	return type_spec;
+}
+
+/*
+<array_decl> ::= "[" [ <constant-exp> ] "]"
+
+returns NULL if no array spec found
+returns an expression of kind expr_null if empty array spec found '[]'
+otherwise returns an expression representing the array size
+*/
+ast_expression_t* opt_parse_array_spec()
+{
+	ast_expression_t* result = NULL;
+	if (current_is(tok_l_square_paren))
+	{
+		next_tok();
+
+		if (!current_is(tok_r_square_paren))
+		{
+			result = parse_constant_expression();
+		}
+		else
+		{
+			result = _alloc_expr();
+			result->kind = expr_null;
+		}
+		expect_cur(tok_r_square_paren);
+		next_tok();
+	}
+	return result;
+}
+
+/*
+<function_param_list> ::= <function_param_decl> { "," <function_param_decl> }
+<function_param_decl> ::= <declaration_specifiers> { "*" } <id> [ <array_decl> ]
 */
 void parse_function_parameters(ast_function_decl_t* func)
 {
 	ast_type_spec_t* type;
 
 	token_t* start = current();
-	while ((type = try_parse_decl_spec()))
+	while ((type = try_parse_pointer_decl_spec()))
 	{
 		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(decl, 0, sizeof(ast_declaration_t));
@@ -786,7 +840,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 		
 		decl->kind = decl_var;
 		decl->data.var.type_ref = _make_type_ref(type, start);
-
+		
 		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
 		memset(param, 0, sizeof(ast_func_param_decl_t));
 		param->decl = decl;		
@@ -796,6 +850,10 @@ void parse_function_parameters(ast_function_decl_t* func)
 			tok_spelling_cpy(current(), decl->data.var.name, MAX_LITERAL_NAME);
 			next_tok();
 		}
+
+		// '[...]'
+		decl->data.var.array_sz = opt_parse_array_spec();
+
 		decl->tokens.end = current();
 
 		if (!func->first_param)
@@ -838,22 +896,15 @@ void parse_function_parameters(ast_function_decl_t* func)
 ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 {
 	token_t* start = current();
-	ast_type_spec_t* type = try_parse_decl_spec();
-	if (!type)
-		return NULL;
 
 	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 	memset(result, 0, sizeof(ast_declaration_t));
 	result->tokens.start = start;
 	result->tokens.end = current();
-
-	while (current_is(tok_star))
-	{
-		next_tok();
-		//pointer
-		ast_type_spec_t* ptr_type = ast_make_ptr_type(type);
-		type = ptr_type;
-	}
+	
+	ast_type_spec_t* type = try_parse_pointer_decl_spec();
+	if (!type)
+		return NULL;
 
 	if (current_is(tok_identifier))
 	{
@@ -861,9 +912,7 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 		{
 			//function			
 			result->kind = decl_func;
-			//result->data.func.return_type = type;
 			result->data.func.return_type_ref = _make_type_ref(type, start);
-			expect_cur(tok_identifier);
 			tok_spelling_cpy(current(), result->data.func.name, MAX_LITERAL_NAME);
 			next_tok();
 			/*(*/
@@ -878,9 +927,14 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 		{
 			//variable 
 			result->kind = decl_var;
-			result->data.var.type_ref = _make_type_ref(type, start);
 			tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
 			next_tok();
+						
+			result->data.var.type_ref = _make_type_ref(type, start);
+
+			// '[...]'
+			result->data.var.array_sz = opt_parse_array_spec();
+						
 			if (current_is(tok_equal))
 			{
 				next_tok();
@@ -953,8 +1007,16 @@ ast_expression_t* try_parse_literal()
 		//<factor> ::= <int>
 		ast_expression_t* expr = _alloc_expr();
 		expr->kind = expr_int_literal;
-		expr->data.int_literal.value = (uint32_t)(long)current()->data;
+		expr->data.int_literal.value = (uint32_t)current()->data;
 		expr->data.int_literal.type = NULL;
+		next_tok();
+		return expr;
+	}
+	else if (current_is(tok_string_literal))
+	{
+		ast_expression_t* expr = _alloc_expr();
+		expr->kind = expr_str_literal;
+		expr->data.str_literal.value = (const char*)current()->data;
 		next_tok();
 		return expr;
 	}
@@ -1009,7 +1071,13 @@ static bool _is_postfix_op(token_t* tok)
 
 ast_expression_t* try_parse_postfix_expr()
 {
-	static tok_kind postfix_ops[] = { tok_l_paren, tok_fullstop, tok_plusplus, tok_minusminus, tok_minusgreater, tok_invalid };
+	static tok_kind postfix_ops[] = { tok_l_paren,
+									tok_fullstop,
+									tok_plusplus,
+									tok_minusminus,
+									tok_minusgreater,
+									tok_l_square_paren,
+									tok_invalid };
 
 	ast_expression_t* primary = try_parse_primary_expr();
 
@@ -1078,6 +1146,18 @@ ast_expression_t* try_parse_postfix_expr()
 			expr->data.unary_op.operation = _get_postfix_operator(current());
 			expr->data.unary_op.expression = primary;
 			next_tok();
+			expr->tokens.end = current();
+		}
+		else if (current_is(tok_l_square_paren))
+		{
+			//pointer member access
+			next_tok();
+			expr->kind = expr_binary_op;
+			expr->data.binary_op.lhs = primary;
+			expr->data.binary_op.rhs = parse_expression();
+			expr->data.binary_op.operation = op_array_subscript;
+			expect_cur(tok_r_square_paren);
+			next_tok();			
 			expr->tokens.end = current();
 		}
 		primary = expr;

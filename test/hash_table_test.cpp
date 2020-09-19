@@ -63,7 +63,7 @@ TEST(StringHashTable, lots)
 
 	hash_table_t* ht = sht_create(64);
 
-	for (size_t i = 0; i < 1024; i++)
+	for (uint32_t i = 0; i < 1024; i++)
 	{
 		sprintf(buff, "test %d", i);
 		sht_insert(ht, buff, 0);
