@@ -44,7 +44,7 @@ void gen_block_item(ast_block_item_t* bi);
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result);
 void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* result);
 void gen_copy_eax_to_lval(expr_result* result);
-void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result);
+void gen_assignment_expression(ast_expression_t* expr, expr_result* result);
 void gen_expression1(ast_expression_t* expr);
 
 static write_asm_cb _asm_cb;
@@ -362,13 +362,13 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 
 		gen_expression(expr->data.binary_op.lhs, result);
 
-		if ((result->lval.kind == lval_stack || result->lval.kind == lval_label) &&
+	/*	if ((result->lval.kind == lval_stack || result->lval.kind == lval_label) &&
 			expr->data.binary_op.rhs->kind == expr_int_literal)
 		{
 			result->lval.offset += expr->data.binary_op.rhs->data.int_literal.value * result->lval.type->ptr_type->size;
 			result->lval.type = result->lval.type->ptr_type;
 		}
-		else
+		else*/
 		{
 			ensure_lval_in_reg(&result->lval);
 			//lhs must be a pointer
@@ -397,7 +397,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	}
 	else if (expr->kind == expr_assign)
 	{
-		gen_assignment_expression_impl(expr, result);
+		gen_assignment_expression(expr, result);
 	}
 	else if (expr->kind == expr_binary_op)
 	{
@@ -508,15 +508,12 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		_make_label_name(label_false);
 		_make_label_name(label_end);
 
-		//gen_expression(expr->data.condition.cond, result); //condition
 		gen_expression1(expr->data.condition.cond); //condition
 		_gen_asm("cmpl $0, %%eax"); //was false?
 		_gen_asm("je %s", label_false);
-		//gen_expression(expr->data.condition.true_branch, result); //true
 		gen_expression1(expr->data.condition.true_branch); //true
 		_gen_asm("jmp %s", label_end);
 		_gen_asm("%s:", label_false);
-		//gen_expression(expr->data.condition.false_branch, result);
 		gen_expression1(expr->data.condition.false_branch);
 		_gen_asm("%s:", label_end);
 	}
@@ -593,7 +590,7 @@ void gen_copy_eax_to_lval(expr_result* target)
 	}
 }
 
-void gen_assignment_expression_impl(ast_expression_t* expr, expr_result* result)
+void gen_assignment_expression(ast_expression_t* expr, expr_result* result)
 {
 	/*
 	1) Process the target expression generating code to calculate the assignment target which can be one of:
@@ -1219,12 +1216,12 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 		var_decl = var_decl->next;
 	}
 
-	/*sht_iterator_t it = sht_begin(tl->string_literals);
+	sht_iterator_t it = sht_begin(tl->string_literals);
 	while (!sht_end(tl->string_literals, &it))
 	{
 		gen_string_literal(it.key, ((string_literal_t*)it.val)->label);
 		sht_next(tl->string_literals, &it);
-	}*/
+	}
 	
 	tl_decl_t* fn_decl = tl->fn_decls;
 	while (fn_decl)

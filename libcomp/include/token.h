@@ -94,13 +94,19 @@ typedef enum
     tok_string_literal      // "abc"
 }tok_kind;
 
+enum tok_flags
+{
+    TF_START_LINE = 0x01,
+    TF_LEADING_SPACE = 0x02
+};
+
 typedef struct token
 {
     const char* loc;
     size_t len;
     tok_kind kind;
     size_t data;
-    //uint8_t flags;
+    uint8_t flags;
     struct token* next;
     struct token* prev;
 }token_t;

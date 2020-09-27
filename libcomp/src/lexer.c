@@ -396,12 +396,14 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
 {
 	*result = _invalid_tok;
+	bool start_line = false;
 
 lex_next_tok:
 
 	//Skip any white space
 	while(*pos == ' ' || *pos == '\t')
 	{
+		result->flags |= TF_LEADING_SPACE;
 		if (!_adv_pos(src, &pos)) goto _hit_end;
 	};
 
@@ -415,6 +417,7 @@ lex_next_tok:
 
 	result->loc = pos;
 	result->len = 0;
+	result->flags |= (start_line ? TF_START_LINE : 0);
 
 	switch (*pos)
 	{
@@ -423,6 +426,7 @@ lex_next_tok:
 	case '\n':
 		//preprocessor
 		pos++;
+		start_line = true;
 		goto lex_next_tok;
 	case '(':
 		result->kind = tok_l_paren;
@@ -636,7 +640,7 @@ lex_next_tok:
 		break;
 	};
 
-	if (result->kind == tok_slashslash)
+	/*if (result->kind == tok_slashslash)
 	{
 		//Skip up to eol
 		do
@@ -644,7 +648,7 @@ lex_next_tok:
 			if (!_adv_pos(src, &pos)) goto _hit_end;
 		} while (*pos != '\n');
 		goto lex_next_tok;
-	}
+	}*/
 
 	return result->kind != tok_invalid;
 
@@ -664,13 +668,13 @@ token_t* lex_source(source_range_t* sr)
 		tok = (token_t*)malloc(sizeof(token_t));
 		memset(tok, 0, sizeof(token_t));
 
-		size_t a = sizeof tok;
 
 		if (!lex_next_tok(sr, pos, tok))
 			break;
 
 		if (first == NULL)
 		{
+			tok->flags |= TF_START_LINE;
 			first = last = tok;
 		}
 		else
@@ -690,6 +694,7 @@ void lex_init()
 	_invalid_tok.loc = NULL;
 	_invalid_tok.len = 0;
 	_invalid_tok.data = 0;
+	_invalid_tok.flags = 0;
 	_invalid_tok.next = NULL;
 	_invalid_tok.prev = NULL;
 }

@@ -253,6 +253,9 @@ static bool _is_int_type(ast_type_spec_t* spec)
 
 static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
+	if (!type)
+		return false;
+
 	if (target == type)
 		return true;
 
@@ -680,11 +683,11 @@ bool process_str_literal(ast_expression_t* expr)
 
 bool process_int_literal(ast_expression_t* expr)
 {
-	if (expr->data.int_literal.value < 0xFF)
+	if (expr->data.int_literal.value <= 0xFF)
 	{
 		expr->data.int_literal.type = uint8_type_spec;
 	}
-	else if (expr->data.int_literal.value < 0xFFFF)
+	else if (expr->data.int_literal.value <= 0xFFFF)
 	{
 		expr->data.int_literal.type = uint16_type_spec;
 	}
