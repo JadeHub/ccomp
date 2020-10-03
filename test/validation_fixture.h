@@ -137,3 +137,49 @@ public:
 	valid_trans_unit_t* tl = nullptr;
 };
 
+class LexTest : public TestWithErrorHandling
+{
+public:
+
+	LexTest()
+	{
+	}
+
+	~LexTest()
+	{
+	}
+
+	void Lex(const std::string& src)
+	{
+		source_range_t sr;
+		sr.ptr = src.c_str();
+		sr.end = sr.ptr + src.length();
+
+		token_t* toks = lex_source(&sr);
+
+		token_t* tok = toks;
+		while (tok)
+		{
+			tokens.push_back(*tok);
+			token_t* next = tok->next;
+			free(tok);
+			tok = next;
+		}
+	}
+
+	std::vector<token_t> tokens;
+
+	template <typename T>
+	void ExpectIntLiteral(const token_t& t, T val)
+	{
+		EXPECT_EQ(t.kind, tok_num_literal);
+		EXPECT_EQ(t.data, (uint32_t)val);
+	}
+
+	void ExpectStringLiteral(const token_t& t, const char* expected)
+	{
+		const char* str = (const char*)t.data;
+		EXPECT_STREQ(str, expected);
+	}
+};
+

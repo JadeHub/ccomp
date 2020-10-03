@@ -124,4 +124,4 @@ const char* tok_kind_spelling(tok_kind);
 void tok_printf(token_t* tok);
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
-bool tok_spelling_cmp(token_t* tok, const char* str);
+void tok_spelling_extract(const char* src, size_t src_len, char* dest, size_t dest_len);

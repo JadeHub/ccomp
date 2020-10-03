@@ -33,7 +33,7 @@ TEST_F(EnumValidationTest, define_nested)
 	void fn()
 	{
 		enum foo {a, b};	
-		//enum foo f = a;
+		
 	}
 	)";
 

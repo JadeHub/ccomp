@@ -8,15 +8,59 @@
 
 static token_t _invalid_tok;
 
+static inline bool _can_adv(source_range_t* sr, const char** pos)
+{
+	return *pos < sr->end;
+}
+
 static inline bool _adv_pos(source_range_t* sr, const char** pos)
 {
-	if (*pos < sr->end) //skip the null and the last char
+	//if (*pos < sr->end) //skip the null and the last char
+	if (_can_adv(sr, pos))
 	{
 		char c = **pos;
+
 		(*pos)++;
+		c = **pos;
+
+		if (c == '\\')
+		{
+			if (*(*pos + 1) == '\n')
+			{
+				(*pos) += 2;
+			}
+			else if (*(*pos + 1) == '\r' && *(*pos + 2) == '\n')
+			{
+				(*pos) += 3;
+			}
+		}
+
 		return true;
 	}
 	return false;
+}
+
+static inline char _peek_next(source_range_t* sr, const char* pos)
+{
+	if (_can_adv(sr, &pos))
+	{
+		pos++;
+		char c = *pos;
+
+		if (c == '\\')
+		{
+			if (*(pos + 1) == '\n')
+			{
+				(pos) += 2;
+			}
+			else if (*(pos + 1) == '\r' && *(pos + 2) == '\n')
+			{
+				(pos) += 3;
+			}
+		}
+		return *pos;
+	}
+	return 0;
 }
 
 #define ADV_POS(SR, POS)	if (!_adv_pos(SR, POS)) \
@@ -222,13 +266,13 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	}
 	//skip closing quote
 	ADV_POS_ERR(result, sr, &pos);
-	result->len++;
+	result->len = pos - result->loc;
 
 	//result->loc points at the opening quote
 	//result->len includes both quotes
 	char* buff = (char*)malloc(result->len - 1); // -2 for the quotes, +1 for the null
 	memset(buff, 0, result->len - 1);
-	memcpy(buff, result->loc + 1, result->len - 2);
+	tok_spelling_extract(result->loc+1, result->len-2, buff, result->len - 1);
 	result->data = (size_t)buff;
 }
 
@@ -313,6 +357,11 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 	}
 }
 
+bool tok_spelling_cmp(const char* lhs, const char* rhs)
+{
+	return strcmp(lhs, rhs) == 0;
+}
+
 static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result)
 {
 	result->loc = pos;
@@ -322,74 +371,78 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	do
 	{
 		//check len
-		result->len++;
+		//result->len++;
 		ADV_POS(sr, &pos);
 	} while (_is_identifier_body(*pos));
+	result->len = pos - result->loc;
+
+	char* buff = (char*)malloc(result->len + 1);
+	tok_spelling_cpy(result, buff, result->len + 1);
 
 	//Keywords
-	if (tok_spelling_cmp(result, "int"))
+	if (tok_spelling_cmp(buff, "int"))
 		result->kind = tok_int;
-	else if (tok_spelling_cmp(result, "char"))
+	else if (tok_spelling_cmp(buff, "char"))
 		result->kind = tok_char;
-	else if (tok_spelling_cmp(result, "short"))
+	else if (tok_spelling_cmp(buff, "short"))
 		result->kind = tok_short;
-	else if (tok_spelling_cmp(result, "long"))
+	else if (tok_spelling_cmp(buff, "long"))
 		result->kind = tok_long;
-	else if (tok_spelling_cmp(result, "void"))
+	else if (tok_spelling_cmp(buff, "void"))
 		result->kind = tok_void;
-	else if (tok_spelling_cmp(result, "signed"))
+	else if (tok_spelling_cmp(buff, "signed"))
 		result->kind = tok_signed;
-	else if (tok_spelling_cmp(result, "unsigned"))
+	else if (tok_spelling_cmp(buff, "unsigned"))
 		result->kind = tok_unsigned;
-	else if (tok_spelling_cmp(result, "float"))
+	else if (tok_spelling_cmp(buff, "float"))
 		result->kind = tok_float;
-	else if (tok_spelling_cmp(result, "double"))
+	else if (tok_spelling_cmp(buff, "double"))
 		result->kind = tok_double;
-	else if (tok_spelling_cmp(result, "const"))
+	else if (tok_spelling_cmp(buff, "const"))
 		result->kind = tok_const;
-	else if (tok_spelling_cmp(result, "volatile"))
+	else if (tok_spelling_cmp(buff, "volatile"))
 		result->kind = tok_volatile;
-	else if (tok_spelling_cmp(result, "typedef"))
+	else if (tok_spelling_cmp(buff, "typedef"))
 		result->kind = tok_typedef;
-	else if (tok_spelling_cmp(result, "extern"))
+	else if (tok_spelling_cmp(buff, "extern"))
 		result->kind = tok_extern;
-	else if (tok_spelling_cmp(result, "static"))
+	else if (tok_spelling_cmp(buff, "static"))
 		result->kind = tok_static;
-	else if (tok_spelling_cmp(result, "auto"))
+	else if (tok_spelling_cmp(buff, "auto"))
 		result->kind = tok_auto;
-	else if (tok_spelling_cmp(result, "register"))
+	else if (tok_spelling_cmp(buff, "register"))
 		result->kind = tok_register;
-	else if (tok_spelling_cmp(result, "return"))
+	else if (tok_spelling_cmp(buff, "return"))
 		result->kind = tok_return;
-	else if (tok_spelling_cmp(result, "if"))
+	else if (tok_spelling_cmp(buff, "if"))
 		result->kind = tok_if;
-	else if (tok_spelling_cmp(result, "else"))
+	else if (tok_spelling_cmp(buff, "else"))
 		result->kind = tok_else;
-	if (tok_spelling_cmp(result, "for"))
+	else if (tok_spelling_cmp(buff, "for"))
 		result->kind = tok_for;
-	else if (tok_spelling_cmp(result, "while"))
+	else if (tok_spelling_cmp(buff, "while"))
 		result->kind = tok_while;
-	else if (tok_spelling_cmp(result, "do"))
+	else if (tok_spelling_cmp(buff, "do"))
 		result->kind = tok_do;
-	else if (tok_spelling_cmp(result, "break"))
+	else if (tok_spelling_cmp(buff, "break"))
 		result->kind = tok_break;
-	else if (tok_spelling_cmp(result, "continue"))
+	else if (tok_spelling_cmp(buff, "continue"))
 		result->kind = tok_continue;
-	else if (tok_spelling_cmp(result, "struct"))
+	else if (tok_spelling_cmp(buff, "struct"))
 		result->kind = tok_struct;
-	else if (tok_spelling_cmp(result, "union"))
+	else if (tok_spelling_cmp(buff, "union"))
 		result->kind = tok_union;
-	else if (tok_spelling_cmp(result, "enum"))
+	else if (tok_spelling_cmp(buff, "enum"))
 		result->kind = tok_enum;
-	else if (tok_spelling_cmp(result, "sizeof"))
+	else if (tok_spelling_cmp(buff, "sizeof"))
 		result->kind = tok_sizeof;
-	else if (tok_spelling_cmp(result, "switch"))
+	else if (tok_spelling_cmp(buff, "switch"))
 		result->kind = tok_switch;
-	else if (tok_spelling_cmp(result, "case"))
+	else if (tok_spelling_cmp(buff, "case"))
 		result->kind = tok_case;
-	else if (tok_spelling_cmp(result, "default"))
+	else if (tok_spelling_cmp(buff, "default"))
 		result->kind = tok_default;
-	else if (tok_spelling_cmp(result, "goto"))
+	else if (tok_spelling_cmp(buff, "goto"))
 		result->kind = tok_goto;
 }
 
@@ -430,190 +483,166 @@ lex_next_tok:
 		goto lex_next_tok;
 	case '(':
 		result->kind = tok_l_paren;
-		result->len = 1;
 		break;
 	case ')':
 		result->kind = tok_r_paren;
-		result->len = 1;
 		break;
 	case '{':
 		result->kind = tok_l_brace;
-		result->len = 1;
 		break;
 	case '}':
 		result->kind = tok_r_brace;
-		result->len = 1;
 		break;
 	case '[':
 		result->kind = tok_l_square_paren;
-		result->len = 1;
 		break;
 	case ']':
 		result->kind = tok_r_square_paren;
-		result->len = 1;
 		break;
 	case ';':
 		result->kind = tok_semi_colon;
-		result->len = 1;
 		break;
 	case '-':
-		if (pos[1] == '-')
+		if (_peek_next(src, pos) == '-')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_minusminus;
-			result->len = 2;
 		}
-		else if (pos[1] == '>')
+		else if (_peek_next(src, pos) == '>')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_minusgreater;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_minus;
-			result->len = 1;
 		}
 		break;
 	case '~':
 		result->kind = tok_tilda;
-		result->len = 1;
 		break;
 	case '!':
-		if (pos[1] == '=')
+		if (_peek_next(src, pos) == '=')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_exclaimequal;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_exclaim;
-			result->len = 1;
 		}
 		break;
 	case '+':
-		if (pos[1] == '+')
+		if (_peek_next(src, pos) == '+')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_plusplus;
-			result->len = 2;
 		}
-		else if (pos[1] == '=')
+		else if (_peek_next(src, pos) == '=')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_plusequal;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_plus;
-			result->len = 1;
 		}
 		break;
 	case '*':
 		result->kind = tok_star;
-		result->len = 1;
 		break;
 	case '/':
-		if (pos[1] == '/')
+		if (_peek_next(src, pos) == '/')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_slashslash;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_slash;
-			result->len = 1;
 		}
 		break;
 	case '%':
 		result->kind = tok_percent;
-		result->len = 1;
 		break;
 	case '^':
 		result->kind = tok_caret;
-		result->len = 1;
 		break;
 	case ':':
 		result->kind = tok_colon;
-		result->len = 1;
 		break;
 	case '?':
 		result->kind = tok_question;
-		result->len = 1;
 		break;
 	case ',':
 		result->kind = tok_comma;
-		result->len = 1;
 		break;
 	case '.':
 		result->kind = tok_fullstop;
-		result->len = 1;
 		break;
 	case '&':
-		if (pos[1] == '&')
+		if (_peek_next(src, pos) == '&')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_ampamp;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_amp;
-			result->len = 1;
 		}
 		break;
 	case '|':
-		if (pos[1] == '|')
+		if (_peek_next(src, pos) == '|')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_pipepipe;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_pipe;
-			result->len = 1;
 		}
 		break;
 	case '=':
-		if (pos[1] == '=')
+		if (_peek_next(src, pos) == '=')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_equalequal;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_equal;
-			result->len = 1;
 		}
 		break;
 	case '<':
-		if (pos[1] == '<')
+		if (_peek_next(src, pos) == '<')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_lesserlesser;
-			result->len = 2;
 		}
-		else if (pos[1] == '=')
+		else if (_peek_next(src, pos) == '=')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_lesserequal;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_lesser;
-			result->len = 1;
 		}
 		break;
 	case '>':
-		if (pos[1] == '>')
+		if (_peek_next(src, pos) == '>')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_greatergreater;
-			result->len = 2;
 		}
-		else if (pos[1] == '=')
+		else if (_peek_next(src, pos) == '=')
 		{
+			_adv_pos(src, &pos);
 			result->kind = tok_greaterequal;
-			result->len = 2;
 		}
 		else
 		{
 			result->kind = tok_greater;
-			result->len = 1;
 		}
 		break;
 	case '\'':
@@ -640,7 +669,7 @@ lex_next_tok:
 		break;
 	};
 
-	/*if (result->kind == tok_slashslash)
+	if (result->kind == tok_slashslash)
 	{
 		//Skip up to eol
 		do
@@ -648,7 +677,10 @@ lex_next_tok:
 			if (!_adv_pos(src, &pos)) goto _hit_end;
 		} while (*pos != '\n');
 		goto lex_next_tok;
-	}*/
+	}
+
+	if(result->len == 0)
+		result->len = 1 + pos - result->loc;
 
 	return result->kind != tok_invalid;
 

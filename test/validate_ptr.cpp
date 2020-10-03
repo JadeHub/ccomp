@@ -31,9 +31,6 @@ TEST_F(PtrValidationTest, local_ptr_ptr)
 						)";
 
 	ExpectNoError(code);
-
-	ast_function_decl_t* func;
-
 }
 
 TEST_F(PtrValidationTest, return_ptr)

@@ -1175,7 +1175,9 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 	}
 
 	if (decl->data.var.expr)
+	{
 		process_expression(decl->data.var.expr);
+	}
 
 	idm_add_id(_id_map, decl);
 	return proc_decl_new_def;

@@ -87,7 +87,7 @@ const char* tok_kind_spelling(tok_kind k)
 	case tok_else:
 		return "else";
 	case tok_for:
-		return "for";
+return "for";
 	case tok_while:
 		return "while";
 	case tok_do:
@@ -118,27 +118,27 @@ const char* tok_kind_spelling(tok_kind k)
 		return "void";
 	case tok_fullstop:
 		return ".";
-//	case tok_apostrophe:
-	//	return "'";
-	case tok_signed: 
+		//	case tok_apostrophe:
+			//	return "'";
+	case tok_signed:
 		return "signed";
-	case tok_unsigned: 
+	case tok_unsigned:
 		return "unsigned";
-	case tok_float: 
+	case tok_float:
 		return "float";
-	case tok_double: 
+	case tok_double:
 		return "double";
-	case tok_const: 
+	case tok_const:
 		return "const";
 	case tok_volatile:
 		return "volatile";
 	case tok_typedef:
 		return "typedef";
-	case tok_extern: 
+	case tok_extern:
 		return "extern";
-	case tok_static: 
+	case tok_static:
 		return "static";
-	case tok_auto: 
+	case tok_auto:
 		return "auto";
 	case tok_register:
 		return "register";
@@ -173,19 +173,35 @@ size_t tok_spelling_len(token_t* tok)
 	return tok->len;
 }
 
-void tok_spelling_cpy(token_t* tok, char* dest, size_t len)
+void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_t dest_len)
 {
-	assert(len > tok->len);
-	strncpy(dest, tok->loc, tok->len);
-	dest[tok->len] = '\0';
+	const char* src = src_loc;
+	int pos = 0;
+	while ((src < src_loc+src_len) && (pos < dest_len - 1))
+	{
+		if (*src == '\\')
+		{
+			if (src[1] == '\n')
+			{
+				src += 2;
+				continue;
+			}
+			if (src[1] == '\r' && src[2] == '\n')
+			{
+				src += 3;
+				continue;
+			}
+		}
+		dest[pos] = *src;
+		pos++;
+		src++;
+	}
+	dest[pos] = '\0';
 }
 
-bool tok_spelling_cmp(token_t* tok, const char* str)
+void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 {
-	size_t l = strlen(str);
-	if (tok->len > l)
-		return false;
-	return strncmp(tok->loc, str, l) == 0;
+	tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
 }
 
 bool tok_is_in_range(token_t* tok, token_range_t* range)
