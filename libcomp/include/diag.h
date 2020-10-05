@@ -1,10 +1,5 @@
 #pragma once
 
-#if defined(__cplusplus)
-extern "C"
-{
-#endif
-
 #include <stdint.h>
 #include <stdarg.h>
 
@@ -27,6 +22,7 @@ extern "C"
 #define ERR_INVALID_SWITCH 16 //switch statmement is not valid
 #define ERR_DUP_LABEL 17
 #define ERR_UNKNOWN_LABEL 18
+#define ERR_UNKNOWN_SRC_FILE 19
 
 struct token;
 
@@ -35,7 +31,3 @@ typedef void (*diag_cb)(struct token* toc, uint32_t err, const char* msg, void* 
 void diag_set_handler(diag_cb, void* data);
 void diag_err(struct token* tok, uint32_t err, const char* format, ...);
 const char* diag_pos_str(struct token*);
-
-#if defined(__cplusplus)
-}
-#endif

@@ -1428,14 +1428,13 @@ ast_expression_t* parse_optional_expression(tok_kind term_tok)
 
 	ast_expression_t* result = NULL;
 
-	
 	if (current_is(term_tok))
 	{
 		result = _alloc_expr();
 		result->kind = expr_null;
 		return result;
 	}
-j:	result = parse_expression();
+	result = parse_expression();
 	if (_parse_err)
 	{
 		ast_destroy_expression(result);

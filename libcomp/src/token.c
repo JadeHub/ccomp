@@ -9,21 +9,16 @@ const char* tok_kind_spelling(tok_kind k)
 {
 	switch (k)
 	{
-		case tok_eof: return "";
-	}
-
-	switch (k)
-	{
 	case tok_eof:
 		return "eof";
 	case tok_l_brace:
-		return "(";
-	case tok_r_brace:
-		return ")";
-	case tok_l_paren:
 		return "{";
-	case tok_r_paren:
+	case tok_r_brace:
 		return "}";
+	case tok_l_paren:
+		return "(";
+	case tok_r_paren:
+		return ")";
 	case tok_l_square_paren:
 		return "[";
 	case tok_r_square_paren:
@@ -44,6 +39,8 @@ const char* tok_kind_spelling(tok_kind k)
 		return "identifier";
 	case tok_num_literal:
 		return "num_literal";
+	case tok_string_literal:
+		return "string_literal";
 	case tok_minus:
 		return "-";
 	case tok_tilda:
@@ -87,7 +84,7 @@ const char* tok_kind_spelling(tok_kind k)
 	case tok_else:
 		return "else";
 	case tok_for:
-return "for";
+		return "for";
 	case tok_while:
 		return "while";
 	case tok_do:
@@ -144,6 +141,8 @@ return "for";
 		return "register";
 	case tok_minusgreater:
 		return "minusgreater";
+	case tok_pp_include:
+		return "#include";
 	}
 	return "invalid";
 }
@@ -154,17 +153,39 @@ void tok_printf(token_t* tok)
 	{
 		printf("Tok %s %d\n", tok_kind_spelling(tok->kind), (uint32_t)(long)tok->data);
 	}
+	else if (tok->kind == tok_string_literal)
+	{
+		printf("Tok %s \"%s\"\n", tok_kind_spelling(tok->kind), (const char*)tok->data);
+	}
 	else if (tok->kind == tok_identifier)
 	{
-		char buff[32];
-		assert(tok->len < 32);
-		strncpy(buff, tok->loc, tok->len);
-		buff[tok->len] = '\0';
+		char buff[33];
+		tok_spelling_cpy(tok, buff, 33);
 		printf("Tok %s %s\n", tok_kind_spelling(tok->kind), buff);
 	}
 	else
 	{
 		printf("Tok %s\n", tok_kind_spelling(tok->kind));
+	}
+}
+
+void tok_dump_range(token_t* start, token_t* end)
+{
+	while (start)
+	{
+		tok_printf(start);
+		if (start == end)
+			break;
+		start = start->next;
+	}
+}
+
+void tok_dump(token_t* tok)
+{
+	while (tok)
+	{
+		tok_printf(tok);
+		tok = tok->next;
 	}
 }
 
@@ -204,23 +225,16 @@ void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 	tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
 }
 
-bool tok_is_in_range(token_t* tok, token_range_t* range)
+token_t* tok_find_next(token_t* start, tok_kind kind)
 {
-	if (!tok_is_valid_range(range)) return false;
-	return tok->loc >= range->start->loc &&
-		tok->loc + tok->len <= range->end->loc + range->end->len;
+	token_t* tok = start;
+
+	while (tok)
+	{
+		if (tok->kind == kind)
+			return tok;
+		tok = tok->next;
+	}
+
+	return NULL;
 }
-
-size_t tok_range_len(token_range_t* range)
-{
-	if (!tok_is_valid_range(range))
-		return 0;
-	return range->end->loc + range->end->len - range->start->loc;
-}
-
-bool tok_is_valid_range(token_range_t* range)
-{
-	return range->start && range->end;
-}
-
-

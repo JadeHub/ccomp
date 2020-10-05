@@ -13,6 +13,7 @@ extern "C"
 #include <libcomp/include/lexer.h>
 #include <libcomp/include/parse.h>
 #include <libcomp/include/sema.h>
+#include <libcomp/include/pp.h>
 }
 
 using namespace ::testing;
@@ -71,9 +72,8 @@ public:
 		token_t* tok = toks;
 		while (tok)
 		{
-			tokens.push_back(*tok);
+			tokens.push_back(tok);
 			token_t* next = tok->next;
-			//free(tok);
 			tok = next;
 		}
 
@@ -132,7 +132,7 @@ public:
 		//ASSERT_EQ(1, 2);
 	}
 
-	std::vector<token_t> tokens;
+	std::vector<token_t*> tokens;
 	ast_trans_unit_t* ast = nullptr;
 	valid_trans_unit_t* tl = nullptr;
 };
@@ -155,31 +155,76 @@ public:
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 
-		token_t* toks = lex_source(&sr);
-
-		token_t* tok = toks;
-		while (tok)
-		{
-			tokens.push_back(*tok);
-			token_t* next = tok->next;
-			free(tok);
-			tok = next;
-		}
+		tokens = lex_source(&sr);
 	}
 
-	std::vector<token_t> tokens;
+	token_t* tokens = nullptr;
+
+	token_t* GetToken(uint32_t idx)
+	{
+		token_t* tok = tokens;
+		for (uint32_t i = 0; i < idx; i++)
+		{
+			EXPECT_NE(nullptr, tok);
+			tok = tok->next;
+		}
+		return tok;
+	}
 
 	template <typename T>
-	void ExpectIntLiteral(const token_t& t, T val)
+	void ExpectIntLiteral(token_t* t, T val)
 	{
-		EXPECT_EQ(t.kind, tok_num_literal);
-		EXPECT_EQ(t.data, (uint32_t)val);
+		EXPECT_EQ(t->kind, tok_num_literal);
+		EXPECT_EQ(t->data, (uint32_t)val);
 	}
 
-	void ExpectStringLiteral(const token_t& t, const char* expected)
+	void ExpectStringLiteral(token_t* t, const char* expected)
 	{
-		const char* str = (const char*)t.data;
+		const char* str = (const char*)t->data;
 		EXPECT_STREQ(str, expected);
+	}
+
+	void ExpectTokTypes(const std::vector<tok_kind>& kinds)
+	{
+		token_t* tok = tokens;
+
+		for (auto i = 0; i < kinds.size(); i++)
+		{
+			EXPECT_NE(nullptr, tok);
+			EXPECT_EQ(kinds[i], tok->kind);
+			tok = tok->next;
+		}
 	}
 };
 
+class LexPreProcTest : public LexTest
+{
+public:
+
+	LexPreProcTest()
+	{
+		src_init(&load_file, this);
+	}
+
+	static source_range_t load_file(const char* path, void* data)
+	{
+		LexPreProcTest* This = (LexPreProcTest*)data;
+		return This->on_load_file(path);
+	}
+
+	void PreProc(const char* src)
+	{
+		Lex(src);
+		tokens = pre_proc_file(tokens);
+	}
+
+	MOCK_METHOD1(on_load_file, source_range_t(const std::string&));
+
+	void ExpectFileLoad(const std::string& path, const std::string& code)
+	{
+		source_range_t sr;
+		sr.ptr = code.c_str();
+		sr.end = sr.ptr + code.size() + 1;
+		EXPECT_CALL(*this, on_load_file(path)).WillOnce(Return(sr));
+	}
+};

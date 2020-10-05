@@ -228,7 +228,7 @@ hash_table_t* sht_create(uint32_t sz)
 
 void sht_insert(hash_table_t* ht, const char* key, void* val)
 {
-	char* keydup = strdup(key);
+	const char* keydup = strdup(key);
 	ht_insert(ht, keydup, val);
 }
 

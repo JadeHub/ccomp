@@ -1,5 +1,7 @@
 #include "source.h"
 
+#include <libj/include/hash_table.h>
+
 #include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
@@ -13,7 +15,16 @@ typedef struct
 	uint32_t line_count;
 }source_file_t;
 
-source_file_t _theFile;
+
+/*
+Map of path to source_file_t* for each open file
+
+We can find the file associated with a char pointer by looking at the source ranges of each file
+*/
+static hash_table_t* _files;
+
+static src_load_cb _load_cb;
+static void* _load_data;
 
 static int _is_line_ending(const char* ptr)
 {
@@ -28,17 +39,16 @@ static int _is_line_ending(const char* ptr)
 	return 0;
 }
 
-static void _init_line_data(source_file_t* f)
+static uint32_t _count_lines(source_range_t* range)
 {
-	const char* ptr = f->range.ptr;
-
-	f->line_count = 0;
-	while (ptr < f->range.end)
+	const char* ptr = range->ptr;
+	uint32_t result = 0;
+	while (ptr < range->end)
 	{
 		int adv = _is_line_ending(ptr);
 		if (adv)
 		{
-			f->line_count++;
+			result++;
 			ptr += adv;
 		}
 		else
@@ -46,9 +56,17 @@ static void _init_line_data(source_file_t* f)
 			ptr++;
 		}
 	}
+	return result;
+}
 
+static void _init_line_data(source_file_t* f)
+{
+	//allocate buffer
+	f->line_count = _count_lines(&f->range);
 	f->lines = (const char**)malloc(sizeof(const char*) * f->line_count);
-	ptr = f->range.ptr;
+
+	//store pointers to the start of each line
+	const char* ptr = f->range.ptr;
 	int line = 0;
 	while (ptr < f->range.end)
 	{
@@ -67,26 +85,41 @@ static void _init_line_data(source_file_t* f)
 	}
 }
 
+source_file_t* _get_file_for_pos(const char* pos)
+{
+	sht_iterator_t it = sht_begin(_files);
+	while (!sht_end(_files, &it))
+	{
+		source_file_t* sf = (source_file_t*)it.val;
+
+		if (pos >= sf->range.ptr && pos <= sf->range.end)
+			return sf;
+
+		sht_next(_files, &it);
+	}
+	return NULL;
+}
+
 file_pos_t src_file_position(const char* pos)
 {
-	source_file_t* f = &_theFile;
+	source_file_t* file = _get_file_for_pos(pos);
 	file_pos_t result;
 	result.col = 0;
 	result.line = 0;
 	uint32_t line = 0;
-	for (line = 0; line < f->line_count; line++)
+	for (line = 0; line < file->line_count; line++)
 	{
-		if (pos < f->lines[line])
+		if (pos < file->lines[line])
 		{
 			if (line == 0)
 			{
 				result.line = 1;
-				result.col = (pos - f->range.ptr) + 1;
+				result.col = (pos - file->range.ptr) + 1;
 			}
 			else
 			{
 				result.line = line + 1;
-				result.col = pos - _theFile.lines[line-1] + 1;
+				result.col = pos - file->lines[line-1] + 1;
 			}
 			return result;
 		}
@@ -94,21 +127,14 @@ file_pos_t src_file_position(const char* pos)
 	return result;
 }
 
-source_range_t* src_init_source(const char* src, size_t len)
+static source_file_t* _init_source(source_range_t src)
 {
-	source_file_t* f = &_theFile;
-
-	size_t buff_len = len;
-	char* buff;
-	if (src[buff_len - 1] != '\0')
-		buff_len++;
-	buff = (char*)malloc(buff_len);
-	buff[buff_len - 1] = '\0';
-	strncpy(buff, src, len);
-	f->range.ptr = buff;
-	f->range.end = buff + buff_len;
-	_init_line_data(f);
-	return &f->range;
+	source_file_t* file = (source_file_t*)malloc(sizeof(source_file_t));
+	memset(file, 0, sizeof(source_file_t));
+	
+	file->range = src;
+	_init_line_data(file);
+	return file;
 }
 
 const char* src_file_pos_str(file_pos_t pos)
@@ -140,4 +166,39 @@ char* src_extract(const char* start, const char* end)
 	}	
 
 	return result;
+}
+
+bool src_is_valid_range(source_range_t* src)
+{
+	return src->ptr && src->end && src->ptr != src->end;
+}
+
+source_range_t* src_load_file(const char* path)
+{
+	source_range_t src = _load_cb(path, _load_data);
+	if (!src_is_valid_range(&src))
+		return NULL;
+	
+	source_file_t* file = _init_source(src);
+	sht_insert(_files, path, file);
+	return &file->range;
+}
+
+void src_init(src_load_cb load_cb, void* load_data)
+{
+	_files = sht_create(32);
+	_load_cb = load_cb;
+	_load_data = load_data;
+}
+
+void src_deinit()
+{
+	sht_iterator_t it = sht_begin(_files);
+	while (!sht_end(_files, &it))
+	{
+		source_file_t* sf = (source_file_t*)it.val;
+		free(sf);
+		sht_next(_files, &it);
+	}
+	ht_destroy(_files);
 }

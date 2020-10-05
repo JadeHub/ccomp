@@ -89,6 +89,20 @@ typedef enum
     tok_auto,
     tok_register,
 
+    // preprocessor directives
+    tok_pp_include,
+    tok_pp_define,
+    tok_pp_undef,
+    tok_pp_line,
+    tok_pp_error,
+    tok_pp_pragma,
+    tok_pp_if,
+    tok_pp_ifdef,
+    tok_pp_ifndef,
+    tok_pp_else,
+    tok_pp_elif,
+    tok_pp_endif,
+
     tok_identifier,         // main
     tok_num_literal,        // 1234
     tok_string_literal      // "abc"
@@ -117,11 +131,11 @@ typedef struct
     token_t* end;
 }token_range_t;
 
-bool tok_is_valid_range(token_range_t* range);
-size_t tok_range_len(token_range_t* range);
-bool tok_is_in_range(token_t* tok, token_range_t* range);
+token_t* tok_find_next(token_t* start, tok_kind kind);
 const char* tok_kind_spelling(tok_kind);
 void tok_printf(token_t* tok);
+void tok_dump(token_t* tok);
+void tok_dump_range(token_t* start, token_t* end);
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
 void tok_spelling_extract(const char* src, size_t src_len, char* dest, size_t dest_len);

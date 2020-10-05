@@ -37,8 +37,29 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
     exit(1); 
 }
 
+source_range_t _file_loader(const char* path, void* d)
+{
+    source_range_t result = {NULL, NULL};
+    FILE* f = fopen(path, "r");
+    if (f)
+    {
+        fseek(f, 0, SEEK_END);
+        unsigned long len = (unsigned long)ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char* buff = (char*)malloc(len + 1);
+        if (fread(buff, 1, len, f) == len)
+        {
+            result.ptr = buff;
+            result.end = buff + len;
+        }
+        fclose(f);
+    }
+    return result;
+}
+
 int main(int argc, char* argv[])
 {
+    src_init(&_file_loader, NULL);
     lex_init();
     diag_set_handler(&diag_err_print, NULL);
 
@@ -46,20 +67,9 @@ int main(int argc, char* argv[])
 
     if (argc == 2)
     {
-        FILE* f = fopen(argv[1], "r");
-        if (!f)
-            return 1;
-
-        fseek(f, 0, SEEK_END);
-        unsigned long len = (unsigned long)ftell(f);
-        fseek(f, 0, SEEK_SET);
-
-        char *buff = (char*)malloc(len + 1);
-        if (fread(buff, 1, len, f) != len)
+        source_range_t* sr = src_load_file(argv[1]);
+        if (!sr)
             return -1;
-        fclose(f);
-        
-        source_range_t* sr = src_init_source(buff, len);
         toks = lex_source(sr);
     }
     else
@@ -80,6 +90,7 @@ int main(int argc, char* argv[])
     }
     code_gen(tl, &asm_print, NULL);
     tl_destroy(tl);
+    src_deinit();
     return 0;
 }
 
