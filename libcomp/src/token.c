@@ -191,7 +191,28 @@ void tok_dump(token_t* tok)
 
 size_t tok_spelling_len(token_t* tok)
 {
-	return tok->len;
+	size_t len = 0;
+	const char* src = tok->loc;
+
+	while (src < (tok->loc + tok->len))
+	{
+		if (*src == '\\')
+		{
+			if (src[1] == '\n')
+			{
+				src += 2;
+				continue;
+			}
+			if (src[1] == '\r' && src[2] == '\n')
+			{
+				src += 3;
+				continue;
+			}
+		}
+		len++;
+		src++;
+	}
+	return len;
 }
 
 void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_t dest_len)
@@ -237,4 +258,26 @@ token_t* tok_find_next(token_t* start, tok_kind kind)
 	}
 
 	return NULL;
+}
+
+size_t tok_range_len(token_range_t* range)
+{
+	token_t* tok = range->start;
+	size_t len = 0;
+
+	while (tok && tok != range->end)
+	{
+		len++;
+		tok = tok->next;
+	}
+	return len;
+}
+
+void tok_destory(token_t* tok)
+{
+	if (tok && tok->kind == tok_string_literal)
+	{
+		free(tok->data);
+	}
+	free(tok);
 }

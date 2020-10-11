@@ -1,33 +1,16 @@
 #include "validation_fixture.h"
 
-TEST_F(LexPreProcTest, err_include_extra_toks_before_eol)
+class PreProcIncludeTest : public LexPreProcTest 
 {
-	std::string src = R"(#include "stdio.h" int i;)";
+public:
 
-	ExpectError(ERR_SYNTAX);
-
-	PreProc(src.c_str());
-}
-
-TEST_F(LexPreProcTest, err_include_unterminated)
-{
-	std::string src = R"(#include "stdio.h
-int i;)";
-
-	ExpectError(ERR_SYNTAX);
-
-	PreProc(src.c_str());
-}
-
-TEST_F(LexPreProcTest, include1)
-{
-	std::string stdio = R"(void fn();)";
-	std::string src = R"(#include "stdio.h"
+	const std::string stdio_code = "void fn();";
+	const std::string inc_code = R"(#include "stdio.h"
 void main() {})";
-	ExpectFileLoad("stdio.h", stdio);
 
-	PreProc(src.c_str());
-	ExpectTokTypes({ tok_void,
+	const std::vector<tok_kind> expected_toks = 
+	{ 
+		tok_void,
 		tok_identifier,
 		tok_l_paren,
 		tok_r_paren,
@@ -39,15 +22,41 @@ void main() {})";
 		tok_l_brace,
 		tok_r_brace,
 		tok_eof
-		});
+	};
+};
+
+TEST_F(PreProcIncludeTest, err_include_extra_toks_before_eol)
+{
+	std::string src = R"(#include "stdio.h" int i;)";
+
+	ExpectError(ERR_SYNTAX);
+
+	PreProc(src.c_str());
 }
 
-TEST_F(LexPreProcTest, include2)
+TEST_F(PreProcIncludeTest, err_include_unterminated)
 {
-	std::string stdio = R"(void fn();)";
+	std::string src = R"(#include "stdio.h
+int i;)";
+
+	ExpectError(ERR_SYNTAX);
+
+	PreProc(src.c_str());
+}
+
+TEST_F(PreProcIncludeTest, include1)
+{
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	PreProc(inc_code.c_str());
+	ExpectTokTypes(expected_toks);
+}
+
+TEST_F(PreProcIncludeTest, include2)
+{
 	std::string src = R"(#include <stdio.h>)";
 
-	ExpectFileLoad("stdio.h", stdio);
+	ExpectFileLoad("stdio.h", stdio_code);
 
 	PreProc(src.c_str());
 	ExpectTokTypes({ tok_void,
@@ -59,7 +68,35 @@ TEST_F(LexPreProcTest, include2)
 		});
 }
 
-TEST_F(LexPreProcTest, include_recursive)
+TEST_F(PreProcIncludeTest, include_define1)
+{
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	const std::string inc_code = R"(
+#define STDIO_H "stdio.h"
+#include STDIO_H
+void main() {})";
+
+	PreProc(inc_code.c_str());
+	ExpectTokTypes(expected_toks);
+}
+
+TEST_F(PreProcIncludeTest, include_define2)
+{
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	const std::string inc_code = R"(
+#define STDIO_H <stdio.h>
+#include STDIO_H
+void main() {})";
+
+	PreProc(inc_code.c_str());
+	ExpectTokTypes(expected_toks);
+}
+
+
+
+TEST_F(PreProcIncludeTest, include_recursive)
 {
 	std::string inc1 = R"(int x;)";
 	std::string inc2 = R"(#include "inc1.h"
@@ -82,7 +119,7 @@ void fn();)";
 		});
 }
 
-TEST_F(LexPreProcTest, include_two_files)
+TEST_F(PreProcIncludeTest, include_two_files)
 {
 	std::string inc1 = R"(int x;)";
 	std::string inc2 = R"(void fn();)";
@@ -104,5 +141,3 @@ TEST_F(LexPreProcTest, include_two_files)
 		tok_eof
 		});
 }
-
-

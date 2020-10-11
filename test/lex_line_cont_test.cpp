@@ -114,3 +114,13 @@ tion();)";
 			tok_semi_colon,
 			tok_eof });
 }
+
+TEST_F(LexLineContTest, tok_spelling_len)
+{
+	Lex(R"(ab\
+c)");
+
+	ExpectTokTypes({ tok_identifier, tok_eof });
+	EXPECT_EQ(3, tok_spelling_len(GetToken(0)));
+
+}

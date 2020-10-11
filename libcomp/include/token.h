@@ -139,3 +139,5 @@ void tok_dump_range(token_t* start, token_t* end);
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
 void tok_spelling_extract(const char* src, size_t src_len, char* dest, size_t dest_len);
+size_t tok_range_len(token_range_t* range);
+void tok_destory(token_t* tok);

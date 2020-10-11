@@ -223,5 +223,12 @@ TEST_F(LexerTest, ErrStringConstantUnterminated2)
 	Lex(code);
 }
 
+TEST_F(LexerTest, tok_spelling_len)
+{
+	Lex(R"(abc)");
 
+	ExpectTokTypes({ tok_identifier, tok_eof });
+	EXPECT_EQ(3, tok_spelling_len(GetToken(0)));
+
+}
 

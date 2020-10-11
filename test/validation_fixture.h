@@ -190,7 +190,7 @@ public:
 
 		for (auto i = 0; i < kinds.size(); i++)
 		{
-			EXPECT_NE(nullptr, tok);
+			ASSERT_NE(nullptr, tok);
 			EXPECT_EQ(kinds[i], tok->kind);
 			tok = tok->next;
 		}
@@ -204,6 +204,13 @@ public:
 	LexPreProcTest()
 	{
 		src_init(&load_file, this);
+		pre_proc_init();
+	}
+
+	~LexPreProcTest()
+	{
+		pre_proc_deinit();
+		src_deinit();
 	}
 
 	static source_range_t load_file(const char* path, void* data)

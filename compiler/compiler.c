@@ -5,11 +5,10 @@
 #include <assert.h>
 #include <libcomp/include/token.h>
 #include <libcomp/include/lexer.h>
+#include <libcomp/include/pp.h>
 #include <libcomp/include/parse.h>
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/sema.h>
-
-static const char* _src = "int main() { struct A {int b; int c; }a; a.c = 5; return a.c;}";
 
 void print_tokens(token_t* toks)
 {
@@ -71,16 +70,16 @@ int main(int argc, char* argv[])
         if (!sr)
             return -1;
         toks = lex_source(sr);
+
+        pre_proc_init();
+        toks = pre_proc_file(toks);
+        pre_proc_deinit();
     }
     else
     {
-        source_range_t sr;
-        sr.ptr = _src;
-        sr.end = sr.ptr + strlen(_src);
-        toks = lex_source(&sr);
+        return -1;
     }
 
-  
     ast_trans_unit_t* ast = parse_translation_unit(toks);
     valid_trans_unit_t* tl = sem_analyse(ast);
     if (!tl)
@@ -90,6 +89,7 @@ int main(int argc, char* argv[])
     }
     code_gen(tl, &asm_print, NULL);
     tl_destroy(tl);
+    
     src_deinit();
     return 0;
 }

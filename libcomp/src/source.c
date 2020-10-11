@@ -170,7 +170,7 @@ char* src_extract(const char* start, const char* end)
 
 bool src_is_valid_range(source_range_t* src)
 {
-	return src->ptr && src->end && src->ptr != src->end;
+	return src && src->ptr && src->end && src->ptr != src->end;
 }
 
 source_range_t* src_load_file(const char* path)

@@ -486,8 +486,6 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)
 {
-	bool start_line = false;
-
 lex_next_tok:
 
 	//Skip any white space
@@ -507,8 +505,6 @@ lex_next_tok:
 
 	result->loc = pos;
 	result->len = 0;
-	//if(start_line)
-		//result->flags |= TF_START_LINE;
 
 	switch (*pos)
 	{
@@ -517,7 +513,6 @@ lex_next_tok:
 	case '\n':
 		//preprocessor
 		pos++;
-		//start_line = true;
 		result->flags = TF_START_LINE;
 		goto lex_next_tok;
 	case '(':
@@ -675,13 +670,6 @@ lex_next_tok:
 		}
 		break;
 	case '<':
-		
-		if (result->prev && result->prev->kind == tok_pp_include)
-		{
-			_lex_string_literal(src, pos, result, '>');
-			break;
-		}
-
 		_adv_pos(src, &pos);
 		if (*pos == '<')
 		{
