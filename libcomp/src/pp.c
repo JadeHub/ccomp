@@ -26,15 +26,16 @@ static inline void _emit_token(token_t* tok)
 	}
 }
 
-static inline void _diag_expected(token_t* tok, tok_kind kind)
+static inline void* _diag_expected(token_t* tok, tok_kind kind)
 {
 	diag_err(tok, ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
 		tok_kind_spelling(kind), tok_kind_spelling(tok->kind));
+	return NULL;
 }
 
 static inline bool _is_pp_tok(token_t* tok)
 {
-	return tok->kind >= tok_pp_include &&
+	return tok->kind >= tok_pp_null &&
 		tok->kind <= tok_pp_endif;
 }
 
@@ -89,41 +90,59 @@ static token_range_t _expand_identifier(token_t* tok)
 	return r;
 }
 
-
-static bool _eval_const_expr(token_range_t range)
-{
-	token_t* tok = range.start;
-
-	if (tok->kind == tok_num_literal && tok->next == range.end)
-	{
-		return tok->data != 0;
-	}
-
-	return true;
-}
-
-static bool _process_define(token_t* tok, token_t* end)
+static token_t* _process_undef(token_t* tok)
 {
 	token_t* identifier = tok->next;
+	token_t* end = _find_eol(tok->next)->next;
+
+	if (identifier->kind != tok_identifier)
+		return _diag_expected(identifier, tok_identifier);
 
 	char name[MAX_LITERAL_NAME + 1];
 	tok_spelling_cpy(identifier, name, MAX_LITERAL_NAME + 1);
 
+	token_range_t* range = (token_range_t*)sht_lookup(_context->defs, name);
+	if (range)
+	{
+		sht_remove(_context->defs, name);
+		tok_destroy_range(range);
+		free(range);
+	}
+	return end;
+}
+
+static token_t* _process_define(token_t* tok)
+{
+	token_t* end = _find_eol(tok->next)->next;
+	token_t* identifier = tok->next;
+
+	if (identifier->kind != tok_identifier)
+		return _diag_expected(identifier, tok_identifier);
+	
+	char name[MAX_LITERAL_NAME + 1];
+	tok_spelling_cpy(identifier, name, MAX_LITERAL_NAME + 1);
+
+	if (sht_lookup(_context->defs, name))
+	{
+		diag_err(tok, ERR_SYNTAX, "duplicate macro '%s'", name);
+		return NULL;
+	}
+
 	if (identifier->next->kind == tok_l_paren && !(identifier->next->flags & TF_LEADING_SPACE))
 	{
 		//macro...
-		return false;
+		return NULL;
 	}
 
 	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
 	range->start = identifier->next;
-	range->end = end->next;
+	range->end = end;
 
 	sht_insert(_context->defs, name, range);
 
 	tok_destory(tok);
 	tok_destory(identifier);
-	return true;
+	return end;
 }
 
 //Return next token to be processed
@@ -270,7 +289,7 @@ static token_t* _process_condition(token_t* tok)
 	}
 	else
 	{
-		diag_err(tok, ERR_SYNTAX, "unexpected token loking for pp conditional");
+		diag_err(tok, ERR_SYNTAX, "unexpected token looking for pp conditional");
 		return NULL;
 	}
 
@@ -311,40 +330,36 @@ static token_t* _process_token(token_t* tok)
 {
 	token_t* next = tok->next;
 
-	if (_is_pp_tok(tok))
+	switch (tok->kind)
 	{
-		switch (tok->kind)
-		{
-		case tok_pp_include:
-		{
-			next = _process_include(tok);
-			if(!next)
-				return NULL;
-			break;
-		}
-		case tok_pp_define:
-		{
-			token_t* end = _find_eol(tok->next);
-			_process_define(tok, end);
-			next = end->next;
-			break;
-		}
-		case tok_pp_if:
-		case tok_pp_ifdef:
-		case tok_pp_ifndef:
-			next = _process_condition(tok);
-			break;
-		}
-	}
-	else if (tok->kind == tok_identifier)
+	case tok_pp_include:
+		next = _process_include(tok);
+		break;
+	case tok_pp_define:
+		next = _process_define(tok);
+		break;
+	case tok_pp_if:
+	case tok_pp_ifdef:
+	case tok_pp_ifndef:
+		next = _process_condition(tok);
+		break;
+	case tok_pp_undef:
+		next = _process_undef(tok);
+		break;
+	case tok_pp_null:
+		//consume
+		next = tok->next;
+		break;
+	case tok_identifier:
 	{
 		next = tok->next;
 		token_range_t range = _expand_identifier(tok);
 		_emit_range(&range);
+		break;
 	}
-	else
-	{
+	default:
 		_emit_token(tok);
+		break;
 	}
 	return next;
 }

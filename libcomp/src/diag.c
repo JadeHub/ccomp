@@ -15,7 +15,7 @@ void diag_set_handler(diag_cb cb, void* data)
 	_cb_data = data;
 }
 
-void diag_err(token_t* tok, uint32_t err, const char* format, ...)
+void* diag_err(token_t* tok, uint32_t err, const char* format, ...)
 {
 	assert(_diag_cb);
 	char buff[512];
@@ -26,6 +26,7 @@ void diag_err(token_t* tok, uint32_t err, const char* format, ...)
 	va_end(args);
 
 	_diag_cb(tok, err, buff, _cb_data);
+	return NULL;
 }
 
 const char* diag_pos_str(token_t* tok)

@@ -2,6 +2,16 @@
 
 class PreProcCondTest : public LexPreProcTest {};
 
+TEST_F(PreProcCondTest, pp_null)
+{
+	std::string src = R"(
+#
+)";
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_eof });
+}
+
 TEST_F(PreProcCondTest, if_true)
 {
 	std::string src = R"(
@@ -209,6 +219,22 @@ int i;
 TEST_F(PreProcCondTest, ifndef_true)
 {
 	std::string src = R"(
+#ifndef ABC
+int i;
+#endif)";
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_int,
+		tok_identifier,
+		tok_semi_colon,
+		tok_eof });
+}
+
+TEST_F(PreProcCondTest, undef)
+{
+	std::string src = R"(
+#define ABC 1
+#undef ABC
 #ifndef ABC
 int i;
 #endif)";

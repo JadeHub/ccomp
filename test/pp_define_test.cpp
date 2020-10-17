@@ -13,3 +13,14 @@ TEST)";
 		tok_semi_colon,
 		tok_eof });
 }
+
+TEST_F(PreProcDefineTest, err_dup_define)
+{
+	std::string src = R"(
+#define TEST
+#define TEST
+)";
+
+	ExpectError(ERR_SYNTAX);
+	PreProc(src.c_str());
+}

@@ -454,7 +454,9 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 	char* buff = (char*)malloc(result->len);
 	tok_spelling_extract(result->loc + 1, result->len-1, buff, result->len);
 
-	if (strcmp(buff, "include") == 0)
+	if (result->len == 1)
+		result->kind = tok_pp_null;
+	else if (strcmp(buff, "include") == 0)
 		result->kind = tok_pp_include;
 	else if (strcmp(buff, "define") == 0)
 		result->kind = tok_pp_define;
@@ -478,8 +480,6 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 		result->kind = tok_pp_elif;
 	else if (strcmp(buff, "endif") == 0)
 		result->kind = tok_pp_endif;
-	else if (strcmp(buff, "#") == 0)
-		result->kind = tok_pp_hashhash;
 	else
 	{
 		diag_err(result, ERR_SYNTAX, "unknown preprocessor directive %s", buff);
@@ -714,7 +714,18 @@ lex_next_tok:
 		break;
 
 	case '#':
-		_lex_pre_proc_directive(src, pos, result);
+		if (result->flags & TF_START_LINE)
+		{
+			_lex_pre_proc_directive(src, pos, result);
+		}
+		else
+		{
+			_adv_pos(src, &pos);
+			if (*pos == '#')
+				result->kind = tok_hashhash;
+			else
+				result->kind = tok_hash;
+		}
 		break;
 
 	case '0': case '1': case '2': case '3': case '4':

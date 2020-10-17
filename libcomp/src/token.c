@@ -314,3 +314,15 @@ void tok_destory(token_t* tok)
 	}
 	free(tok);
 }
+
+void tok_destroy_range(token_range_t* range)
+{
+	token_t* tok = range->start;
+
+	while (tok && tok != range->end)
+	{
+		token_t* next = tok->next;
+		tok_destory(tok);
+		tok = next;
+	}
+}

@@ -26,6 +26,8 @@ typedef enum
     tok_plusequal,          // +=
     tok_star,               // *
     tok_slash,              // /
+    tok_hash,               // #
+    tok_hashhash,           // ##
     tok_slashslash,         // //
     tok_amp,                // &
     tok_ampamp,             // &&
@@ -90,6 +92,7 @@ typedef enum
     tok_register,
 
     // preprocessor directives
+    tok_pp_null, //# \n
     tok_pp_include,
     tok_pp_define,
     tok_pp_undef,
@@ -102,7 +105,6 @@ typedef enum
     tok_pp_else,
     tok_pp_elif,
     tok_pp_endif,
-    tok_pp_hashhash,
 
     tok_identifier,         // main
     tok_num_literal,        // 1234
@@ -143,3 +145,4 @@ const char* tok_spelling_dup(token_t* tok);
 void tok_spelling_extract(const char* src, size_t src_len, char* dest, size_t dest_len);
 size_t tok_range_len(token_range_t* range);
 void tok_destory(token_t* tok);
+void tok_destroy_range(token_range_t* range);
