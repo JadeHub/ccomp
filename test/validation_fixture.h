@@ -14,6 +14,7 @@ extern "C"
 #include <libcomp/include/parse.h>
 #include <libcomp/include/sema.h>
 #include <libcomp/include/pp.h>
+#include <libcomp/include/pp_internal.h>
 }
 
 using namespace ::testing;
@@ -143,6 +144,7 @@ public:
 
 	LexTest()
 	{
+		lex_init();
 	}
 
 	~LexTest()

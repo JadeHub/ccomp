@@ -15,7 +15,6 @@ static inline bool _can_adv(source_range_t* sr, const char** pos)
 
 static inline bool _adv_pos(source_range_t* sr, const char** pos)
 {
-	//if (*pos < sr->end) //skip the null and the last char
 	if (_can_adv(sr, pos))
 	{
 		char c = **pos;
@@ -147,6 +146,14 @@ static inline bool _is_valid_num_char(uint32_t base, char ch)
 	return false;
 }
 
+static inline bool _is_white_space(char ch)
+{
+	return ch == ' ' ||
+		ch == '\t' ||
+		ch == '\n' ||
+		ch == '\r';
+}
+
 static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* result)
 {
 	result->loc = pos;
@@ -258,7 +265,7 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 		if (!_is_valid_string_literal_char(*pos))
 		{
 			diag_err(result, ERR_SYNTAX, "Unterminated string literal");
-			result->kind = tok_invalid;
+			result->kind = tok_eof;
 			return;
 		}
 		ADV_POS_ERR(result, sr, &pos);
@@ -329,7 +336,6 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 			//Hex
 			ADV_POS_ERR(result, sr, &pos); //skip the '0'
 			ADV_POS_ERR(result, sr, &pos); //skip the 'x'
-		//	result->len += 2;
 			base = 16;
 		}
 		else
@@ -343,16 +349,12 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 	do
 	{
 		i = i * base + _get_char_int_val(*pos);
-		//result->len++;
 		ADV_POS(sr, &pos);
 	} while (_is_valid_num_char(base, *pos));
 	result->data = (uint32_t)i;
 
 	while (_is_valid_num_suffix(*pos))
-	{
-		//result->len++;
 		ADV_POS(sr, &pos);
-	}
 	result->len = pos - result->loc;
 }
 
@@ -446,11 +448,11 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 	do
 	{
 		ADV_POS(sr, &pos);
-	} while (_is_identifier_body(*pos));
+	} while (_is_identifier_body(*pos) || *pos == '#');
 	result->len = pos - result->loc;
 
 	char* buff = (char*)malloc(result->len);
-	tok_spelling_extract(result->loc + 1, result->len - 1, buff, result->len);
+	tok_spelling_extract(result->loc + 1, result->len-1, buff, result->len);
 
 	if (strcmp(buff, "include") == 0)
 		result->kind = tok_pp_include;
@@ -476,7 +478,8 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 		result->kind = tok_pp_elif;
 	else if (strcmp(buff, "endif") == 0)
 		result->kind = tok_pp_endif;
-
+	else if (strcmp(buff, "#") == 0)
+		result->kind = tok_pp_hashhash;
 	else
 	{
 		diag_err(result, ERR_SYNTAX, "unknown preprocessor directive %s", buff);
@@ -730,6 +733,15 @@ lex_next_tok:
 	case '_':
 		_lex_identifier(src, pos, result);
 		break;
+	default:
+		{
+			//unknown tok, consume up to next white space
+		do
+		{
+			_adv_pos(src, &pos);
+		} while (!_is_white_space(*pos));
+		result->kind = tok_invalid;
+		}
 	};
 
 	if (result->kind == tok_slashslash)
@@ -775,7 +787,9 @@ token_t* lex_source(source_range_t* sr)
 			last->next = tok;
 		}
 
-		if (!lex_next_tok(sr, pos, tok))
+		lex_next_tok(sr, pos, tok);
+
+		if (tok->kind == tok_eof && tok->loc < sr->end-1)
 			goto return_err;
 
 		if (tok->kind == tok_eof)

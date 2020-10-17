@@ -143,6 +143,30 @@ const char* tok_kind_spelling(tok_kind k)
 		return "minusgreater";
 	case tok_pp_include:
 		return "#include";
+	tok_pp_define:
+		return "#define";
+	tok_pp_undef:
+		return "#undef";
+	tok_pp_line: 
+		return "#line";
+	tok_pp_error: 
+		return "#error";
+	tok_pp_pragma: 
+		return "#pragma";
+	tok_pp_if: 
+		return "#if";
+	tok_pp_ifdef: 
+		return "#ifdef";
+	tok_pp_ifndef: 
+		return "#ifndef";
+	tok_pp_else: 
+		return "#else";
+	tok_pp_elif: 
+		return "#elif";
+	tok_pp_endif: 
+		return "#endif";
+	tok_pp_hashhash: 
+		return "##";
 	}
 	return "invalid";
 }
@@ -244,6 +268,15 @@ void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_
 void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 {
 	tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
+}
+
+const char* tok_spelling_dup(token_t* tok)
+{
+	size_t l = tok_spelling_len(tok);
+	if (l == 0) return NULL;
+	const char* buff = (const char*)malloc(l + 1);
+	tok_spelling_cpy(tok, buff, l + 1);
+	return buff;
 }
 
 token_t* tok_find_next(token_t* start, tok_kind kind)

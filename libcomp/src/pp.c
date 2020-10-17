@@ -1,24 +1,13 @@
 #include "pp.h"
+#include "pp_internal.h"
 #include "diag.h"
 #include "source.h"
 #include "lexer.h"
 #include "ast.h"
 
-#include <libj/include/hash_table.h>
-
 #include <string.h>
 
 static token_t* _process_token(token_t* tok);
-
-typedef struct
-{	
-	/*
-	Map of identifier string to token_range_t*
-	*/
-	hash_table_t* defs;
-	token_t* first;
-	token_t* last;
-}pp_context_t;
 
 static pp_context_t* _context = NULL;
 
@@ -40,7 +29,7 @@ static inline void _emit_token(token_t* tok)
 static inline void _diag_expected(token_t* tok, tok_kind kind)
 {
 	diag_err(tok, ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
-tok_kind_spelling(kind), tok_kind_spelling(tok->kind));
+		tok_kind_spelling(kind), tok_kind_spelling(tok->kind));
 }
 
 static inline bool _is_pp_tok(token_t* tok)
@@ -82,17 +71,35 @@ static void _tok_replace(token_range_t* remove, token_t* insert)
 		remove->start->prev->next = insert;
 }
 
-static token_range_t _expand_identifier(token_t* tok)
+static token_range_t* _find_def(token_t* ident)
 {
 	char name[MAX_LITERAL_NAME + 1];
-	tok_spelling_cpy(tok, name, MAX_LITERAL_NAME + 1);
+	tok_spelling_cpy(ident, name, MAX_LITERAL_NAME + 1);
 
-	token_range_t* range = (token_range_t*)sht_lookup(_context->defs, name);
+	return (token_range_t*)sht_lookup(_context->defs, name);
+}
+
+static token_range_t _expand_identifier(token_t* tok)
+{
+	token_range_t* range = _find_def(tok);
 	if (range)
 		return *range;
 
 	token_range_t r = { tok, tok->next };
 	return r;
+}
+
+
+static bool _eval_const_expr(token_range_t range)
+{
+	token_t* tok = range.start;
+
+	if (tok->kind == tok_num_literal && tok->next == range.end)
+	{
+		return tok->data != 0;
+	}
+
+	return true;
 }
 
 static bool _process_define(token_t* tok, token_t* end)
@@ -179,6 +186,11 @@ static token_t* _process_include(token_t* tok)
 			return NULL;
 		}
 	}
+	else
+	{
+		diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
+		return NULL;
+	}
 
 	source_range_t* sr = src_load_file(path);
 	if (!src_is_valid_range(sr))
@@ -197,6 +209,80 @@ static token_t* _process_include(token_t* tok)
 	}
 	
 	return end;
+}
+
+static token_t* _process_condition(token_t* tok)
+{
+	bool inc_group = false;
+	if (tok->kind == tok_pp_ifdef)
+	{
+		tok = tok->next;
+		if (tok->kind != tok_identifier)
+		{
+			diag_err(tok, ERR_SYNTAX, "expected %s after #ifdef",
+				tok_kind_spelling(tok_identifier));
+			return NULL;
+		}
+		inc_group = _find_def(tok) != NULL;
+		tok = _find_eol(tok)->next;
+	}
+	else if (tok->kind == tok_pp_ifndef)
+	{
+		tok = tok->next;
+		if (tok->kind != tok_identifier)
+		{
+			diag_err(tok, ERR_SYNTAX, "expected %s after #ifndef",
+				tok_kind_spelling(tok_identifier));
+			return NULL;
+		}
+		inc_group = _find_def(tok) == NULL;
+		tok = _find_eol(tok)->next;
+	}
+	else if (tok->kind == tok_pp_if)
+	{
+		tok = tok->next;
+		token_range_t range = { tok, _find_eol(tok)->next };
+		tok = range.end;
+
+		uint32_t val;
+		if (!pre_proc_eval_expr(_context, range, &val))
+		{
+			diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression",
+				tok_kind_spelling(tok_identifier));
+			return NULL;
+		}
+		inc_group = val != 0;
+	}
+	else
+	{
+		diag_err(tok, ERR_SYNTAX, "unexpected token loking for pp conditional");
+		return NULL;
+	}
+
+	//have we hit a true case yet?
+	bool any_true = inc_group;
+	while (tok->kind != tok_pp_endif)
+	{
+		if (inc_group)
+			any_true = true;
+
+		token_t* next = tok->next;
+		if (tok->kind == tok_pp_elif)
+		{
+			//inc_group = !any_true && conditioh
+		}
+		else if (tok->kind == tok_pp_else)
+		{
+			inc_group = !any_true;
+		}
+		else if (inc_group)
+		{
+			next = _process_token(tok);
+		}
+		
+		tok = next;
+	}
+	return tok->next;
 }
 
 static token_t* _process_token(token_t* tok)
@@ -221,7 +307,10 @@ static token_t* _process_token(token_t* tok)
 			next = end->next;
 			break;
 		}
+		case tok_pp_if:
 		case tok_pp_ifdef:
+		case tok_pp_ifndef:
+			next = _process_condition(tok);
 			break;
 		}
 	}

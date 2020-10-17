@@ -68,6 +68,57 @@ TEST_F(PreProcIncludeTest, include2)
 		});
 }
 
+TEST_F(PreProcIncludeTest, include_line_cont1)
+{
+	std::string src = R"(#\
+include <stdio.h>)";
+
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_void,
+		tok_identifier,
+		tok_l_paren,
+		tok_r_paren,
+		tok_semi_colon,
+		tok_eof
+		});
+}
+
+TEST_F(PreProcIncludeTest, include_line_cont2)
+{
+	std::string src = R"(#inc\
+lude <stdio.h>)";
+
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_void,
+		tok_identifier,
+		tok_l_paren,
+		tok_r_paren,
+		tok_semi_colon,
+		tok_eof
+		});
+}
+
+TEST_F(PreProcIncludeTest, include_line_cont3)
+{
+	std::string src = R"(#include <stdio.\
+h>)";
+
+	ExpectFileLoad("stdio.h", stdio_code);
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_void,
+		tok_identifier,
+		tok_l_paren,
+		tok_r_paren,
+		tok_semi_colon,
+		tok_eof
+		});
+}
+
 TEST_F(PreProcIncludeTest, include_define1)
 {
 	ExpectFileLoad("stdio.h", stdio_code);
