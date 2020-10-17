@@ -84,6 +84,40 @@ int i;
 		tok_eof });
 }
 
+TEST_F(PreProcCondTest, if_elif)
+{
+	std::string src = R"(
+#define ABC
+#if !defined(ABC)
+char c;
+#elif defined(ABC)
+int i;
+#endif)";
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_int,
+		tok_identifier,
+		tok_semi_colon,
+		tok_eof });
+}
+
+TEST_F(PreProcCondTest, if_else_if)
+{
+	std::string src = R"(
+#define ABC
+#if !defined(ABC)
+char c;
+#else if defined(ABC)
+int i;
+#endif)";
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_int,
+		tok_identifier,
+		tok_semi_colon,
+		tok_eof });
+}
+
 TEST_F(PreProcCondTest, ifdef_true)
 {
 	std::string src = R"(

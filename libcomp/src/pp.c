@@ -211,6 +211,31 @@ static token_t* _process_include(token_t* tok)
 	return end;
 }
 
+/*
+Evaluate the condition in a #if or #elif pre proc expression
+tok points to the start of the expression
+returns the token after the expression
+*/
+static token_t* _eval_pp_expression(token_t* tok, bool* result)
+{
+	token_range_t range = { tok, _find_eol(tok)->next };
+
+	uint32_t val;
+	if (!pre_proc_eval_expr(_context, range, &val))
+	{
+		diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression",
+			tok_kind_spelling(tok_identifier));
+		return NULL;
+	}
+	*result = val != 0;
+	return range.end;
+}
+
+/*
+Process a conditional pp expression
+tok points at one of: tok_pp_if, tok_pp_ifdef, tok_pp_ifndef
+returns the next token to be processed
+*/
 static token_t* _process_condition(token_t* tok)
 {
 	bool inc_group = false;
@@ -240,18 +265,8 @@ static token_t* _process_condition(token_t* tok)
 	}
 	else if (tok->kind == tok_pp_if)
 	{
-		tok = tok->next;
-		token_range_t range = { tok, _find_eol(tok)->next };
-		tok = range.end;
-
-		uint32_t val;
-		if (!pre_proc_eval_expr(_context, range, &val))
-		{
-			diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression",
-				tok_kind_spelling(tok_identifier));
+		if (!(tok = _eval_pp_expression(tok->next, &inc_group)))
 			return NULL;
-		}
-		inc_group = val != 0;
 	}
 	else
 	{
@@ -269,11 +284,18 @@ static token_t* _process_condition(token_t* tok)
 		token_t* next = tok->next;
 		if (tok->kind == tok_pp_elif)
 		{
-			//inc_group = !any_true && conditioh
+			inc_group = !any_true;
+			if (!(next = _eval_pp_expression(tok->next, &inc_group)))
+				return NULL;
 		}
 		else if (tok->kind == tok_pp_else)
 		{
-			inc_group = !any_true;
+			inc_group = !any_true;						
+			if (next->kind == tok_if)
+			{
+				if (!(next = _eval_pp_expression(next->next, &inc_group)))
+					return NULL;
+			}
 		}
 		else if (inc_group)
 		{

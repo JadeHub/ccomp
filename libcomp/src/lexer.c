@@ -736,11 +736,11 @@ lex_next_tok:
 	default:
 		{
 			//unknown tok, consume up to next white space
-		do
-		{
-			_adv_pos(src, &pos);
-		} while (!_is_white_space(*pos));
-		result->kind = tok_invalid;
+			do
+			{
+				_adv_pos(src, &pos);
+			} while (!_is_white_space(*pos));
+			result->kind = tok_invalid;
 		}
 	};
 
