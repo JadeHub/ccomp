@@ -10,16 +10,7 @@
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/sema.h>
 
-void print_tokens(token_t* toks)
-{
-    token_t* tok = toks;
-
-    while (tok)
-    {
-        tok_printf(tok);
-        tok = tok->next;
-    }
-}
+#include <libj/include/platform.h>
 
 void asm_print(const char* line, void* data)
 {
@@ -36,8 +27,9 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
     exit(1); 
 }
 
-source_range_t _file_loader(const char* path, void* d)
+source_range_t _file_loader(const char* dir, const char* file, void* d)
 {
+    char* path = path_combine(dir, file);
     source_range_t result = {NULL, NULL};
     FILE* f = fopen(path, "r");
     if (f)
@@ -48,11 +40,13 @@ source_range_t _file_loader(const char* path, void* d)
         char* buff = (char*)malloc(len + 1);
         if (fread(buff, 1, len, f) == len)
         {
+            buff[len] = '\0';
             result.ptr = buff;
             result.end = buff + len;
         }
         fclose(f);
     }
+    free(path);
     return result;
 }
 

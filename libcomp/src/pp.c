@@ -151,7 +151,7 @@ static token_t* _process_include(token_t* tok)
 	tok = tok->next;
 	token_t* end = _find_eol(tok)->next;
 	token_range_t range = { tok, end };
-
+	include_kind inc_kind;
 	
 	if (tok->kind == tok_identifier)
 	{
@@ -164,6 +164,7 @@ static token_t* _process_include(token_t* tok)
 	if (range.start->kind == tok_string_literal)
 	{
 		//#include "blah.h"
+		inc_kind = include_local;
 		strcpy(path, (const char*)range.start->data);
 		tok = range.start->next;
 		if(tok != range.end)
@@ -176,6 +177,7 @@ static token_t* _process_include(token_t* tok)
 	else if (range.start->kind == tok_lesser)
 	{
 		//#include <blah.h>
+		inc_kind = include_system;
 		tok = range.start->next;
 
 		if (tok->kind != tok_identifier)
@@ -211,7 +213,7 @@ static token_t* _process_include(token_t* tok)
 		return NULL;
 	}
 
-	source_range_t* sr = src_load_file(path);
+	source_range_t* sr = src_load_header(path, inc_kind);
 	if (!src_is_valid_range(sr))
 	{
 		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", path);

@@ -749,7 +749,8 @@ lex_next_tok:
 			//unknown tok, consume up to next white space
 			do
 			{
-				_adv_pos(src, &pos);
+				if (!_adv_pos(src, &pos))
+					break;
 			} while (!_is_white_space(*pos));
 			result->kind = tok_invalid;
 		}

@@ -50,6 +50,42 @@ struct TestWithErrorHandling : public ::testing::Test
 	MOCK_METHOD3(on_diag, void(token_t* tok, uint32_t err, const char* msg));
 };
 
+class CompilerTest : public TestWithErrorHandling
+{
+public:
+
+	void SetSource(const std::string& src)
+	{
+		mSrc = src;
+	}
+
+	void Lex()
+	{
+		source_range_t sr;
+		sr.ptr = mSrc.c_str();
+		sr.end = sr.ptr + mSrc.length();
+
+		mTokens = lex_source(&sr);
+	}
+
+	void Parse()
+	{
+		mAst = parse_translation_unit(mTokens);
+	}
+
+	void Validate()
+	{
+		mTL = sem_analyse(mAst);
+	}
+
+private:
+
+	std::string mSrc;
+	token_t* mTokens = nullptr;
+	ast_trans_unit_t* mAst = nullptr;
+	valid_trans_unit_t* mTL = nullptr;
+};
+
 class ValidationTest : public TestWithErrorHandling
 {
 public:
@@ -69,15 +105,7 @@ public:
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 		token_t* toks = lex_source(&sr);
-
-		token_t* tok = toks;
-		while (tok)
-		{
-			tokens.push_back(tok);
-			token_t* next = tok->next;
-			tok = next;
-		}
-
+				
 		ast = parse_translation_unit(toks);
 	}
 
@@ -97,6 +125,7 @@ public:
 	void ExpectError(const std::string& code, uint32_t err, testing::Cardinality times = Exactly(1))
 	{
 		TestWithErrorHandling::ExpectError(err, times);
+
 		parse(code);
 		if(ast)
 			validate();
@@ -133,7 +162,7 @@ public:
 		//ASSERT_EQ(1, 2);
 	}
 
-	std::vector<token_t*> tokens;
+	//std::vector<token_t*> tokens;
 	ast_trans_unit_t* ast = nullptr;
 	valid_trans_unit_t* tl = nullptr;
 };
@@ -215,10 +244,10 @@ public:
 		src_deinit();
 	}
 
-	static source_range_t load_file(const char* path, void* data)
+	static source_range_t load_file(const char* dir, const char* file, void* data)
 	{
 		LexPreProcTest* This = (LexPreProcTest*)data;
-		return This->on_load_file(path);
+		return This->on_load_file(file);
 	}
 
 	void PreProc(const char* src)

@@ -143,30 +143,32 @@ const char* tok_kind_spelling(tok_kind k)
 		return "minusgreater";
 	case tok_pp_include:
 		return "#include";
-	tok_pp_define:
+	case tok_pp_define:
 		return "#define";
-	tok_pp_undef:
+	case tok_pp_undef:
 		return "#undef";
-	tok_pp_line: 
+	case tok_pp_line:
 		return "#line";
-	tok_pp_error: 
+	case tok_pp_error:
 		return "#error";
-	tok_pp_pragma: 
+	case tok_pp_pragma:
 		return "#pragma";
-	tok_pp_if: 
+	case tok_pp_if:
 		return "#if";
-	tok_pp_ifdef: 
+	case tok_pp_ifdef:
 		return "#ifdef";
-	tok_pp_ifndef: 
+	case tok_pp_ifndef:
 		return "#ifndef";
-	tok_pp_else: 
+	case tok_pp_else:
 		return "#else";
-	tok_pp_elif: 
+	case tok_pp_elif:
 		return "#elif";
-	tok_pp_endif: 
+	case tok_pp_endif:
 		return "#endif";
-	tok_pp_hashhash: 
+	case  tok_hashhash:
 		return "##";
+	case  tok_hash:
+		return "#";
 	}
 	return "invalid";
 }
@@ -274,7 +276,7 @@ const char* tok_spelling_dup(token_t* tok)
 {
 	size_t l = tok_spelling_len(tok);
 	if (l == 0) return NULL;
-	const char* buff = (const char*)malloc(l + 1);
+	char* buff = (char*)malloc(l + 1);
 	tok_spelling_cpy(tok, buff, l + 1);
 	return buff;
 }
@@ -310,7 +312,7 @@ void tok_destory(token_t* tok)
 {
 	if (tok && tok->kind == tok_string_literal)
 	{
-		free(tok->data);
+		free((char*)tok->data);
 	}
 	free(tok);
 }

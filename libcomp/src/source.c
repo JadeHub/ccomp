@@ -1,6 +1,7 @@
 #include "source.h"
 
 #include <libj/include/hash_table.h>
+#include <libj/include/platform.h>
 
 #include <stdbool.h>
 #include <string.h>
@@ -15,14 +16,13 @@ typedef struct
 	uint32_t line_count;
 }source_file_t;
 
-
 /*
 Map of path to source_file_t* for each open file
 
 We can find the file associated with a char pointer by looking at the source ranges of each file
 */
 static hash_table_t* _files;
-
+static char* _src_dir = NULL;
 static src_load_cb _load_cb;
 static void* _load_data;
 
@@ -170,17 +170,40 @@ char* src_extract(const char* start, const char* end)
 
 bool src_is_valid_range(source_range_t* src)
 {
-	return src && src->ptr && src->end && src->ptr != src->end;
+	return src && src->ptr && src->end && src->ptr < src->end;
+}
+
+source_range_t* src_load_header(const char* fn, include_kind kind)
+{
+	source_range_t src = _load_cb(_src_dir, fn, _load_data);
+	if (!src_is_valid_range(&src))
+		return NULL;
+
+	source_file_t* file = _init_source(src);
+	sht_insert(_files, fn, file);
+	return &file->range;
 }
 
 source_range_t* src_load_file(const char* path)
 {
-	source_range_t src = _load_cb(path, _load_data);
+	char* full_path = path_resolve(path);
+	if (!full_path) return NULL;
+
+	_src_dir = path_dirname(full_path);
+	char* file_name = path_filename(full_path);
+
+	source_range_t src = _load_cb(_src_dir, file_name, _load_data);
 	if (!src_is_valid_range(&src))
+	{
+		free(file_name);
+		free(full_path);
 		return NULL;
-	
+	}
+
 	source_file_t* file = _init_source(src);
-	sht_insert(_files, path, file);
+	sht_insert(_files, full_path, file);
+	free(file_name);
+	free(full_path);
 	return &file->range;
 }
 
@@ -193,6 +216,7 @@ void src_init(src_load_cb load_cb, void* load_data)
 
 void src_deinit()
 {
+	free(_src_dir);
 	sht_iterator_t it = sht_begin(_files);
 	while (!sht_end(_files, &it))
 	{
