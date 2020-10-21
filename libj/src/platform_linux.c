@@ -21,9 +21,9 @@ char* path_dirname(const char* path)
 
 char* path_filename(const char* path)
 {
-	char* buff = (char*)malloc(strlen(path) + 1);
-	strcpy(buff, path);
-	buff = basename(buff);
+	char* fn = basename(path);
+	char* buff = (char*)malloc(strlen(fn) + 1);
+	strcpy(buff, fn);
 	return buff;
 }
 
