@@ -21,9 +21,9 @@ void asm_print(const char* line, void* data)
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 {
     fprintf(stderr, "%s(%s): Err %d: %s\n",
-        "file.c",
+        src_file_path(tok->loc),
         diag_pos_str(tok),
-        err, msg);
+        err, msg);    
     exit(1); 
 }
 
@@ -55,27 +55,35 @@ source_range_t _file_loader(const char* dir, const char* file, void* d)
 
 int main(int argc, char* argv[])
 {
-    src_init(&_file_loader, NULL);
-    lex_init();
     diag_set_handler(&diag_err_print, NULL);
 
-    token_t* toks;
-
-    if (argc == 2)
-    {
-        source_range_t* sr = src_load_file(argv[1]);
-        if (!sr)
-            return -1;
-        toks = lex_source(sr);
-
-        pre_proc_init();
-        toks = pre_proc_file(toks);
-        pre_proc_deinit();
-    }
-    else
-    {
+    if (argc != 2)
         return -1;
-    }
+    
+    char* path = path_resolve(argv[1]);
+    char* src_dir = path_dirname(path);
+    char* src_file = path_filename(path);
+    free(path);
+        
+    if (!src_file || !src_dir)
+        return -1;
+
+    src_init(src_dir, &_file_loader, NULL);
+    lex_init();
+
+    source_range_t* sr = src_load_file(src_file);
+    free(src_file);
+    free(src_dir);
+    if (!sr)
+        return -1;
+    
+    token_t* toks = lex_source(sr);
+    if (!toks)
+        return -1;
+
+    pre_proc_init();
+    toks = pre_proc_file(toks);
+    pre_proc_deinit();
 
     ast_trans_unit_t* ast = parse_translation_unit(toks);
     valid_trans_unit_t* tl = sem_analyse(ast);

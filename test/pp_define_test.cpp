@@ -14,6 +14,19 @@ TEST)";
 		tok_eof });
 }
 
+TEST_F(PreProcDefineTest, define_nested)
+{
+	std::string src = R"(#define TEST1 int i;
+#define TEST TEST1
+TEST)";
+
+	PreProc(src.c_str());
+	ExpectTokTypes({ tok_int,
+		tok_identifier,
+		tok_semi_colon,
+		tok_eof });
+}
+
 TEST_F(PreProcDefineTest, err_dup_define)
 {
 	std::string src = R"(

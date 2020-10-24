@@ -33,3 +33,17 @@ const char* diag_pos_str(token_t* tok)
 {
 	return src_file_pos_str(src_file_position(tok->loc));
 }
+
+static char _desc_buff[1024];
+
+const char* diag_tok_desc(token_t* tok)
+{
+	if (tok->kind == tok_identifier)
+	{
+		char* spelling = tok_spelling_dup(tok);
+		sprintf(_desc_buff, "identifier '%s'", spelling);
+		free(spelling);
+		return _desc_buff;
+	}
+	return tok_kind_spelling(tok->kind);
+}

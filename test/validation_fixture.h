@@ -234,7 +234,7 @@ public:
 
 	LexPreProcTest()
 	{
-		src_init(&load_file, this);
+		src_init("./", &load_file, this);
 		pre_proc_init();
 	}
 

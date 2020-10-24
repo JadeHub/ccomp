@@ -137,11 +137,9 @@ typedef struct
 token_t* tok_find_next(token_t* start, tok_kind kind);
 const char* tok_kind_spelling(tok_kind);
 void tok_printf(token_t* tok);
-void tok_dump(token_t* tok);
-void tok_dump_range(token_t* start, token_t* end);
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
-const char* tok_spelling_dup(token_t* tok);
+char* tok_spelling_dup(token_t* tok);
 void tok_spelling_extract(const char* src, size_t src_len, char* dest, size_t dest_len);
 size_t tok_range_len(token_range_t* range);
 void tok_destory(token_t* tok);

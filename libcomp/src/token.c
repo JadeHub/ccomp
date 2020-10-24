@@ -173,48 +173,6 @@ const char* tok_kind_spelling(tok_kind k)
 	return "invalid";
 }
 
-void tok_printf(token_t* tok)
-{
-	if (tok->kind == tok_num_literal)
-	{
-		printf("Tok %s %d\n", tok_kind_spelling(tok->kind), (uint32_t)(long)tok->data);
-	}
-	else if (tok->kind == tok_string_literal)
-	{
-		printf("Tok %s \"%s\"\n", tok_kind_spelling(tok->kind), (const char*)tok->data);
-	}
-	else if (tok->kind == tok_identifier)
-	{
-		char buff[33];
-		tok_spelling_cpy(tok, buff, 33);
-		printf("Tok %s %s\n", tok_kind_spelling(tok->kind), buff);
-	}
-	else
-	{
-		printf("Tok %s\n", tok_kind_spelling(tok->kind));
-	}
-}
-
-void tok_dump_range(token_t* start, token_t* end)
-{
-	while (start)
-	{
-		tok_printf(start);
-		if (start == end)
-			break;
-		start = start->next;
-	}
-}
-
-void tok_dump(token_t* tok)
-{
-	while (tok)
-	{
-		tok_printf(tok);
-		tok = tok->next;
-	}
-}
-
 size_t tok_spelling_len(token_t* tok)
 {
 	size_t len = 0;
@@ -272,7 +230,7 @@ void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 	tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
 }
 
-const char* tok_spelling_dup(token_t* tok)
+char* tok_spelling_dup(token_t* tok)
 {
 	size_t l = tok_spelling_len(tok);
 	if (l == 0) return NULL;

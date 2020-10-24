@@ -49,7 +49,7 @@ static inline bool _expect_kind(token_t* tok, tok_kind kind)
 	if (tok->kind != kind)
 	{
 		diag_err(tok, ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
-			tok_kind_spelling(kind), tok_kind_spelling(tok->kind));
+			tok_kind_spelling(kind), diag_tok_desc(tok));
 		return false;
 	}
 	return true;

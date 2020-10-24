@@ -38,10 +38,10 @@ def run_test(path):
     #link
     if run_command('gcc -m32 temp.s -o ~/temp/jcc_' + test_name) != 0:
         print(f'{bcolors.FAIL}LINK FAIL')
-        run_command('rm temp.s');
+#        run_command('rm temp.s')
         return False;
         
-    run_command('rm temp.s');
+#    run_command('rm temp.s')
     #run our version
     jcc_result = run_command('~/temp/jcc_' + test_name);
 

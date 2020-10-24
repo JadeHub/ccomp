@@ -31,3 +31,4 @@ typedef void (*diag_cb)(struct token* toc, uint32_t err, const char* msg, void* 
 void diag_set_handler(diag_cb, void* data);
 void* diag_err(struct token* tok, uint32_t err, const char* format, ...);
 const char* diag_pos_str(struct token*);
+const char* diag_tok_desc(struct token*);

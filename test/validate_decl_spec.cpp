@@ -241,3 +241,12 @@ TEST_F(DeclSpecValidationTest, err_struct_union)
 
 	ExpectError(code, ERR_SYNTAX);
 }
+
+TEST_F(DeclSpecValidationTest, err_invalid_type)
+{
+	std::string code = R"(
+	iint i;
+	)";
+
+	ExpectError(code, ERR_SYNTAX);
+}

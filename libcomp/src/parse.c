@@ -256,7 +256,7 @@ static op_kind _get_postfix_operator(token_t* tok)
 	case tok_plusplus:
 		return op_postfix_inc;
 	}
-	report_err(ERR_SYNTAX, "Unknown postfix op %s", tok_kind_spelling(tok->kind));
+	report_err(ERR_SYNTAX, "Unknown postfix op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -279,7 +279,7 @@ static op_kind _get_unary_operator(token_t* tok)
 	case tok_star:
 		return op_dereference;
 	}
-	report_err(ERR_SYNTAX, "Unknown unary op %s", tok_kind_spelling(tok->kind));
+	report_err(ERR_SYNTAX, "Unknown unary op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -324,7 +324,7 @@ static op_kind _get_binary_operator(token_t* tok)
 	case tok_percent:
 		return op_mod;
 	}
-	report_err(ERR_SYNTAX, "Unknown binary op %s", tok_kind_spelling(tok->kind));
+	report_err(ERR_SYNTAX, "Unknown binary op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -1743,6 +1743,14 @@ static void _add_decl_to_tl(ast_trans_unit_t* tl, ast_declaration_t* decl)
 	tmp->next = decl;
 }
 
+ast_declaration_t* parse_top_level_decl(bool* found_semi)
+{
+	ast_declaration_t* result = try_parse_declaration_opt_semi(found_semi);
+	if (!result && !_parse_err)
+		report_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
+	return result;
+}
+
 //<translation_unit> :: = { <function> | <declaration> }
 ast_trans_unit_t* parse_translation_unit(token_t* tok)
 {
@@ -1758,7 +1766,7 @@ ast_trans_unit_t* parse_translation_unit(token_t* tok)
 	while (!current_is(tok_eof))
 	{
 		bool found_semi;
-		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
+		ast_declaration_t* decl = parse_top_level_decl(&found_semi);
 		if (_parse_err)
 			goto parse_failure;
 

@@ -51,5 +51,7 @@ char* path_combine(const char* dir, const char* file)
 	strcpy(buff, dir);
 	strcat(buff, "/");
 	strcat(buff, file);
-	return buff;
+	char* result = path_resolve(buff);
+	free(buff);
+	return result;
 }

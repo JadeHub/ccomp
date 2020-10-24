@@ -13,10 +13,17 @@ char* path_resolve(const char* path)
 
 char* path_dirname(const char* path)
 {
-	char* buff = (char*)malloc(strlen(path) + 1);
-	strcpy(buff, path);
-	buff = dirname(buff);
-	return buff;
+	//dirname() may modify its input so give it a copy
+	char* path_cpy = strdup(path);
+	char* tmp = dirname(path_cpy);
+	if (!tmp)
+	{
+		free(path_cpy);
+		return NULL;
+	}
+	char* result = strdup(tmp);
+	free(path_cpy);
+	return result;
 }
 
 char* path_filename(const char* path)

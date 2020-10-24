@@ -8,12 +8,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 typedef struct
 {
 	source_range_t range;
 	const char** lines;
 	uint32_t line_count;
+	const char* path;
 }source_file_t;
 
 /*
@@ -100,6 +102,12 @@ source_file_t* _get_file_for_pos(const char* pos)
 	return NULL;
 }
 
+const char* src_file_path(const char* pos)
+{
+	source_file_t* file = _get_file_for_pos(pos);
+	return file ? file->path : NULL;
+}
+
 file_pos_t src_file_position(const char* pos)
 {
 	source_file_t* file = _get_file_for_pos(pos);
@@ -173,42 +181,37 @@ bool src_is_valid_range(source_range_t* src)
 	return src && src->ptr && src->end && src->ptr < src->end;
 }
 
+source_file_t* _load_file(const char* dir, const char* fn)
+{
+	source_range_t src = _load_cb(dir, fn, _load_data);
+	if (!src_is_valid_range(&src)) return NULL;
+
+	source_file_t* file = _init_source(src);
+	file->path = path_combine(dir, fn);
+	sht_insert(_files, file->path, file);	
+	return file;
+}
+
 source_range_t* src_load_header(const char* fn, include_kind kind)
 {
-	source_range_t src = _load_cb(_src_dir, fn, _load_data);
-	if (!src_is_valid_range(&src))
-		return NULL;
-
-	source_file_t* file = _init_source(src);
-	sht_insert(_files, fn, file);
-	return &file->range;
+	assert(_src_dir);
+	
+	source_file_t* file = _load_file(_src_dir, fn);
+	//search different paths...
+	return file ? &file->range : NULL;
 }
 
-source_range_t* src_load_file(const char* path)
+source_range_t* src_load_file(const char* fn)
 {
-	char* full_path = path_resolve(path);
-	if (!full_path) return NULL;
-
-	_src_dir = path_dirname(full_path);
-	char* file_name = path_filename(full_path);
-
-	source_range_t src = _load_cb(_src_dir, file_name, _load_data);
-	if (!src_is_valid_range(&src))
-	{
-		free(file_name);
-		free(full_path);
-		return NULL;
-	}
-
-	source_file_t* file = _init_source(src);
-	sht_insert(_files, full_path, file);
-	free(file_name);
-	free(full_path);
-	return &file->range;
+	assert(_src_dir);
+	
+	source_file_t* file = _load_file(_src_dir, fn);
+	return file ? &file->range : NULL;
 }
 
-void src_init(src_load_cb load_cb, void* load_data)
+void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
 {
+	_src_dir = strdup(src_path);
 	_files = sht_create(32);
 	_load_cb = load_cb;
 	_load_data = load_data;
@@ -221,6 +224,7 @@ void src_deinit()
 	while (!sht_end(_files, &it))
 	{
 		source_file_t* sf = (source_file_t*)it.val;
+		free(sf->path);
 		free(sf);
 		sht_next(_files, &it);
 	}

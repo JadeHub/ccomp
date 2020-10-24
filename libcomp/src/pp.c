@@ -29,7 +29,7 @@ static inline void _emit_token(token_t* tok)
 static inline void* _diag_expected(token_t* tok, tok_kind kind)
 {
 	diag_err(tok, ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
-		tok_kind_spelling(kind), tok_kind_spelling(tok->kind));
+		tok_kind_spelling(kind), diag_tok_desc(tok));
 	return NULL;
 }
 
@@ -244,7 +244,7 @@ static token_t* _eval_pp_expression(token_t* tok, bool* result)
 	uint32_t val;
 	if (!pre_proc_eval_expr(_context, range, &val))
 	{
-		diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression",
+		diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression %s",
 			tok_kind_spelling(tok_identifier));
 		return NULL;
 	}
