@@ -182,11 +182,7 @@ static token_t* _eval_defined(token_t* tok, const_expr_result_t* result, pp_cont
 
 	if (!_expect_kind(tok, tok_identifier)) return NULL;
 
-	char name[MAX_LITERAL_NAME + 1];
-	tok_spelling_cpy(tok, name, MAX_LITERAL_NAME + 1);
-
-	result->value  = sht_lookup(pp->defs, name) ? 1 : 0;
-
+	result->value  = sht_lookup(pp->defs, tok->data.str) ? 1 : 0;
 	tok = tok->next;
 	if (paren)
 	{
@@ -203,17 +199,16 @@ static token_t* _eval_value(token_t* tok, const_expr_result_t* result, pp_contex
 	case tok_identifier:
 	{
 		//handle defined X, defined (X)
-		char buff[MAX_LITERAL_NAME + 1];
-		tok_spelling_cpy(tok, buff, MAX_LITERAL_NAME + 1);
+		char* name = tok->data.str;
 		
-		if (strcmp(buff, "defined") == 0)
+		if (strcmp(name, "defined") == 0)
 			return _eval_defined(tok->next, result, pp);
 
-		diag_err(tok, ERR_SYNTAX, "unexpected identifier: '%s' in constant expression", buff);
+		diag_err(tok, ERR_SYNTAX, "unexpected identifier: '%s' in constant expression", name);
 		return NULL;
 	}
 	case tok_num_literal:
-		result->value = tok->data;
+		result->value = tok->data.integer;
 		return tok->next;
 		break;
 	case tok_exclaim:

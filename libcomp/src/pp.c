@@ -74,10 +74,7 @@ static void _tok_replace(token_range_t* remove, token_t* insert)
 
 static token_range_t* _find_def(token_t* ident)
 {
-	char name[MAX_LITERAL_NAME + 1];
-	tok_spelling_cpy(ident, name, MAX_LITERAL_NAME + 1);
-
-	return (token_range_t*)sht_lookup(_context->defs, name);
+	return (token_range_t*)sht_lookup(_context->defs, ident->data.str);
 }
 
 static token_range_t _expand_identifier(token_t* tok)
@@ -98,8 +95,7 @@ static token_t* _process_undef(token_t* tok)
 	if (identifier->kind != tok_identifier)
 		return _diag_expected(identifier, tok_identifier);
 
-	char name[MAX_LITERAL_NAME + 1];
-	tok_spelling_cpy(identifier, name, MAX_LITERAL_NAME + 1);
+	char* name = identifier->data.str;
 
 	token_range_t* range = (token_range_t*)sht_lookup(_context->defs, name);
 	if (range)
@@ -119,9 +115,7 @@ static token_t* _process_define(token_t* tok)
 	if (identifier->kind != tok_identifier)
 		return _diag_expected(identifier, tok_identifier);
 	
-	char name[MAX_LITERAL_NAME + 1];
-	tok_spelling_cpy(identifier, name, MAX_LITERAL_NAME + 1);
-
+	char* name = identifier->data.str;
 	if (sht_lookup(_context->defs, name))
 	{
 		diag_err(tok, ERR_SYNTAX, "duplicate macro '%s'", name);
@@ -165,7 +159,8 @@ static token_t* _process_include(token_t* tok)
 	{
 		//#include "blah.h"
 		inc_kind = include_local;
-		strcpy(path, (const char*)range.start->data);
+		//strcpy(path, (const char*)range.start->data);
+		strcpy(path, range.start->data.str);
 		tok = range.start->next;
 		if(tok != range.end)
 		{

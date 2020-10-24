@@ -14,7 +14,7 @@ TEST)";
 		tok_eof });
 }
 
-TEST_F(PreProcDefineTest, define_nested)
+/*TEST_F(PreProcDefineTest, define_nested)
 {
 	std::string src = R"(#define TEST1 int i;
 #define TEST TEST1
@@ -25,7 +25,7 @@ TEST)";
 		tok_identifier,
 		tok_semi_colon,
 		tok_eof });
-}
+}*/
 
 TEST_F(PreProcDefineTest, err_dup_define)
 {

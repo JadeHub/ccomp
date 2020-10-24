@@ -194,7 +194,7 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 			return;
 		}
 
-		result->data = i;
+		result->data.integer = i;
 		return;
 	}
 
@@ -204,41 +204,41 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 	case '\'':
 	case '\"':
 	case '?':
-		result->data = *pos;
+		result->data.integer = *pos;
 		result->len++;
 		return;
 	case 'a':
-		result->data = 0x07; //bell
+		result->data.integer = 0x07; //bell
 		result->len++;
 		return;
 	case 'b':
-		result->data = 0x08; //backspace
+		result->data.integer = 0x08; //backspace
 		result->len++;
 		return;
 	case 'f':
-		result->data = 0x0C; //form feed
+		result->data.integer = 0x0C; //form feed
 		result->len++;
 		return;
 	case 'n':
-		result->data = 0x0A; //new line
+		result->data.integer = 0x0A; //new line
 		result->len++;
 		return;
 
 	case 'r':
-		result->data = 0x0D; //carriage return
+		result->data.integer = 0x0D; //carriage return
 		result->len++;
 		return;
 
 	case 't':
-		result->data = 0x09; //tab
+		result->data.integer = 0x09; //tab
 		result->len++;
 		return;
 	case 'v':
-		result->data = 0x0B; //vert tab
+		result->data.integer = 0x0B; //vert tab
 		result->len++;
 		return;
 	case '0':
-		result->data = 0;
+		result->data.integer = 0;
 		result->len++;
 		return;
 	}
@@ -276,10 +276,9 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 
 	//result->loc points at the opening quote
 	//result->len includes both quotes
-	char* buff = (char*)malloc(result->len - 1); // -2 for the quotes, +1 for the null
-	memset(buff, 0, result->len - 1);
-	tok_spelling_extract(result->loc+1, result->len-2, buff, result->len - 1);
-	result->data = (size_t)buff;
+	size_t sp_len = tok_spelling_len(result);
+	result->data.str = (char*)malloc(sp_len + 1);
+	tok_spelling_extract(result->loc + 1, result->len - 2, result->data.str, sp_len + 1);
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -306,7 +305,7 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	}
 	else
 	{
-		result->data = (*pos);
+		result->data.integer = *pos;
 		ADV_POS_ERR(result, sr, &pos);
 	}
 
@@ -351,7 +350,7 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 		i = i * base + _get_char_int_val(*pos);
 		ADV_POS(sr, &pos);
 	} while (_is_valid_num_char(base, *pos));
-	result->data = (uint32_t)i;
+	result->data.integer = (uint32_t)i;
 
 	while (_is_valid_num_suffix(*pos))
 		ADV_POS(sr, &pos);
@@ -370,8 +369,10 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	} while (_is_identifier_body(*pos));
 	result->len = pos - result->loc;
 
-	char* buff = (char*)malloc(result->len + 1);
-	tok_spelling_cpy(result, buff, result->len + 1);
+	size_t sp_len = tok_spelling_len(result);
+	char* buff = (char*)malloc(sp_len + 1);
+
+	tok_spelling_extract(result->loc, result->len, buff, sp_len+1);
 
 	//Keywords
 	if (strcmp(buff, "int") == 0)
@@ -438,6 +439,11 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_default;
 	else if (strcmp(buff, "goto") == 0)
 		result->kind = tok_goto;
+	
+	if (result->kind == tok_identifier)
+		result->data.str = buff;
+	else
+		free(buff);
 }
 
 static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t* result)
@@ -500,6 +506,7 @@ lex_next_tok:
 
 	if (*pos == '\0')
 	{
+		//end of file
 		result->loc = pos;
 		result->kind = tok_eof;
 		result->len = 0;
@@ -514,7 +521,7 @@ lex_next_tok:
 	case '\r':
 		//fallthrough
 	case '\n':
-		//preprocessor
+		//Skip newline, mark token flags as starting of line and lex next token
 		pos++;
 		result->flags = TF_START_LINE;
 		goto lex_next_tok;
@@ -747,6 +754,8 @@ lex_next_tok:
 	default:
 		{
 			//unknown tok, consume up to next white space
+			//we allow unknown  tokens here as they may eventually
+			//be excluded from compilation by the pre processor
 			do
 			{
 				if (!_adv_pos(src, &pos))
@@ -785,7 +794,7 @@ token_t* lex_source(source_range_t* sr)
 	do
 	{
 		tok = (token_t*)malloc(sizeof(token_t));
-		memset(tok, 0, sizeof(token_t));
+		
 		*tok = _invalid_tok;
 
 		if (first == NULL)
@@ -829,11 +838,6 @@ return_err:
 
 void lex_init()
 {
+	memset(&_invalid_tok, 0, sizeof(token_t));
 	_invalid_tok.kind = tok_invalid;
-	_invalid_tok.loc = NULL;
-	_invalid_tok.len = 0;
-	_invalid_tok.data = 0;
-	_invalid_tok.flags = 0;
-	_invalid_tok.next = NULL;
-	_invalid_tok.prev = NULL;
 }

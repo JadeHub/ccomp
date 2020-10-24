@@ -227,16 +227,14 @@ void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_
 
 void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 {
-	tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
-}
-
-char* tok_spelling_dup(token_t* tok)
-{
-	size_t l = tok_spelling_len(tok);
-	if (l == 0) return NULL;
-	char* buff = (char*)malloc(l + 1);
-	tok_spelling_cpy(tok, buff, l + 1);
-	return buff;
+	if (tok->kind == tok_identifier || tok->kind == tok_string_literal)
+	{
+		strncpy(dest, tok->data.str, dest_len);
+	}
+	else
+	{
+		tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
+	}
 }
 
 token_t* tok_find_next(token_t* start, tok_kind kind)
@@ -268,9 +266,10 @@ size_t tok_range_len(token_range_t* range)
 
 void tok_destory(token_t* tok)
 {
-	if (tok && tok->kind == tok_string_literal)
+	if (!tok) return;
+	if (tok->kind == tok_string_literal || tok->kind == tok_identifier)
 	{
-		free((char*)tok->data);
+		free(tok->data.str);
 	}
 	free(tok);
 }
@@ -285,4 +284,36 @@ void tok_destroy_range(token_range_t* range)
 		tok_destory(tok);
 		tok = next;
 	}
+}
+
+bool tok_equals(token_t* lhs, token_t* rhs)
+{
+	bool result = (lhs && rhs) &&
+		lhs->kind == rhs->kind &&
+		lhs->flags == rhs->flags;
+	if (!result)
+		return false;
+
+	if (lhs->kind == tok_identifier || lhs->kind == tok_string_literal)
+		result = strcmp(lhs->data.str, rhs->data.str) == 0;		
+	else if (lhs->kind == tok_num_literal)
+		result = lhs->data.integer == rhs->data.integer;
+	return result;
+}
+
+bool tok_range_equals(token_range_t* lhr, token_range_t* rhr)
+{
+	token_t* lhs = lhr->start;
+	token_t* rhs = rhr->start;
+
+	while (lhs != lhr->end && rhs != rhr->end)
+	{
+		if (!tok_equals(lhs, rhs))
+			return false;
+
+		lhs = lhs->next;
+		rhs = rhs->next;
+	}
+
+	return lhs == lhr->end && rhs == rhr->end;
 }

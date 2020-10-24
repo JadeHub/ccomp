@@ -40,9 +40,7 @@ const char* diag_tok_desc(token_t* tok)
 {
 	if (tok->kind == tok_identifier)
 	{
-		char* spelling = tok_spelling_dup(tok);
-		sprintf(_desc_buff, "identifier '%s'", spelling);
-		free(spelling);
+		sprintf(_desc_buff, "identifier '%s'", tok->data.str);
 		return _desc_buff;
 	}
 	return tok_kind_spelling(tok->kind);

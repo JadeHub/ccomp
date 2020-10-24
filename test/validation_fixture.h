@@ -206,13 +206,12 @@ public:
 	void ExpectIntLiteral(token_t* t, T val)
 	{
 		EXPECT_EQ(t->kind, tok_num_literal);
-		EXPECT_EQ(t->data, (uint32_t)val);
+		EXPECT_EQ(t->data.integer, (uint32_t)val);
 	}
 
 	void ExpectStringLiteral(token_t* t, const char* expected)
 	{
-		const char* str = (const char*)t->data;
-		EXPECT_STREQ(str, expected);
+		EXPECT_STREQ(t->data.str, expected);
 	}
 
 	void ExpectTokTypes(const std::vector<tok_kind>& kinds)

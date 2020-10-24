@@ -416,7 +416,7 @@ ast_struct_member_t* parse_struct_member()
 	{
 		next_tok();
 		expect_cur(tok_num_literal);
-		result->bit_size = (uint32_t)current()->data;
+		result->bit_size = current()->data.integer;
 		next_tok();
 	}
 
@@ -1007,7 +1007,7 @@ ast_expression_t* try_parse_literal()
 		//<factor> ::= <int>
 		ast_expression_t* expr = _alloc_expr();
 		expr->kind = expr_int_literal;
-		expr->data.int_literal.value = (uint32_t)current()->data;
+		expr->data.int_literal.value = current()->data.integer;
 		expr->data.int_literal.type = NULL;
 		next_tok();
 		return expr;
@@ -1016,7 +1016,7 @@ ast_expression_t* try_parse_literal()
 	{
 		ast_expression_t* expr = _alloc_expr();
 		expr->kind = expr_str_literal;
-		expr->data.str_literal.value = (const char*)current()->data;
+		expr->data.str_literal.value = current()->data.str;
 		next_tok();
 		return expr;
 	}
