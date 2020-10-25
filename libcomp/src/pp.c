@@ -7,6 +7,19 @@
 
 #include <string.h>
 
+typedef enum
+{
+	marco_obj,
+	macro_fn
+}macro_kind;
+
+typedef struct
+{
+	macro_kind kind;
+	token_range_t tokens;
+	bool expanding;
+}macro_t;
+
 static token_t* _process_token(token_t* tok);
 
 static pp_context_t* _context = NULL;
@@ -66,22 +79,22 @@ static void _emit_range(token_range_t* range)
 
 static void _tok_replace(token_range_t* remove, token_t* insert)
 {
-	token_t* end = tok_find_next(insert, tok_eof);
-
 	if (remove->start->prev)
 		remove->start->prev->next = insert;
 }
 
-static token_range_t* _find_def(token_t* ident)
+static macro_t* _find_def(token_t* ident)
 {
-	return (token_range_t*)sht_lookup(_context->defs, ident->data.str);
+	return (macro_t*)sht_lookup(_context->defs, ident->data.str);
 }
 
 static token_range_t _expand_identifier(token_t* tok)
 {
-	token_range_t* range = _find_def(tok);
-	if (range)
-		return *range;
+	macro_t* macro = _find_def(tok);
+	if (macro && !macro->expanding)
+	{
+		return macro->tokens;
+	}
 
 	token_range_t r = { tok, tok->next };
 	return r;
@@ -97,14 +110,18 @@ static token_t* _process_undef(token_t* tok)
 
 	char* name = identifier->data.str;
 
-	token_range_t* range = (token_range_t*)sht_lookup(_context->defs, name);
-	if (range)
+	macro_t* macro = (macro_t*)sht_lookup(_context->defs, name);
+	if (macro)
 	{
 		sht_remove(_context->defs, name);
-		tok_destroy_range(range);
-		free(range);
+		free(macro);
 	}
 	return end;
+}
+
+static inline bool _leadingspace_or_startline(token_t* tok)
+{
+	return tok->flags & TF_LEADING_SPACE || tok->flags & TF_START_LINE;
 }
 
 static token_t* _process_define(token_t* tok)
@@ -112,30 +129,48 @@ static token_t* _process_define(token_t* tok)
 	token_t* end = _find_eol(tok->next)->next;
 	token_t* identifier = tok->next;
 
+	//must be a token
 	if (identifier->kind != tok_identifier)
 		return _diag_expected(identifier, tok_identifier);
-	
-	char* name = identifier->data.str;
-	if (sht_lookup(_context->defs, name))
-	{
-		diag_err(tok, ERR_SYNTAX, "duplicate macro '%s'", name);
-		return NULL;
-	}
 
 	if (identifier->next->kind == tok_l_paren && !(identifier->next->flags & TF_LEADING_SPACE))
 	{
-		//macro...
+		//function-like macro...
 		return NULL;
 	}
 
-	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
-	range->start = identifier->next;
-	range->end = end;
+	char* name = identifier->data.str;
 
-	sht_insert(_context->defs, name, range);
+	//There shall be white-space between the identifier and the replacement list in the definition of an object-like macro.
+	if (!_leadingspace_or_startline(identifier->next))
+	{
+		diag_err(tok, ERR_SYNTAX, "expected white space after macro name '%s'", name);
+	}
 
-	tok_destory(tok);
-	tok_destory(identifier);
+	macro_t* macro = (macro_t*)malloc(sizeof(macro_t));
+	memset(macro, 0, sizeof(macro_t));
+
+	macro->tokens.start = identifier->next;
+	macro->tokens.end = end;
+
+	macro_t* existing = (macro_t*)sht_lookup(_context->defs, name);
+	if (existing)
+	{
+		/*	An identifier currently defined as an object-like macro shall not be redefined by another
+			#define preprocessing directive unless the second definition is an object-like macro
+			definition and the two replacement lists are identical. */
+		if (tok_range_equals(&existing->tokens, &macro->tokens))
+		{			
+			free(macro);
+			return end;
+		}
+
+		diag_err(tok, ERR_SYNTAX, "redefinition of macro '%s'", name);
+		return NULL;
+	}
+
+	sht_insert(_context->defs, name, macro);
+
 	return end;
 }
 
@@ -180,7 +215,7 @@ static token_t* _process_include(token_t* tok)
 			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
 			return NULL;
 		}
-		tok_spelling_cpy(tok, path, 1024);
+		strncpy(path, tok->data.str, 1024);
 		tok = tok->next;
 
 		if (tok->kind == tok_fullstop)
@@ -190,7 +225,7 @@ static token_t* _process_include(token_t* tok)
 			if (tok->kind == tok_identifier)
 			{
 				char buff[128];
-				tok_spelling_cpy(tok, buff, 128);
+				strncpy(buff, tok->data.str, 128);
 				strncat(path, buff, strlen(buff));
 				tok = tok->next;
 			}			
@@ -323,6 +358,26 @@ static token_t* _process_condition(token_t* tok)
 	return tok->next;
 }
 
+static void _process_identifier(token_t* tok)
+{
+	macro_t* macro = _find_def(tok);
+	if (macro && !macro->expanding)
+	{
+		macro->expanding = true;
+		tok = macro->tokens.start;
+		while (tok != macro->tokens.end)
+		{
+			token_t* next = _process_token(tok);
+			tok = next;
+		}
+		macro->expanding = false;
+	}
+	else
+	{
+		_emit_token(tok);
+	}
+}
+
 static token_t* _process_token(token_t* tok)
 {
 	token_t* next = tok->next;
@@ -348,12 +403,9 @@ static token_t* _process_token(token_t* tok)
 		next = tok->next;
 		break;
 	case tok_identifier:
-	{
 		next = tok->next;
-		token_range_t range = _expand_identifier(tok);
-		_emit_range(&range);
+		_process_identifier(tok);
 		break;
-	}
 	default:
 		_emit_token(tok);
 		break;

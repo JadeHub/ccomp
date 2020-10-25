@@ -286,11 +286,16 @@ void tok_destroy_range(token_range_t* range)
 	}
 }
 
+/*
+Two replacement lists are identical if and only if the preprocessing tokens in both have
+the same number, ordering, spelling, and white-space separation, where all white-space
+separations are considered identical.
+*/
 bool tok_equals(token_t* lhs, token_t* rhs)
 {
 	bool result = (lhs && rhs) &&
 		lhs->kind == rhs->kind &&
-		lhs->flags == rhs->flags;
+		lhs->flags == rhs->flags; //?
 	if (!result)
 		return false;
 
