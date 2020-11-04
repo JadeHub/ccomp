@@ -9,8 +9,8 @@ public:
 		Lex(src);
 
 		token_range_t range;
-		range.start = tokens;
-		range.end = tok_find_next(tokens, tok_eof);
+		range.start = tokens.start;
+		range.end = tok_find_next(tokens.start, tok_eof);
 
 		uint32_t val;
 		pp_context_t ctx = { sht_create(128), range.start, range.end };

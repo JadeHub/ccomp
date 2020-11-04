@@ -65,7 +65,7 @@ public:
 		sr.ptr = mSrc.c_str();
 		sr.end = sr.ptr + mSrc.length();
 
-		mTokens = lex_source(&sr);
+		mTokens = lex_source(&sr).start;
 	}
 
 	void Parse()
@@ -104,7 +104,7 @@ public:
 		source_range_t sr;
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
-		token_t* toks = lex_source(&sr);
+		token_t* toks = lex_source(&sr).start;
 				
 		ast = parse_translation_unit(toks);
 	}
@@ -189,11 +189,12 @@ public:
 		tokens = lex_source(&sr);
 	}
 
-	token_t* tokens = nullptr;
+	token_range_t tokens = { NULL, NULL };
+	//token_t* tokens = nullptr;
 
 	token_t* GetToken(uint32_t idx)
 	{
-		token_t* tok = tokens;
+		token_t* tok = tokens.start;
 		for (uint32_t i = 0; i < idx; i++)
 		{
 			EXPECT_NE(nullptr, tok);
@@ -216,7 +217,7 @@ public:
 
 	void ExpectTokTypes(const std::vector<tok_kind>& kinds)
 	{
-		token_t* tok = tokens;
+		token_t* tok = tokens.start;
 
 		for (auto i = 0; i < kinds.size(); i++)
 		{
@@ -224,6 +225,17 @@ public:
 			EXPECT_EQ(kinds[i], tok->kind);
 			tok = tok->next;
 		}
+	}
+
+	void ExpectCode(const std::string& code)
+	{
+		source_range_t sr;
+		sr.ptr = code.c_str();
+		sr.end = sr.ptr + code.length();
+
+		token_range_t expected = lex_source(&sr);
+		
+		EXPECT_TRUE(tok_range_equals(&tokens, &expected));		
 	}
 };
 
@@ -252,7 +264,7 @@ public:
 	void PreProc(const char* src)
 	{
 		Lex(src);
-		tokens = pre_proc_file(tokens);
+		tokens = pre_proc_file(tokens.start);
 	}
 
 	MOCK_METHOD1(on_load_file, source_range_t(const std::string&));

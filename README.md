@@ -1,10 +1,16 @@
 # ccomp
 
 ## Todo
-+ Signed / unsigned
 + Cast expression (typeref and expression)
-+ Pointers (address of & deference operator. Pointer type. Arrays and index operator. String constants.)
 + Preprocessor
+	- # & ## operators
+	- #pragma
+	- #error
+	- signed/unsigned bug in expression eval
+	- ? operator in expression eval
++ Better overflow detection
++ Struct member alignment
++ enum bug
 + Typedef
 + Const
 + Static

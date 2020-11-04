@@ -9,7 +9,7 @@
 
 typedef enum
 {
-	marco_obj,
+	macro_obj,
 	macro_fn
 }macro_kind;
 
@@ -17,6 +17,7 @@ typedef struct
 {
 	macro_kind kind;
 	token_range_t tokens;
+	token_t* fn_params;
 	bool expanding;
 }macro_t;
 
@@ -77,12 +78,6 @@ static void _emit_range(token_range_t* range)
 	}
 }
 
-static void _tok_replace(token_range_t* remove, token_t* insert)
-{
-	if (remove->start->prev)
-		remove->start->prev->next = insert;
-}
-
 static macro_t* _find_def(token_t* ident)
 {
 	return (macro_t*)sht_lookup(_context->defs, ident->data.str);
@@ -124,6 +119,58 @@ static inline bool _leadingspace_or_startline(token_t* tok)
 	return tok->flags & TF_LEADING_SPACE || tok->flags & TF_START_LINE;
 }
 
+static token_t* _process_fn_define(token_t* identifier)
+{
+	token_t* tok = identifier->next->next;
+	token_t* end = _find_eol(identifier)->next;
+
+	macro_t* macro = (macro_t*)malloc(sizeof(macro_t));
+	memset(macro, 0, sizeof(macro_t));
+	macro->kind = macro_fn;
+	
+	token_t* last_param = NULL;
+	while (tok->kind == tok_identifier)
+	{
+		token_t* next = tok->next;
+
+		if (macro->fn_params == NULL)
+		{
+			macro->fn_params = last_param = tok;
+			macro->fn_params->prev = macro->fn_params->next = NULL;
+		}
+		else
+		{
+			last_param->next = tok;
+			tok->prev = last_param;
+			last_param = tok;
+		}
+		tok->next = NULL;
+
+		tok = next;
+		if (tok->kind != tok_comma)
+			break;
+		tok = tok->next;
+	}
+	if (tok->kind != tok_r_paren)
+	{
+		_diag_expected(tok, tok_r_paren);
+		free(macro);
+		return NULL;
+	}
+	tok = tok->next;
+
+	macro->tokens.start = tok;
+	macro->tokens.end = end;
+
+	macro_t* existing = (macro_t*)sht_lookup(_context->defs, identifier->data.str);
+	if (existing)
+	{
+	}
+
+	sht_insert(_context->defs, identifier->data.str, macro);
+	return macro->tokens.end;
+}
+
 static token_t* _process_define(token_t* tok)
 {
 	token_t* end = _find_eol(tok->next)->next;
@@ -136,7 +183,7 @@ static token_t* _process_define(token_t* tok)
 	if (identifier->next->kind == tok_l_paren && !(identifier->next->flags & TF_LEADING_SPACE))
 	{
 		//function-like macro...
-		return NULL;
+		return _process_fn_define(identifier);
 	}
 
 	char* name = identifier->data.str;
@@ -149,7 +196,7 @@ static token_t* _process_define(token_t* tok)
 
 	macro_t* macro = (macro_t*)malloc(sizeof(macro_t));
 	memset(macro, 0, sizeof(macro_t));
-
+	macro->kind = macro_obj;
 	macro->tokens.start = identifier->next;
 	macro->tokens.end = end;
 
@@ -159,12 +206,12 @@ static token_t* _process_define(token_t* tok)
 		/*	An identifier currently defined as an object-like macro shall not be redefined by another
 			#define preprocessing directive unless the second definition is an object-like macro
 			definition and the two replacement lists are identical. */
-		if (tok_range_equals(&existing->tokens, &macro->tokens))
-		{			
+		if (existing->kind == macro_obj && tok_range_equals(&existing->tokens, &macro->tokens))
+		{	
 			free(macro);
 			return end;
 		}
-
+		free(macro);
 		diag_err(tok, ERR_SYNTAX, "redefinition of macro '%s'", name);
 		return NULL;
 	}
@@ -250,9 +297,10 @@ static token_t* _process_include(token_t* tok)
 		return NULL;
 	}
 
-	tok = lex_source(sr);
-	if (!tok)
+	token_range_t toks = lex_source(sr);
+	if (!toks.start)
 		return false;
+	tok = toks.start;
 
 	while (tok->kind != tok_eof)
 	{
@@ -358,24 +406,150 @@ static token_t* _process_condition(token_t* tok)
 	return tok->next;
 }
 
-static void _process_identifier(token_t* tok)
+static token_t* _find_fn_param_end(token_t* tok)
 {
-	macro_t* macro = _find_def(tok);
+	int paren_count = 0;
+
+	while (!( (tok->kind == tok_comma || tok->kind == tok_r_paren) && paren_count == 0))
+	{
+		if (!tok)
+			return NULL;
+
+		if (tok->kind == tok_l_paren)
+			paren_count++;
+		if (tok->kind == tok_r_paren)
+			paren_count--;
+
+		//Within the sequence of preprocessing tokens making up an invocation of a function-like macro,
+		//new-line is considered a normal white-space character
+		if (tok->flags & TF_START_LINE)
+			tok->flags = TF_LEADING_SPACE;
+
+		tok = tok->next;
+	}
+	return tok;
+}
+
+
+static void _emit_replacement_list(token_t* replace, token_range_t* list)
+{
+	token_t* tok = list->start;
+	tok->flags = replace->flags; //first token in the replacement list should inherit flags from the token being replaced
+	while (tok != list->end)
+	{
+		tok = _process_token(tok);
+	}
+}
+
+static token_t* _process_fn_macro_call(token_t* identifier, macro_t* macro)
+{
+	token_t* tok = identifier->next;
+	if (tok->kind != tok_l_paren)
+		return _diag_expected(tok, tok_l_paren);
+	tok = tok->next;
+
+	hash_table_t* params = sht_create(8);
+	token_t* result = NULL;
+
+	//process the parameters and build a table of param name to token range
+	token_t* param = macro->fn_params;
+	while (1)
+	{
+		if (!param)
+		{
+			//error
+			break;
+		}
+
+		token_t* end = _find_fn_param_end(tok);
+
+		if (!end)
+		{
+
+		}
+
+		token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
+		range->start = tok;
+		range->end = end;
+
+		sht_insert(params, param->data.str, range);
+
+		if (end->kind == tok_r_paren)
+		{
+			result = end->next;
+			break;
+		}
+		param = param->next;
+		tok = end->next;
+	}	
+
+	//process the replacement list
+	token_t* next;
+	tok = macro->tokens.start;
+	tok->flags = identifier->flags; //first token in the replacement list should inherit flags from the identifier being replaced	
+	while (tok != macro->tokens.end)
+	{
+		if (tok->kind == tok_identifier)
+		{
+			//check params
+			token_range_t* range = (token_range_t*)sht_lookup(params, tok->data.str);
+
+			if (range)
+			{
+				_emit_replacement_list(tok, range);
+				tok = tok->next;
+				/*
+				token_t* tok2 = range->start;
+				tok2->flags = tok->flags; //first token in the replacement list should inherit flags from the identifier being replaced	
+				while (tok2 != range->end)
+				{
+					next = _process_token(tok2);
+					tok2 = next;
+				}
+
+				tok = tok->next;*/
+				continue;
+			}
+		}
+
+		next = _process_token(tok);
+		tok = next;
+	}
+	return result;
+}
+
+static token_t* _process_identifier(token_t* identifier)
+{
+	token_t* next = identifier->next;
+
+	macro_t* macro = _find_def(identifier);
 	if (macro && !macro->expanding)
 	{
 		macro->expanding = true;
-		tok = macro->tokens.start;
-		while (tok != macro->tokens.end)
+
+		if (macro->kind == macro_obj)
 		{
-			token_t* next = _process_token(tok);
-			tok = next;
+			_emit_replacement_list(identifier, &macro->tokens);
+
+			/*token_t* tok = macro->tokens.start;
+			tok->flags = identifier->flags; //first token in the replacement list should inherit flags from the indetifier being replaced
+			while (tok != macro->tokens.end)
+			{
+				token_t* next = _process_token(tok);
+				tok = next;
+			}*/
+		}
+		else
+		{
+			next = _process_fn_macro_call(identifier, macro);
 		}
 		macro->expanding = false;
 	}
 	else
 	{
-		_emit_token(tok);
+		_emit_token(identifier);
 	}
+	return next;
 }
 
 static token_t* _process_token(token_t* tok)
@@ -403,8 +577,7 @@ static token_t* _process_token(token_t* tok)
 		next = tok->next;
 		break;
 	case tok_identifier:
-		next = tok->next;
-		_process_identifier(tok);
+		next = _process_identifier(tok);
 		break;
 	default:
 		_emit_token(tok);
@@ -413,17 +586,16 @@ static token_t* _process_token(token_t* tok)
 	return next;
 }
 
-token_t* pre_proc_file(token_t* toks)
+token_range_t pre_proc_file(token_t* toks)
 {
-	token_t* result = toks;
 	token_t* tok = toks;
 
 	while (tok)
 	{
 		tok = _process_token(tok);
-
 	}
-	return _context->first;
+	token_range_t result = { _context->first , _context->last };
+	return result;
 }
 
 void pre_proc_init()

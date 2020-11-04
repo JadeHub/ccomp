@@ -77,15 +77,15 @@ int main(int argc, char* argv[])
     if (!sr)
         return -1;
     
-    token_t* toks = lex_source(sr);
-    if (!toks)
+    token_range_t range = lex_source(sr);
+    if (!range.start)
         return -1;
-
+    
     pre_proc_init();
-    toks = pre_proc_file(toks);
+    token_range_t preproced = pre_proc_file(range.start);
     pre_proc_deinit();
 
-    ast_trans_unit_t* ast = parse_translation_unit(toks);
+    ast_trans_unit_t* ast = parse_translation_unit(preproced.start);
     valid_trans_unit_t* tl = sem_analyse(ast);
     if (!tl)
     {

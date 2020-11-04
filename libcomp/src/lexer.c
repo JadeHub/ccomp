@@ -785,11 +785,10 @@ _hit_end:
 	return true;
 }
 
-token_t* lex_source(source_range_t* sr)
+token_range_t lex_source(source_range_t* sr)
 {
 	const char* pos = sr->ptr;
-	token_t* first = NULL;
-	token_t* last = NULL;
+	token_range_t result = { NULL, NULL };
 	token_t* tok;
 	do
 	{
@@ -797,15 +796,15 @@ token_t* lex_source(source_range_t* sr)
 		
 		*tok = _invalid_tok;
 
-		if (first == NULL)
+		if (result.start == NULL)
 		{
 			tok->flags |= TF_START_LINE;
-			first = last = tok;
+			result.start = result.end = tok;
 		}
 		else
 		{
-			tok->prev = last;
-			last->next = tok;
+			tok->prev = result.end;
+			result.end->next = tok;
 		}
 
 		lex_next_tok(sr, pos, tok);
@@ -819,21 +818,22 @@ token_t* lex_source(source_range_t* sr)
 			tok->flags |= TF_START_LINE;
 		}
 
-		last = tok;		
+		result.end = tok;
 		pos = tok->loc + tok->len;
 	} while (tok->kind != tok_eof);
-	return first;
+	return result;
 
 return_err:
 
-	tok = first;
+	tok = result.start;
 	while (tok)
 	{
 		token_t* next = tok->next;
 		free(tok);
 		tok = next;
 	}
-	return NULL;
+	result.start = result.end = NULL;
+	return result;
 }
 
 void lex_init()
