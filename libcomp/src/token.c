@@ -1,5 +1,7 @@
 #include "token.h"
 
+#include <libj/include/str_buff.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -199,11 +201,10 @@ size_t tok_spelling_len(token_t* tok)
 	return len;
 }
 
-void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_t dest_len)
+void tok_spelling_extract(const char* src_loc, size_t src_len, str_buff_t* result)
 {
 	const char* src = src_loc;
-	int pos = 0;
-	while ((src < src_loc+src_len) && (pos < dest_len - 1))
+	while (src < src_loc + src_len)
 	{
 		if (*src == '\\')
 		{
@@ -218,11 +219,10 @@ void tok_spelling_extract(const char* src_loc, size_t src_len, char* dest, size_
 				continue;
 			}
 		}
-		dest[pos] = *src;
-		pos++;
+		sb_append_ch(result, *src);
+		
 		src++;
 	}
-	dest[pos] = '\0';
 }
 
 void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
@@ -233,7 +233,11 @@ void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 	}
 	else
 	{
-		tok_spelling_extract(tok->loc, tok->len, dest, dest_len);
+		dest[0] = '\0';
+		str_buff_t* sb = sb_attach(dest, dest_len);
+
+		tok_spelling_extract(tok->loc, tok->len, sb);
+		sb_release(sb);
 	}
 }
 
@@ -321,4 +325,11 @@ bool tok_range_equals(token_range_t* lhr, token_range_t* rhr)
 	}
 
 	return lhs == lhr->end && rhs == rhr->end;
+}
+
+token_t* tok_duplicate(token_t* tok)
+{
+	token_t* result = (token_t*)malloc(sizeof(token_t));
+	*result = *tok;
+	return result;
 }

@@ -1,6 +1,8 @@
 #include "lexer.h"
 #include "diag.h"
 
+#include <libj/include/str_buff.h>
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -154,21 +156,21 @@ static inline bool _is_white_space(char ch)
 		ch == '\r';
 }
 
-static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* result)
+static uint32_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* pos, int* len)
 {
-	result->loc = pos;
-	result->kind = tok_num_literal;
-	result->len = 1;
-	//skip slash
-	ADV_POS(sr, &pos);
+	//skip the slash
+	if (!_adv_pos(sr, &pos))
+		goto esc_err_ret;
+	*len = 1;
 
 	int base = 0;
 	if (*pos == 'x')
 	{
 		//hex
-		ADV_POS(sr, &pos);
-		result->len++;
+		if (!_adv_pos(sr, &pos))
+			goto esc_err_ret;
 
+		(*len)++;
 		base = 16;
 	}
 	else if (_is_octal_digit_char(*pos))
@@ -183,19 +185,17 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 		do
 		{
 			i = i * base + _get_char_int_val(*pos);
-			result->len++;
-			ADV_POS(sr, &pos);
+			(*len)++;
+			if (!_adv_pos(sr, &pos))
+				goto esc_err_ret;
 		} while (_is_valid_num_char(base, *pos));
 
 		if (i > 255)
 		{
-			diag_err(result, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
-			result->kind = tok_eof;
-			return;
+			diag_err(tok, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
+			goto esc_err_ret;
 		}
-
-		result->data.integer = i;
-		return;
+		return i;
 	}
 
 	switch (*pos)
@@ -204,46 +204,39 @@ static void _lex_escape_char(source_range_t* sr, const char* pos, token_t* resul
 	case '\'':
 	case '\"':
 	case '?':
-		result->data.integer = *pos;
-		result->len++;
-		return;
+		(*len)++;
+		return  *pos;
 	case 'a':
-		result->data.integer = 0x07; //bell
-		result->len++;
-		return;
+		(*len)++;
+		return 0x07; //bell;
 	case 'b':
-		result->data.integer = 0x08; //backspace
-		result->len++;
-		return;
+		(*len)++;
+		return 0x08; //backspace
 	case 'f':
-		result->data.integer = 0x0C; //form feed
-		result->len++;
-		return;
+		(*len)++;
+		return 0x0C; //form feed
 	case 'n':
-		result->data.integer = 0x0A; //new line
-		result->len++;
-		return;
+		(*len)++;
+		return 0x0A; //new line
 
 	case 'r':
-		result->data.integer = 0x0D; //carriage return
-		result->len++;
-		return;
-
+		(*len)++;
+		return 0x0D; //carriage return
 	case 't':
-		result->data.integer = 0x09; //tab
-		result->len++;
-		return;
+		(*len)++;
+		return 0x09; //tab
 	case 'v':
-		result->data.integer = 0x0B; //vert tab
-		result->len++;
-		return;
+		(*len)++;
+		return 0x0B; //vert tab
 	case '0':
-		result->data.integer = 0;
-		result->len++;
-		return;
+		(*len)++;
+		return 0;
 	}
-	diag_err(result, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
-	result->kind = tok_eof;
+	diag_err(tok, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
+
+esc_err_ret:
+	*len = -1;
+	return 0;
 }
 
 static inline bool _is_valid_string_literal_char(char c)
@@ -257,6 +250,8 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	result->len = 1;
 	result->kind = tok_string_literal;
 
+	str_buff_t* sb = sb_create(256);
+
 	//skip initial quote
 	ADV_POS_ERR(result, sr, &pos);
 
@@ -268,17 +263,26 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 			result->kind = tok_eof;
 			return;
 		}
-		ADV_POS_ERR(result, sr, &pos);
+		if (*pos == '\\')
+		{
+			int len;
+			uint32_t val = _lex_escaped_char(sr, result, pos, &len);
+			if (len == -1)
+				return;
+			sb_append_ch(sb, (const char)val);
+			pos += len;			
+		}
+		else
+		{
+			sb_append_ch(sb, *pos);
+			ADV_POS_ERR(result, sr, &pos);
+		}
 	}
 	//skip closing quote
 	ADV_POS_ERR(result, sr, &pos);
+	
 	result->len = pos - result->loc;
-
-	//result->loc points at the opening quote
-	//result->len includes both quotes
-	size_t sp_len = tok_spelling_len(result);
-	result->data.str = (char*)malloc(sp_len + 1);
-	tok_spelling_extract(result->loc + 1, result->len - 2, result->data.str, sp_len + 1);
+	result->data.str = sb_release(sb);
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -292,9 +296,12 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	 
 	if (*pos == '\\')
 	{
-		_lex_escape_char(sr, pos, result);
-		if (result->kind == tok_eof)
+		int len;
+		uint32_t val = _lex_escaped_char(sr, result, pos, &len);
+		if(len == -1)
 			return;
+		result->data.integer = val;
+		result->len = len;
 		pos += result->len;
 	}
 	else if (*pos == '\'')
@@ -369,81 +376,79 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	} while (_is_identifier_body(*pos));
 	result->len = pos - result->loc;
 
-	size_t sp_len = tok_spelling_len(result);
-	char* buff = (char*)malloc(sp_len + 1);
-
-	tok_spelling_extract(result->loc, result->len, buff, sp_len+1);
+	str_buff_t* sb = sb_create(64);
+	tok_spelling_extract(result->loc, result->len, sb);
 
 	//Keywords
-	if (strcmp(buff, "int") == 0)
+	if (strcmp(sb->buff, "int") == 0)
 		result->kind = tok_int;
-	else if (strcmp(buff, "char") == 0)
+	else if (strcmp(sb->buff, "char") == 0)
 		result->kind = tok_char;
-	else if (strcmp(buff, "short") == 0)
+	else if (strcmp(sb->buff, "short") == 0)
 		result->kind = tok_short;
-	else if (strcmp(buff, "long") == 0)
+	else if (strcmp(sb->buff, "long") == 0)
 		result->kind = tok_long;
-	else if (strcmp(buff, "void") == 0)
+	else if (strcmp(sb->buff, "void") == 0)
 		result->kind = tok_void;
-	else if (strcmp(buff, "signed") == 0)
+	else if (strcmp(sb->buff, "signed") == 0)
 		result->kind = tok_signed;
-	else if (strcmp(buff, "unsigned") == 0)
+	else if (strcmp(sb->buff, "unsigned") == 0)
 		result->kind = tok_unsigned;
-	else if (strcmp(buff, "float") == 0)
+	else if (strcmp(sb->buff, "float") == 0)
 		result->kind = tok_float;
-	else if (strcmp(buff, "double") == 0)
+	else if (strcmp(sb->buff, "double") == 0)
 		result->kind = tok_double;
-	else if (strcmp(buff, "const") == 0)
+	else if (strcmp(sb->buff, "const") == 0)
 		result->kind = tok_const;
-	else if (strcmp(buff, "volatile") == 0)
+	else if (strcmp(sb->buff, "volatile") == 0)
 		result->kind = tok_volatile;
-	else if (strcmp(buff, "typedef") == 0)
+	else if (strcmp(sb->buff, "typedef") == 0)
 		result->kind = tok_typedef;
-	else if (strcmp(buff, "extern") == 0)
+	else if (strcmp(sb->buff, "extern") == 0)
 		result->kind = tok_extern;
-	else if (strcmp(buff, "static") == 0)
+	else if (strcmp(sb->buff, "static") == 0)
 		result->kind = tok_static;
-	else if (strcmp(buff, "auto") == 0)
+	else if (strcmp(sb->buff, "auto") == 0)
 		result->kind = tok_auto;
-	else if (strcmp(buff, "register") == 0)
+	else if (strcmp(sb->buff, "register") == 0)
 		result->kind = tok_register;
-	else if (strcmp(buff, "return") == 0)
+	else if (strcmp(sb->buff, "return") == 0)
 		result->kind = tok_return;
-	else if (strcmp(buff, "if") == 0)
+	else if (strcmp(sb->buff, "if") == 0)
 		result->kind = tok_if;
-	else if (strcmp(buff, "else") == 0)
+	else if (strcmp(sb->buff, "else") == 0)
 		result->kind = tok_else;
-	else if (strcmp(buff, "for") == 0)
+	else if (strcmp(sb->buff, "for") == 0)
 		result->kind = tok_for;
-	else if (strcmp(buff, "while") == 0)
+	else if (strcmp(sb->buff, "while") == 0)
 		result->kind = tok_while;
-	else if (strcmp(buff, "do") == 0)
+	else if (strcmp(sb->buff, "do") == 0)
 		result->kind = tok_do;
-	else if (strcmp(buff, "break") == 0)
+	else if (strcmp(sb->buff, "break") == 0)
 		result->kind = tok_break;
-	else if (strcmp(buff, "continue") == 0)
+	else if (strcmp(sb->buff, "continue") == 0)
 		result->kind = tok_continue;
-	else if (strcmp(buff, "struct") == 0)
+	else if (strcmp(sb->buff, "struct") == 0)
 		result->kind = tok_struct;
-	else if (strcmp(buff, "union") == 0)
+	else if (strcmp(sb->buff, "union") == 0)
 		result->kind = tok_union;
-	else if (strcmp(buff, "enum") == 0)
+	else if (strcmp(sb->buff, "enum") == 0)
 		result->kind = tok_enum;
-	else if (strcmp(buff, "sizeof") == 0)
+	else if (strcmp(sb->buff, "sizeof") == 0)
 		result->kind = tok_sizeof;
-	else if (strcmp(buff, "switch") == 0)
+	else if (strcmp(sb->buff, "switch") == 0)
 		result->kind = tok_switch;
-	else if (strcmp(buff, "case") == 0)
+	else if (strcmp(sb->buff, "case") == 0)
 		result->kind = tok_case;
-	else if (strcmp(buff, "default") == 0)
+	else if (strcmp(sb->buff, "default") == 0)
 		result->kind = tok_default;
-	else if (strcmp(buff, "goto") == 0)
+	else if (strcmp(sb->buff, "goto") == 0)
 		result->kind = tok_goto;
 	
 	if (result->kind == tok_identifier)
-		result->data.str = buff;
+		result->data.str = sb_release(sb);
 	else
-		free(buff);
+		sb_destroy(sb);
 }
 
 static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t* result)
@@ -457,40 +462,41 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 	} while (_is_identifier_body(*pos) || *pos == '#');
 	result->len = pos - result->loc;
 
-	char* buff = (char*)malloc(result->len);
-	tok_spelling_extract(result->loc + 1, result->len-1, buff, result->len);
+	str_buff_t* sb = sb_create(64);
+	tok_spelling_extract(result->loc + 1, result->len - 1, sb);
 
 	if (result->len == 1)
 		result->kind = tok_pp_null;
-	else if (strcmp(buff, "include") == 0)
+	else if (strcmp(sb->buff, "include") == 0)
 		result->kind = tok_pp_include;
-	else if (strcmp(buff, "define") == 0)
+	else if (strcmp(sb->buff, "define") == 0)
 		result->kind = tok_pp_define;
-	else if (strcmp(buff, "undef") == 0)
+	else if (strcmp(sb->buff, "undef") == 0)
 		result->kind = tok_pp_undef;
-	else if (strcmp(buff, "line") == 0)
+	else if (strcmp(sb->buff, "line") == 0)
 		result->kind = tok_pp_line;
-	else if (strcmp(buff, "error") == 0)
+	else if (strcmp(sb->buff, "error") == 0)
 		result->kind = tok_pp_error;
-	else if (strcmp(buff, "pragma") == 0)
+	else if (strcmp(sb->buff, "pragma") == 0)
 		result->kind = tok_pp_pragma;
-	else if (strcmp(buff, "if") == 0)
+	else if (strcmp(sb->buff, "if") == 0)
 		result->kind = tok_pp_if;
-	else if (strcmp(buff, "ifdef") == 0)
+	else if (strcmp(sb->buff, "ifdef") == 0)
 		result->kind = tok_pp_ifdef;
-	else if (strcmp(buff, "ifndef") == 0)
+	else if (strcmp(sb->buff, "ifndef") == 0)
 		result->kind = tok_pp_ifndef;
-	else if (strcmp(buff, "else") == 0)
+	else if (strcmp(sb->buff, "else") == 0)
 		result->kind = tok_pp_else;
-	else if (strcmp(buff, "elif") == 0)
+	else if (strcmp(sb->buff, "elif") == 0)
 		result->kind = tok_pp_elif;
-	else if (strcmp(buff, "endif") == 0)
+	else if (strcmp(sb->buff, "endif") == 0)
 		result->kind = tok_pp_endif;
 	else
 	{
-		diag_err(result, ERR_SYNTAX, "unknown preprocessor directive %s", buff);
+		diag_err(result, ERR_SYNTAX, "unknown preprocessor directive %s", sb->buff);
 		result->kind = tok_eof;
 	}
+	sb_destroy(sb);
 }
 
 bool lex_next_tok(source_range_t* src, const char* pos, token_t* result)

@@ -142,7 +142,10 @@ typedef struct
 
 typedef struct
 {
+	//string literal value extracted during lex stage
 	const char* value;
+
+	//label name used during code generation. Set during semantic analysis
 	const char* label;
 }ast_string_literal_t;
 
@@ -205,7 +208,7 @@ typedef struct ast_struct_member
 	char name[MAX_LITERAL_NAME]; //name is optional
 	uint32_t bit_size; //eg, the 1 in 'int p : 1'
 
-	uint32_t offset;
+	uint32_t offset; //alligned position within struct
 
 	struct ast_struct_member* next;
 }ast_struct_member_t;

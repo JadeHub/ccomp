@@ -105,7 +105,7 @@ TEST_F(PreProcDefineTest, duplicate_definition_empty)
 		tok_eof });
 }
 
-TEST_F(PreProcDefineTest, fn_macro_start_of_line)
+TEST_F(PreProcDefineTest, fn_start_of_line)
 {
 	std::string src = R"(
 #define TEST(A, B, CDE) A + B + CDE
@@ -118,7 +118,7 @@ TEST(1 + 3, 2, 3);
 	ExpectCode("1 + 3 + 2 + 3;");
 }
 
-TEST_F(PreProcDefineTest, fn_macro_mid_line)
+TEST_F(PreProcDefineTest, fn_mid_line)
 {
 	std::string src = R"(
 #define TEST(A, B, CDE) A + B + CDE
@@ -133,7 +133,7 @@ TEST_F(PreProcDefineTest, fn_macro_mid_line)
 
 //Within the sequence of preprocessing tokens making up an invocation of a function-like macro,
 //new-line is considered a normal white-space character
-TEST_F(PreProcDefineTest, fn_macro_multi_line)
+TEST_F(PreProcDefineTest, fn_multi_line)
 {
 	std::string src = R"(
 #define TEST(A, B, CDE) A + B + CDE
@@ -146,5 +146,82 @@ TEST(1 +
 )";
 
 	PreProc(src.c_str());
-	ExpectCode(R"(1 + 3 + 2 + 3;)");
+	ExpectCode("1 + 3 + 2 + 3;");
+}
+
+TEST_F(PreProcDefineTest, fn_macro_in_params)
+{
+	std::string src = R"(
+#define ONE 1
+#define TWO 2
+#define THREE 3
+#define TEST(A, B, CDE) A + B + CDE
+
+TEST(ONE, TWO, THREE);
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("1 + 2 + 3;");
+}
+
+TEST_F(PreProcDefineTest, fn_recursive_macro_in_params1)
+{
+	std::string src = R"(
+#define ONE 1
+#define TWO ONE
+
+#define TEST(A, B) A + B
+
+TEST(TWO, ONE);
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("1 + 1;");
+}
+
+TEST_F(PreProcDefineTest, fn_param_stringize)
+{
+	std::string src = R"(
+#define TEST(A) #A
+
+TEST(hello("bob");)
+)";
+
+	PreProc(src.c_str());
+	std::string expected = R"(
+"hello(\"bob\");"
+)";
+	ExpectCode(expected);
+}
+
+TEST_F(PreProcDefineTest, fn_param_stringize_num)
+{
+	std::string src = R"(
+#define TEST(A) #A
+
+TEST(12\
+345)
+)";
+
+	PreProc(src.c_str());
+	std::string expected = R"(
+"12345"
+)";
+	ExpectCode(expected);
+}
+
+TEST_F(PreProcDefineTest, fn_param_stringize_multi_line)
+{
+	std::string src = R"(
+#define TEST(A) #A
+
+TEST("hel\
+lo")
+)";
+
+	PreProc(src.c_str());
+	std::string expected = R"(
+"\"hello\""
+)";
+	ExpectCode(expected);
 }

@@ -261,7 +261,7 @@ public:
 		return This->on_load_file(file);
 	}
 
-	void PreProc(const char* src)
+	void PreProc(const std::string& src)
 	{
 		Lex(src);
 		tokens = pre_proc_file(tokens.start);

@@ -5,6 +5,8 @@
 #include "lexer.h"
 #include "ast.h"
 
+#include <libj/include/str_buff.h>
+
 #include <string.h>
 
 typedef enum
@@ -437,7 +439,74 @@ static void _emit_replacement_list(token_t* replace, token_range_t* list)
 	tok->flags = replace->flags; //first token in the replacement list should inherit flags from the token being replaced
 	while (tok != list->end)
 	{
-		tok = _process_token(tok);
+		tok = _process_token(tok_duplicate(tok));
+	}
+}
+
+static token_t* _stringize_range(token_range_t* range)
+{
+	if (!range || range->start == range->end)
+		return NULL;
+
+	token_t* result = (token_t*)malloc(sizeof(token_t));
+	memset(result, 0, sizeof(token_t));
+	result->kind = tok_string_literal;
+
+	str_buff_t* sb = sb_create(512);
+
+	token_t* tok = range->start;
+	while (tok != range->end)
+	{
+		/*
+			Each occurrence of white space between the argument’s preprocessing tokens
+			becomes a single space character in the character string literal. White space before the
+			first preprocessing token and after the last preprocessing token composing the argument
+			is deleted.
+		*/
+		if (tok != range->start && _leadingspace_or_startline(tok))
+			sb_append_ch(sb, ' ');
+
+		switch (tok->kind)
+		{
+		case tok_string_literal:
+		{
+			sb_append_ch(sb, '\"');
+			char* c = tok->data.str;
+			while (*c)
+			{
+				// a \ character is inserted before each " and \ character of a character constant or string literal
+				if (*c == '\\' || *c == '\"')
+					sb_append_ch(sb, '\\');
+				sb_append_ch(sb, *c);
+				c++;
+			}
+			sb_append_ch(sb, '\"');
+			break;
+		}
+		default:
+			//sb_append(sb, tok->data.str);
+			tok_spelling_extract(tok->loc, tok->len, sb);
+			break;
+		}
+
+		tok = tok->next;
+	}
+
+	result->len = sb->len + 1;
+	result->loc = result->data.str = sb_release(sb);
+	return result;
+}
+
+static void _emit_hash_token(token_range_t* range)
+{
+	char buffer[1024];
+	buffer[0] = '\0';
+
+	token_t* tok = range->start;
+	while (tok != range->end)
+	{
+
+		tok = tok->next;
 	}
 }
 
@@ -489,6 +558,14 @@ static token_t* _process_fn_macro_call(token_t* identifier, macro_t* macro)
 	tok->flags = identifier->flags; //first token in the replacement list should inherit flags from the identifier being replaced	
 	while (tok != macro->tokens.end)
 	{
+		bool sawHash = false;
+
+		if (tok->kind == tok_hash)
+		{
+			tok = tok->next;
+			sawHash = true;
+		}
+
 		if (tok->kind == tok_identifier)
 		{
 			//check params
@@ -496,18 +573,15 @@ static token_t* _process_fn_macro_call(token_t* identifier, macro_t* macro)
 
 			if (range)
 			{
-				_emit_replacement_list(tok, range);
-				tok = tok->next;
-				/*
-				token_t* tok2 = range->start;
-				tok2->flags = tok->flags; //first token in the replacement list should inherit flags from the identifier being replaced	
-				while (tok2 != range->end)
+				if (sawHash)
 				{
-					next = _process_token(tok2);
-					tok2 = next;
+					token_t* tt = _stringize_range(range);
+					tt->flags = tok->prev->flags;
+					_emit_token(tt);
 				}
-
-				tok = tok->next;*/
+				else
+					_emit_replacement_list(tok, range);
+				tok = tok->next;
 				continue;
 			}
 		}
@@ -528,21 +602,9 @@ static token_t* _process_identifier(token_t* identifier)
 		macro->expanding = true;
 
 		if (macro->kind == macro_obj)
-		{
 			_emit_replacement_list(identifier, &macro->tokens);
-
-			/*token_t* tok = macro->tokens.start;
-			tok->flags = identifier->flags; //first token in the replacement list should inherit flags from the indetifier being replaced
-			while (tok != macro->tokens.end)
-			{
-				token_t* next = _process_token(tok);
-				tok = next;
-			}*/
-		}
 		else
-		{
 			next = _process_fn_macro_call(identifier, macro);
-		}
 		macro->expanding = false;
 	}
 	else

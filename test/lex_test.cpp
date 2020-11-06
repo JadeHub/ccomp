@@ -223,6 +223,15 @@ TEST_F(LexerTest, ErrStringConstantUnterminated2)
 	Lex(code);
 }
 
+
+TEST_F(LexerTest, string_constant_1)
+{
+	std::string code = R"("hello \"bob\"")";
+
+	Lex(code);
+	ExpectStringLiteral(GetToken(0), "hello \"bob\"");
+}
+
 TEST_F(LexerTest, tok_spelling_len)
 {
 	Lex(R"(abc)");
