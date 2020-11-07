@@ -105,6 +105,19 @@ TEST_F(PreProcDefineTest, duplicate_definition_empty)
 		tok_eof });
 }
 
+TEST_F(PreProcDefineTest, fn)
+{
+	std::string src = R"(
+#define TEST(A) A
+
+TEST(1);
+
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("1;");
+}
+
 TEST_F(PreProcDefineTest, fn_start_of_line)
 {
 	std::string src = R"(
@@ -161,6 +174,7 @@ TEST(ONE, TWO, THREE);
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("1 + 2 + 3;");
 }
 
@@ -224,4 +238,28 @@ lo")
 "\"hello\""
 )";
 	ExpectCode(expected);
+}
+
+TEST_F(PreProcDefineTest, blah)
+{
+	std::string src = R"(
+#define f(a) a + 1
+
+f(f(z));
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+}
+
+TEST_F(PreProcDefineTest, example_3)
+{
+	std::string src = R"(
+#define f(a) f(2 * (a))
+
+f(f(z));
+)";
+	
+	PreProc(src.c_str());
+	PrintTokens();
 }

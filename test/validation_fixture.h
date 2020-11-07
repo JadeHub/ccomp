@@ -227,6 +227,17 @@ public:
 		}
 	}
 
+	void PrintTokens()
+	{
+		token_t* tok = tokens.start;
+
+		while (tok != tokens.end)
+		{
+			tok_printf(tok);
+			tok = tok->next;
+		}
+	}
+
 	void ExpectCode(const std::string& code)
 	{
 		source_range_t sr;
@@ -235,7 +246,7 @@ public:
 
 		token_range_t expected = lex_source(&sr);
 		
-		EXPECT_TRUE(tok_range_equals(&tokens, &expected));		
+		EXPECT_TRUE(tok_range_equals(&tokens, &expected));
 	}
 };
 

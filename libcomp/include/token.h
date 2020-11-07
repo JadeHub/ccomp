@@ -41,6 +41,7 @@ typedef struct
 token_t* tok_find_next(token_t* start, tok_kind kind);
 const char* tok_kind_spelling(tok_kind);
 void tok_printf(token_t* tok);
+void tok_print_range(token_range_t* range);
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
 void tok_spelling_extract(const char* src_loc, size_t src_len, str_buff_t* result);

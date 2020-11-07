@@ -333,3 +333,31 @@ token_t* tok_duplicate(token_t* tok)
 	*result = *tok;
 	return result;
 }
+
+void tok_printf(token_t* tok)
+{
+	if (tok->flags & TF_START_LINE)
+		printf("\n");
+	if (tok->flags & TF_LEADING_SPACE)
+		printf(" ");
+
+	str_buff_t* sb = sb_create(128);
+
+	tok_spelling_extract(tok->loc, tok->len, sb);
+
+	printf(sb->buff);
+
+	sb_destroy(sb);
+}
+
+void tok_print_range(token_range_t* range)
+{
+	token_t* tok = range->start;
+
+	while (tok != range->end)
+	{
+		tok_printf(tok);
+		tok = tok->next;
+	}
+	printf("\n");
+}
