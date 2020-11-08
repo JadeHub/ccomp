@@ -105,6 +105,48 @@ TEST_F(PreProcDefineTest, duplicate_definition_empty)
 		tok_eof });
 }
 
+TEST_F(PreProcDefineTest, self_reference)
+{
+	std::string src = R"(
+#define TEST (4 + TEST)
+TEST;
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("(4 + TEST);");
+}
+
+TEST_F(PreProcDefineTest, self_reference_self)
+{
+	std::string src = R"(
+#define TEST TEST
+TEST;
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("TEST;");
+}
+
+TEST_F(PreProcDefineTest, self_circ_reference)
+{
+	std::string src = R"(
+#define x (4 + y)
+#define y (2 * x)
+
+x;
+y;
+
+)";
+
+	PreProc(src.c_str());
+	ExpectCode(R"(
+(4 + (2 * x));
+(2 * (4 + y));
+)");
+}
+
+/////////////////////////////////////////////
+
 TEST_F(PreProcDefineTest, fn)
 {
 	std::string src = R"(
@@ -240,7 +282,7 @@ lo")
 	ExpectCode(expected);
 }
 
-TEST_F(PreProcDefineTest, blah)
+TEST_F(PreProcDefineTest, nested_fn)
 {
 	std::string src = R"(
 #define f(a) a + 1
@@ -249,17 +291,73 @@ f(f(z));
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
+	ExpectCode("z + 1 + 1;");
+}
+
+TEST_F(PreProcDefineTest, fn_param_double_replace)
+{
+	std::string src = R"(
+#define f(a) a
+#define z z[0]
+
+f(z);
+
+)";
+	//z is only expanded to z[0] once
+	PreProc(src.c_str());
+	ExpectCode("z[0];");
+}
+
+TEST_F(PreProcDefineTest, fn_nested_with_double_replace)
+{
+	std::string src = R"(
+#define f(a) a
+#define z z[0]
+
+f(f(z));
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("z[0];");
+}
+
+TEST_F(PreProcDefineTest, blah)
+{
+	std::string src = R"(
+#define x 2
+#define f(a) f(x * (a))
+#define g f
+
+#define t(a) a
+
+g(0)
+
+)";
+	//t(t(g)(0) + t)(1);
+
+	//PreProc(src.c_str());
+	//ExpectCode("z[0];");
 }
 
 TEST_F(PreProcDefineTest, example_3)
 {
 	std::string src = R"(
-#define f(a) f(2 * (a))
+#define x 3
+#define f(a) f(x * (a))
+#undef x
+#define x 2
+#define g f
+#define z z[0]
+#define h g(~
+#define m(a) a(w)
+#define w 0,1
+#define t(a) a
+#define p() int
+#define q(x) x
 
-f(f(z));
+f(y+1) + f(f(z)) % t(t(f)(0) + t)(1);
 )";
 	
-	PreProc(src.c_str());
+	//PreProc(src.c_str());
 	PrintTokens();
 }

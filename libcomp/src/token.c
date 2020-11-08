@@ -345,7 +345,7 @@ void tok_printf(token_t* tok)
 
 	tok_spelling_extract(tok->loc, tok->len, sb);
 
-	printf(sb->buff);
+	printf("%s", sb->buff);
 
 	sb_destroy(sb);
 }
@@ -360,4 +360,17 @@ void tok_print_range(token_range_t* range)
 		tok = tok->next;
 	}
 	printf("\n");
+}
+
+static uint32_t _next = 1;
+
+token_t* tok_create()
+{
+	token_t* tok = (token_t*)malloc(sizeof(token_t));
+	memset(tok, 0, sizeof(token_t));
+
+	tok->id = _next;
+	_next++;
+
+	return tok;
 }

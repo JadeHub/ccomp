@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include <string.h>
 
-static token_t _invalid_tok;
-
 static inline bool _can_adv(source_range_t* sr, const char** pos)
 {
 	return *pos < sr->end;
@@ -798,9 +796,8 @@ token_range_t lex_source(source_range_t* sr)
 	token_t* tok;
 	do
 	{
-		tok = (token_t*)malloc(sizeof(token_t));
-		
-		*tok = _invalid_tok;
+		tok = tok_create();
+		tok->kind = tok_invalid;
 
 		if (result.start == NULL)
 		{
@@ -844,6 +841,5 @@ return_err:
 
 void lex_init()
 {
-	memset(&_invalid_tok, 0, sizeof(token_t));
-	_invalid_tok.kind = tok_invalid;
+	
 }

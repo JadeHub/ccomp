@@ -27,6 +27,8 @@ typedef struct token
         char* str;
     }data;
 
+    uint32_t id;
+
     uint8_t flags;
     struct token* next;
     struct token* prev;
@@ -38,6 +40,7 @@ typedef struct
     token_t* end;
 }token_range_t;
 
+token_t* tok_create();
 token_t* tok_find_next(token_t* start, tok_kind kind);
 const char* tok_kind_spelling(tok_kind);
 void tok_printf(token_t* tok);
