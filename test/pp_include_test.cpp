@@ -1,3 +1,5 @@
+#if 0
+
 #include "validation_fixture.h"
 
 class PreProcIncludeTest : public LexPreProcTest 
@@ -208,3 +210,6 @@ TEST_F(PreProcIncludeTest, include_two_files)
 		tok_eof
 		});
 }
+
+
+#endif

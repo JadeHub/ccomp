@@ -7,6 +7,7 @@
 
 #include <libj/include/str_buff.h>
 
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
@@ -41,7 +42,8 @@ static token_t* _peek_next()
 
 	while (me)
 	{
-		if (me->current != me->tokens->end)
+		//we can't 'look through' parameters to the following tokens
+		if (me->current != me->tokens->end || me->macro == NULL)
 			return me->current;
 		me = me->next;
 	}
@@ -57,9 +59,6 @@ static token_t* _pop_next_from(macro_expansion_t* me)
 
 		//we have eaten all the tokens
 		macro_expansion_t* tmp = me->next;
-		if(me->macro)
-			me->macro->expanding = false;
-		//printf("stop macro %s\n", me->macro->name);
 		free(me);
 		_context->expansion_stack = tmp;
 		me = tmp;
@@ -89,8 +88,6 @@ static token_t* _pop_next()
 
 static void _begin_macro_expansion(macro_t* macro)
 {
-	macro->expanding = true;
-
 	macro_expansion_t* me = (macro_expansion_t*)malloc(sizeof(macro_expansion_t));
 	memset(me, 0, sizeof(macro_expansion_t));
 	me->macro = macro;
@@ -101,7 +98,7 @@ static void _begin_macro_expansion(macro_t* macro)
 	_context->expansion_stack = me;
 }
 
-static void _begin_fn_param_expansion(token_range_t* range)
+static macro_expansion_t* _begin_fn_param_expansion(token_range_t* range)
 {
 	macro_expansion_t* me = (macro_expansion_t*)malloc(sizeof(macro_expansion_t));
 	memset(me, 0, sizeof(macro_expansion_t));
@@ -109,13 +106,64 @@ static void _begin_fn_param_expansion(token_range_t* range)
 	me->current = range->start;
 	me->next = _context->expansion_stack;
 	_context->expansion_stack = me;
+	return me;
+}
+
+static inline bool _is_expansion_at_end(macro_expansion_t* me)
+{
+	return me->current == me->tokens->end;
+}
+
+static bool _is_macro_expanding(macro_t* macro)
+{
+	macro_expansion_t* me = _context->expansion_stack;
+
+	while (me)
+	{
+		if (me->macro == macro)
+			return true;
+		me = me->next;
+	}
+	return false;
+}
+
+static void _destroy_expansion_stack()
+{
+	macro_expansion_t* me = _context->expansion_stack;
+
+	while (me)
+	{
+		assert(_is_expansion_at_end(me));
+		macro_expansion_t* next = me->next;
+		free(me);
+		me = next;
+	}
+	_context->expansion_stack = NULL;
+}
+
+static bool _is_expansion_complete(macro_expansion_t* expansion)
+{
+	if (!_context->expansion_stack)
+		assert(_context->expansion_stack);
+
+	macro_expansion_t* me = _context->expansion_stack;
+
+	while (me)
+	{
+		if (!_is_expansion_at_end(me)) //either expansion, or something before it is not complete
+			return false;
+
+		if (me == expansion)
+			return _is_expansion_at_end(me);
+
+		me = me->next;
+	}
+	//no longer in the stack, must be complete
+	return true;
 }
 
 static inline void _emit_token(token_t* tok)
 {
-	//printf("Tok: ");
-	//tok_printf(tok);
-	//printf("\n");
 	token_range_t* range = _context->dest_stack->range;
 
 	if(_context->expansion_stack && _context->expansion_stack->macro)
@@ -184,18 +232,6 @@ static macro_t* _find_macro_def(token_t* ident)
 static inline bool _leadingspace_or_startline(token_t* tok)
 {
 	return tok->flags & TF_LEADING_SPACE || tok->flags & TF_START_LINE;
-}
-
-static token_range_t _expand_identifier(token_t* tok)
-{
-	macro_t* macro = _find_macro_def(tok);
-	if (macro && !macro->expanding)
-	{
-		return macro->tokens;
-	}
-
-	token_range_t r = { tok, tok->next };
-	return r;
 }
 
 static bool _process_undef(token_t* tok)
@@ -498,7 +534,7 @@ static bool _process_condition(token_t* tok)
 		}
 		else if (tok->kind == tok_pp_else)
 		{
-			inc_group = !any_true;						
+			inc_group = !any_true;
 			if (next->kind == tok_if)
 			{
 				if (!(next = _eval_pp_expression(next->next, &inc_group)))
@@ -593,6 +629,48 @@ static token_t* _stringize_range(token_range_t* range)
 	return result;
 }
 
+static token_range_t* _expand_range(token_range_t* range)
+{
+	token_range_t* result = (token_range_t*)malloc(sizeof(token_range_t));
+	memset(result, 0, sizeof(token_range_t));
+
+	//save and reset the expansion stack
+	macro_expansion_t* prev_me_stack = _context->expansion_stack;
+	_context->expansion_stack = NULL;
+
+	//setup the unexpanded param tokens for expansion
+	macro_expansion_t* me = _begin_fn_param_expansion(range);
+
+	_push_dest(result);
+
+	token_t* tok;
+	while (!_is_expansion_complete(me))
+	{
+		tok = _pop_next();
+		_process_token(tok);
+	}
+
+	//restore the expansion stack
+	_destroy_expansion_stack();
+	_context->expansion_stack = prev_me_stack;
+
+	_pop_dest();
+
+	result->end = _create_end_marker(result->end);
+	return result;
+}
+
+static void _process_arg_substitution(token_t* identifier, token_range_t* param)
+{
+	macro_t* macro = _context->expansion_stack->macro;
+
+	token_range_t* range = _expand_range(param);
+
+	range->start->flags = identifier->flags;
+	macro_expansion_t* me = _begin_fn_param_expansion(range);
+	me->macro = macro;
+}
+
 /*
 Returns a sht of param name -> token_range_t*
 */
@@ -609,6 +687,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 
 	//process the parameters and build a table of param name to token range
 	token_t* param = macro->fn_params;
+	token_t* last = param;
 	while (1)
 	{
 		if (!param)
@@ -616,9 +695,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 
 		token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
 		memset(range, 0, sizeof(token_range_t));
-
-		//collect outcome here
-		_push_dest(range);
+		range->start = tok;
 
 		int paren_count = 0;
 		while (!((tok->kind == tok_comma || tok->kind == tok_r_paren) && paren_count == 0))
@@ -633,20 +710,12 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 			if (tok->flags & TF_START_LINE)
 				tok->flags = TF_LEADING_SPACE;
 
-			if (!_process_token(tok))
-				return false;
-
+			last = tok;
 			tok = _pop_next();
 		}
-		
-		_pop_dest();
-		
-		range->end = _create_end_marker(range->end);
-
-		tok_print_range(range);
-
+		range->end = _create_end_marker(last);
+//		tok_print_range(range);
 		sht_insert(params, param->data.str, range);
-
 		if (tok->kind == tok_r_paren)
 		{
 			break;
@@ -676,7 +745,7 @@ static token_range_t* _lookup_fn_param(const char* name)
 
 static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 {
-	if (macro->expanding)
+	if (_is_macro_expanding(macro))
 		return false;
 
 	if (_context->expansion_stack)
@@ -693,8 +762,7 @@ static bool _process_identifier(token_t* identifier)
 	token_range_t* p_range = _lookup_fn_param(identifier->data.str);
 	if (p_range)
 	{
-		_begin_fn_param_expansion(p_range);
-		p_range->start->flags = identifier->flags;
+		_process_arg_substitution(identifier, p_range);
 		return true;
 	}
 
@@ -720,7 +788,6 @@ static bool _process_identifier(token_t* identifier)
 			return true;
 		}
 	}
-
 	_emit_token(identifier);
 	return true;
 }

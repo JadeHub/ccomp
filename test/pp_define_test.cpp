@@ -159,7 +159,6 @@ y;
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();	
 	ExpectCode(R"(
 (4 + (2 * x));
 (2 * (4 + y));
@@ -235,7 +234,6 @@ TEST(ONE);
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("1;");
 }
 
@@ -251,7 +249,6 @@ TEST(ONE, TWO, THREE);
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("1 + 2 + 3;");
 }
 
@@ -270,7 +267,7 @@ TEST(TWO, ONE);
 	ExpectCode("1 + 1;");
 }
 
-TEST_F(PreProcDefineTest, fn_param_stringize)
+/*TEST_F(PreProcDefineTest, fn_param_stringize)
 {
 	std::string src = R"(
 #define TEST(A) #A
@@ -315,7 +312,7 @@ lo")
 "\"hello\""
 )";
 	ExpectCode(expected);
-}
+}*/
 
 TEST_F(PreProcDefineTest, nested_fn)
 {
@@ -366,28 +363,24 @@ TEST_F(PreProcDefineTest, fn_name_replace)
 g(0)
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("f(2 * (0))");
 }
 
-TEST_F(PreProcDefineTest, blah)
+TEST_F(PreProcDefineTest, fn_not_replaced_when_not_a_call)
 {
 	std::string src = R"(
 
-#define f(a) f(x * (a))
-#define x 2
+#define f(a) f(2 * (a))
 #define g f
 
 #define t(a) a
 
-
-
 t(g)(0);
-
 )";
+	//g is replaced with f but does not form a call until t is expanded
 
 	PreProc(src.c_str());
-	PrintTokens();
+	ExpectCode("f(2 * (0));");
 }
 
 TEST_F(PreProcDefineTest, example_3_1)
@@ -412,8 +405,31 @@ f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);
 	
 	PreProc(src.c_str());
 	ExpectCode("f(2 * (y+1)) + f(2 * (f(2 * (z[0])))) % f(2 * (0)) + t(1);");
-	PrintTokens();
-} 
+}
+
+//TEST_F(PreProcDefineTest, blah)
+//{
+//	std::string src = R"(
+//#define x 3
+//#define f(a) f(x * (a))
+//#undef x
+//#define x 2
+//#define g f
+//#define z z[0]
+//#define h g(~
+//#define m(a) a(w)
+//#define w 0,1
+//#define t(a) a
+//#define p() int
+//#define q(x) x
+//
+//h 5);
+//)";
+//
+//	PreProc(src.c_str());
+//	ExpectCode("f(2 * (~ 5));");
+//	PrintTokens();
+//}
 
 TEST_F(PreProcDefineTest, example_3_2)
 {
@@ -437,5 +453,4 @@ g(x+(3,4)-w);
 
 	PreProc(src.c_str());
 	ExpectCode("f(2 * (2+(3,4)-0,1));");
-	PrintTokens();
 }

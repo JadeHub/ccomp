@@ -15,7 +15,7 @@ typedef struct
 	macro_kind kind;
 	token_range_t tokens;
 	token_t* fn_params;
-	bool expanding;
+	//bool expanding;
 	const char* name;
 
 	/*Pointer hash set of macro_t*. macro is hidden from these toks*/
