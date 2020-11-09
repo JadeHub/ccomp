@@ -275,7 +275,7 @@ public:
 	void PreProc(const std::string& src)
 	{
 		Lex(src);
-		tokens = pre_proc_file(tokens.start);
+		tokens = pre_proc_file(&tokens);
 	}
 
 	MOCK_METHOD1(on_load_file, source_range_t(const std::string&));

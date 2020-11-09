@@ -28,11 +28,11 @@ typedef struct macro_expansion
 	macro_t* macro;
 	hash_table_t* params;
 
+	token_t* current;
+
 	//set when we are expanding a param
 	//_emit_token() will add to this range if set
 	token_range_t* param_expansion;
-
-	//hash_table_t* expanded_macros;
 
 	struct macro_expansion* next;
 }macro_expansion_t;
@@ -44,10 +44,11 @@ typedef struct
 	*/
 	hash_table_t* defs;
 
+	token_range_t input;
+	token_t* current;
+
 	/* result list*/
 	token_range_t result;
-
-	//hash_table_t* expanded_macros;
 
 	macro_expansion_t* expansion_stack;
 

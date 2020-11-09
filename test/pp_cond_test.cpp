@@ -1,3 +1,5 @@
+#if 0
+
 #include "validation_fixture.h"
 
 class PreProcCondTest : public LexPreProcTest {};
@@ -245,3 +247,5 @@ int i;
 		tok_semi_colon,
 		tok_eof });
 }
+
+#endif

@@ -101,7 +101,7 @@ typedef enum
     tok_pp_elif,
     tok_pp_endif,
 
-    tok_pp_end_param, //special value used interally by pre processor
+    tok_pp_end_marker, //special value used interally by pre processor
 
     tok_identifier,         // main
     tok_num_literal,        // 1234

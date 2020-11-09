@@ -4,14 +4,11 @@ class PreProcDefineTest : public LexPreProcTest {};
 
 TEST_F(PreProcDefineTest, define)
 {
-	std::string src = R"(#define TEST int i;
-TEST)";
+	std::string src = R"(#define TEST int i
+TEST;)";
 
 	PreProc(src.c_str());
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_semi_colon,
-		tok_eof });
+	ExpectCode("int i;");
 }
 
 TEST_F(PreProcDefineTest, define_nested)
@@ -21,10 +18,7 @@ TEST_F(PreProcDefineTest, define_nested)
 TEST)";
 
 	PreProc(src.c_str());
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_semi_colon,
-		tok_eof });
+	ExpectCode("int i;");
 }
 
 TEST_F(PreProcDefineTest, define_nested_recursive)
@@ -127,6 +121,19 @@ TEST;
 	ExpectCode("TEST;");
 }
 
+
+TEST_F(PreProcDefineTest, two_defs)
+{
+	std::string src = R"(
+#define ONE 1
+#define TWO 2
+ONE + TWO;
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("1 + 2;");
+}
+
 TEST_F(PreProcDefineTest, self_circ_reference)
 {
 	std::string src = R"(
@@ -134,11 +141,12 @@ TEST_F(PreProcDefineTest, self_circ_reference)
 #define y (2 * x)
 
 x;
+	
 y;
-
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();	
 	ExpectCode(R"(
 (4 + (2 * x));
 (2 * (4 + y));
@@ -360,4 +368,4 @@ f(y+1) + f(f(z)) % t(t(f)(0) + t)(1);
 	
 	//PreProc(src.c_str());
 	PrintTokens();
-}
+} 
