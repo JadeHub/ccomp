@@ -35,6 +35,20 @@ TEST)";
 		tok_eof });
 }
 
+TEST_F(PreProcDefineTest, define_nested_recursive_many)
+{
+	//enounter 'TEST' while expanding 'TEST' obj macro
+	std::string src = R"(#define M1 TEST;
+#define A a
+#define B A
+#define C B
+#define D C
+D)";
+
+	PreProc(src.c_str());
+	ExpectCode("a");
+}
+
 TEST_F(PreProcDefineTest, err_missing_whitespace)
 {
 	std::string src = R"(
@@ -141,7 +155,6 @@ TEST_F(PreProcDefineTest, self_circ_reference)
 #define y (2 * x)
 
 x;
-	
 y;
 )";
 
@@ -210,6 +223,20 @@ TEST(1 +
 
 	PreProc(src.c_str());
 	ExpectCode("1 + 3 + 2 + 3;");
+}
+
+TEST_F(PreProcDefineTest, fn_macro_in_param)
+{
+	std::string src = R"(
+#define ONE 1
+#define TEST(A) A
+
+TEST(ONE);
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode("1;");
 }
 
 TEST_F(PreProcDefineTest, fn_macro_in_params)
@@ -329,25 +356,41 @@ f(f(z));
 	ExpectCode("z[0];");
 }
 
-TEST_F(PreProcDefineTest, blah)
+TEST_F(PreProcDefineTest, fn_name_replace)
 {
 	std::string src = R"(
 #define x 2
 #define f(a) f(x * (a))
 #define g f
 
-#define t(a) a
-
 g(0)
-
 )";
-	//t(t(g)(0) + t)(1);
-
-	//PreProc(src.c_str());
-	//ExpectCode("z[0];");
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode("f(2 * (0))");
 }
 
-TEST_F(PreProcDefineTest, example_3)
+TEST_F(PreProcDefineTest, blah)
+{
+	std::string src = R"(
+
+#define f(a) f(x * (a))
+#define x 2
+#define g f
+
+#define t(a) a
+
+
+
+t(g)(0);
+
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+}
+
+TEST_F(PreProcDefineTest, example_3_1)
 {
 	std::string src = R"(
 #define x 3
@@ -363,9 +406,36 @@ TEST_F(PreProcDefineTest, example_3)
 #define p() int
 #define q(x) x
 
-f(y+1) + f(f(z)) % t(t(f)(0) + t)(1);
+f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);
+
 )";
 	
-	//PreProc(src.c_str());
+	PreProc(src.c_str());
+	ExpectCode("f(2 * (y+1)) + f(2 * (f(2 * (z[0])))) % f(2 * (0)) + t(1);");
 	PrintTokens();
 } 
+
+TEST_F(PreProcDefineTest, example_3_2)
+{
+	std::string src = R"(
+#define x 3
+#define f(a) f(x * (a))
+#undef x
+#define x 2
+#define g f
+#define z z[0]
+#define h g(~
+#define m(a) a(w)
+#define w 0,1
+#define t(a) a
+#define p() int
+#define q(x) x
+
+g(x+(3,4)-w);
+
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("f(2 * (2+(3,4)-0,1));");
+	PrintTokens();
+}
