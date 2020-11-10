@@ -346,12 +346,34 @@ static bool _process_define(token_t* def)
 		macro->tokens.end = _create_end_marker(macro->tokens.end);
 	}
 
+	if (macro->tokens.start != macro->tokens.end)
+	{
+		/*
+			A ## preprocessing token shall not occur at the beginning or at the end of a replacement
+			list for either form of macro definition
+		*/
+		if (macro->tokens.start->kind == tok_hashhash)
+		{
+			diag_err(macro->tokens.start, ERR_SYNTAX,
+				"macro replacement list may not start with '##'");
+			return false;
+		}
+		if(macro->tokens.end->prev->kind == tok_hashhash)
+		{
+			diag_err(macro->tokens.end->prev, ERR_SYNTAX,
+				"macro replacement list may not end with '##'");
+			return false;
+		}
+	}
+
 	macro_t* existing = (macro_t*)sht_lookup(_context->defs, macro->name);
 	if (existing)
 	{
-		/*	An identifier currently defined as an object-like macro shall not be redefined by another
+		/*
+			An identifier currently defined as an object-like macro shall not be redefined by another
 			#define preprocessing directive unless the second definition is an object-like macro
-			definition and the two replacement lists are identical. */
+			definition and the two replacement lists are identical.
+		*/
 		if (existing->kind == macro_obj && tok_range_equals(&existing->tokens, &macro->tokens))
 		{	
 			free(macro);
@@ -363,7 +385,6 @@ static bool _process_define(token_t* def)
 	}
 
 	sht_insert(_context->defs, macro->name, macro);
-
 	return true;
 }
 
@@ -687,15 +708,15 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 
 	//process the parameters and build a table of param name to token range
 	token_t* param = macro->fn_params;
-	token_t* last = param;
-	while (1)
+	//token_t* last = param;
+	while (tok->kind != tok_r_paren)
 	{
 		if (!param)
 			return false; //todo error
 
 		token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
 		memset(range, 0, sizeof(token_range_t));
-		range->start = tok;
+		range->start = range->end = tok;
 
 		int paren_count = 0;
 		while (!((tok->kind == tok_comma || tok->kind == tok_r_paren) && paren_count == 0))
@@ -710,10 +731,14 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 			if (tok->flags & TF_START_LINE)
 				tok->flags = TF_LEADING_SPACE;
 
-			last = tok;
+			range->end->next = tok;
+			tok->prev = range->end;
+			range->end = tok;
+			tok->next = NULL;
+
 			tok = _pop_next();
 		}
-		range->end = _create_end_marker(last);
+		range->end = _create_end_marker(range->end);
 //		tok_print_range(range);
 		sht_insert(params, param->data.str, range);
 		if (tok->kind == tok_r_paren)
@@ -775,6 +800,7 @@ static bool _process_identifier(token_t* identifier)
 			macro->tokens.start->flags = identifier->flags;
 			return true;
 		}
+		//identifier maps to a function like macro but we only invoke it if it looks like a call
 		else if (_peek_next()->kind == tok_l_paren)
 		{
 			// macro->kind == macro_fn
@@ -792,12 +818,30 @@ static bool _process_identifier(token_t* identifier)
 	return true;
 }
 
+static bool _process_hash_op(token_t* hash)
+{
+	token_t* identifier = _pop_next();
+
+	if (!_expect_kind(identifier, tok_identifier))
+		return false;
+
+	token_range_t* p_range = _lookup_fn_param(identifier->data.str);
+	if (!p_range)
+		return false; //todo error
+
+	token_t* tok = _stringize_range(p_range);
+	tok->flags = hash->flags;
+
+	return _process_token(tok);
+}
+
 static bool _process_token(token_t* tok)
 {
 	switch (tok->kind)
 	{
 	case tok_hash:
 		//consume
+		return _process_hash_op(tok);
 		break;
 	case tok_hashhash:
 		break;
