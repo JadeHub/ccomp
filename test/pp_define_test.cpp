@@ -8,6 +8,7 @@ TEST_F(PreProcDefineTest, define)
 TEST;)";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("int i;");
 }
 
@@ -18,6 +19,7 @@ TEST_F(PreProcDefineTest, define_nested)
 TEST)";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("int i;");
 }
 
@@ -197,7 +199,7 @@ TEST();
 TEST_F(PreProcDefineTest, fn_empty_param)
 {
 	std::string src = R"(
-#define TEST(A, B) A B
+#define TEST(A, B) A |B
 
 TEST(1,);
 
@@ -205,10 +207,24 @@ TEST(1,);
 
 	PreProc(src.c_str());
 	PrintTokens();
-	ExpectCode("1 ;");
+	ExpectCode("1 |;");
 }
 
-TEST_F(PreProcDefineTest, fn_no_arg)
+TEST_F(PreProcDefineTest, fn_empty_param2)
+{
+	std::string src = R"(
+#define TEST(A,B) A B
+
+TEST(,1);
+
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(" 1;");
+}
+
+/*TEST_F(PreProcDefineTest, fn_no_arg)
 {
 	std::string src = R"(
 #define TEST(A) A
@@ -220,7 +236,7 @@ TEST();
 	PreProc(src.c_str());
 	PrintTokens();
 	ExpectCode(";");
-}
+}*/
 
 TEST_F(PreProcDefineTest, fn_start_of_line)
 {
@@ -472,8 +488,8 @@ h 5) & m
 )";
 
 	PreProc(src.c_str());
-	ExpectCode("f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");
 	PrintTokens();
+	ExpectCode("f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");	
 }
 
 TEST_F(PreProcDefineTest, example_3_2)
@@ -501,6 +517,33 @@ g(x+(3,4)-w) | h 5) & m
 	ExpectCode("f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");
 }
 
+TEST_F(PreProcDefineTest, example_3_31)
+{
+	std::string src = R"(
+#define x 3
+#define f(a) f(x * (a))
+#undef x
+#define x 2
+#define g f
+#define z z[0]
+#define h g(~
+#define m(a) a(w)
+#define w 0,1
+#define t(a) a
+#define p() int
+#define q(x) x
+#define r(x,y) x ## y
+#define str(x) # x
+
+, r(4,),
+
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(", 4,");
+}
+
 TEST_F(PreProcDefineTest, example_3_3)
 {
 	std::string src = R"(
@@ -526,4 +569,96 @@ p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };
 	PreProc(src.c_str());
 	PrintTokens();
 	ExpectCode("int i[] = { 1, 23, 4, 5, };");
+}
+
+/*TEST_F(PreProcDefineTest, example_3_4)
+{
+	std::string src = R"(
+#define x 3
+#define f(a) f(x * (a))
+#undef x
+#define x 2
+#define g f
+#define z z[0]
+#define h g(~
+#define m(a) a(w)
+#define w 0,1
+#define t(a) a
+#define p() int
+#define q(x) x
+#define r(x,y) x ## y
+#define str(x) # x
+
+char c[2][6] = { str(hello), str() };
+
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(char c[2][6] = { "hello", "" };)");
+}*/
+
+TEST_F(PreProcDefineTest, hashhash_params)
+{
+	std::string src = R"(
+#define f(A, B) A##B
+
+f(abc 1, 2 xyz);
+)";
+	PreProc(src.c_str());
+	ExpectCode("abc 12 xyz;");
+}
+
+TEST_F(PreProcDefineTest, hashhash_forms_macro)
+{
+	std::string src = R"(
+#define TEST 123
+
+#define f(A, B) A##B
+
+f(TE, ST);
+)";
+	PreProc(src.c_str());
+	ExpectCode("123;");
+}
+
+TEST_F(PreProcDefineTest, hashhash_outside_replacement_list)
+{
+	std::string src = R"(
+AB ## CD
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode("AB ## CD");
+}
+
+TEST_F(PreProcDefineTest, blah2)
+{
+	std::string src = R"(
+#define f(A) #A
+f(hello);
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+}
+
+TEST_F(PreProcDefineTest, hashhash_w_hash)
+{
+	std::string src = R"(
+#define COMMAND(NAME)  { #NAME, NAME ## _command }
+
+struct command commands[] =
+{
+  COMMAND (quit),
+  COMMAND (help),
+};
+)";
+	PreProc(src.c_str());
+	ExpectCode(R"(
+struct command commands[] =
+{
+  { "quit", quit_command },
+  { "help", help_command },
+};
+)");
 }

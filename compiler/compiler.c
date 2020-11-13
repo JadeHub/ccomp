@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
         return -1;
     
     pre_proc_init();
-    token_range_t preproced = pre_proc_file(range.start);
+    token_range_t preproced = pre_proc_file(&range);
     pre_proc_deinit();
 
     ast_trans_unit_t* ast = parse_translation_unit(preproced.start);

@@ -32,13 +32,16 @@ typedef struct macro_expansion
 	token_t* current;
 
 	struct macro_expansion* next;
-}macro_expansion_t;
+}expansion_context_t;
 
 typedef struct dest_range
 {
 	token_range_t* range;
+	uint8_t next_tok_flags;
 	struct dest_range* next;
 }dest_range_t;
+
+#define FLAGS_UNSET 0xFF
 
 typedef struct
 {
@@ -48,15 +51,15 @@ typedef struct
 	hash_table_t* defs;
 
 	token_range_t input;
-	token_t* current;
 
 	/* result list*/
 	token_range_t result;
 
-	macro_expansion_t* expansion_stack;
+	expansion_context_t* expansion_stack;
 
 	dest_range_t* dest_stack;
 
+	//uint8_t next_tok_flags;
 }pp_context_t;
 
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val);
