@@ -503,6 +503,19 @@ static bool _process_define(token_t* def)
 	return true;
 }
 
+static bool _process_pragma(token_t* tok)
+{
+	tok = _pop_next();
+
+	if (tok->kind == tok_identifier && strcmp(tok->data.str, "once") == 0)
+	{
+		const char* path = src_file_path(tok->loc);
+		assert(path);
+		sht_insert(_context->praga_once_paths, path, (void*)1);
+	}
+	return false;
+}
+
 static bool _process_include(token_t* tok)
 {
 	tok = _pop_next();
@@ -588,6 +601,12 @@ static bool _process_include(token_t* tok)
 		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", path);
 		return false;
 	}
+
+	const char* inc_path = src_file_path(sr->ptr);
+	assert(inc_path);
+
+	if (sht_lookup(_context->praga_once_paths, inc_path))
+		return true;
 
 	token_range_t toks = lex_source(sr);
 	if (!toks.start)
@@ -1154,6 +1173,10 @@ static bool _process_token(token_t* tok)
 
 	switch (tok->kind)
 	{
+	case tok_pp_pragma:
+		if (!_process_pragma(tok))
+			return false;
+		break;
 	case tok_hash:
 		//consume
 		return _process_hash_op(tok);
@@ -1211,6 +1234,7 @@ void pre_proc_init()
 	_context = (pp_context_t*)malloc(sizeof(pp_context_t));
 	memset(_context, 0, sizeof(pp_context_t));
 	_context->defs = sht_create(128);
+	_context->praga_once_paths = sht_create(128);
 
 	_push_dest(&_context->result);
 }
@@ -1218,6 +1242,7 @@ void pre_proc_init()
 void pre_proc_deinit()
 {
 	ht_destroy(_context->defs);
+	ht_destroy(_context->praga_once_paths);
 	free(_context);
 	_context = NULL;
 }

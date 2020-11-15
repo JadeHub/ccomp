@@ -71,6 +71,7 @@ typedef struct
 
 	uint8_t define_id_supression_state;
 
+	hash_table_t* praga_once_paths;
 }pp_context_t;
 
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val);

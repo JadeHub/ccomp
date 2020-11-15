@@ -7,34 +7,75 @@ TEST_F(LexerTest, foo)
 	Lex(R"(int foo = 0;)");
 }
 
-TEST_F(LexerTest, Eof)
+TEST_F(LexerTest, eof)
 {
 	std::string code = R"(
-	int foo(int a);
-	int foo = 5;	)";
+int foo(int a);
+int foo = 5;)";
+
+	Lex(code);
+	ExpectCode(R"(
+int foo(int a);
+int foo = 5;)");
+}
+
+TEST_F(LexerTest, comment_slashslash)
+{
+	std::string code = R"(
+int foo //(int a);
+int foo2 = 5;)";
+
+	Lex(code);
+	ExpectCode(R"(
+int foo
+int foo2 = 5;)");
+}
+
+TEST_F(LexerTest, comment_mid_line)
+{
+	std::string code = R"(
+int foo /* abc */;
+int foo2 = 5;)";
+
+	Lex(code);
+	ExpectCode(R"(
+int foo ;
+int foo2 = 5;)");
+}
+
+TEST_F(LexerTest, comment_multiline)
+{
+	std::string code = R"(
+int foo /* abc ;
+int foo2 = 5;*/)";
+
+	Lex(code);
+	ExpectCode(R"(
+int foo )");
+}
+
+TEST_F(LexerTest, comment_entire_file)
+{
+	std::string code = R"(
+/*int foo abc ;
+int foo2 = 5;*/)";
+
+	Lex(code);
+	ExpectCode(" ");
+}
+
+TEST_F(LexerTest, err_comment_unterminated)
+{
+	std::string code = R"(
+int foo /* abc ;
+int foo2 = 5;)";
+
+	ExpectError(ERR_SYNTAX);
 
 	Lex(code);
 }
 
-TEST_F(LexerTest, Comment)
-{
-	std::string code = R"(
-	int foo //(int a);
-	int foo2 = 5;	)";
-
-	Lex(code);
-	EXPECT_EQ(GetToken(0)->kind, tok_int);
-	EXPECT_EQ(GetToken(1)->kind, tok_identifier);
-//	EXPECT_TRUE(tok_spelling_cmp(&GetToken(1), "foo"));
-
-	EXPECT_EQ(GetToken(2)->kind, tok_int);
-	EXPECT_EQ(GetToken(3)->kind, tok_identifier);
-	//EXPECT_TRUE(tok_spelling_cmp(&GetToken(3), "foo2"));
-	EXPECT_EQ(GetToken(4)->kind, tok_equal);
-	EXPECT_EQ(GetToken(5)->kind, tok_num_literal);
-}
-
-TEST_F(LexerTest, HexConstant1)
+TEST_F(LexerTest, hex_const_1)
 {
 	std::string code = R"(int x = 0xFF;)";
 
@@ -42,7 +83,7 @@ TEST_F(LexerTest, HexConstant1)
 	ExpectIntLiteral(GetToken(3), 0xFF);
 }
 
-TEST_F(LexerTest, HexConstant2)
+TEST_F(LexerTest, hex_const_2)
 {
 	std::string code = R"(int x = 0xFf;)";
 
@@ -50,7 +91,7 @@ TEST_F(LexerTest, HexConstant2)
 	ExpectIntLiteral(GetToken(3), 0xFF);
 }
 
-TEST_F(LexerTest, HexConstant3)
+TEST_F(LexerTest, hex_const_3)
 {
 	std::string code = R"(int x = 0x00000;)";
 
@@ -58,7 +99,7 @@ TEST_F(LexerTest, HexConstant3)
 	ExpectIntLiteral(GetToken(3), 0);
 }
 
-TEST_F(LexerTest, HexConstant4)
+TEST_F(LexerTest, hex_const_4)
 {
 	std::string code = R"(int x = 0x00000acb;)";
 
@@ -66,7 +107,7 @@ TEST_F(LexerTest, HexConstant4)
 	ExpectIntLiteral(GetToken(3), 0xACB);
 }
 
-TEST_F(LexerTest, HexConstant5)
+TEST_F(LexerTest, hex_const_5)
 {
 	std::string code = R"(int x = 0x00000acb; int main())";
 
@@ -77,7 +118,7 @@ TEST_F(LexerTest, HexConstant5)
 	EXPECT_EQ(GetToken(6)->kind, tok_identifier);
 }
 
-TEST_F(LexerTest, ErrCharConstantConstantTooLarge)
+TEST_F(LexerTest, err_char_const_too_large)
 {
 	std::string code = R"(int x = '\xFF1';)";
 
@@ -85,7 +126,7 @@ TEST_F(LexerTest, ErrCharConstantConstantTooLarge)
 	Lex(code);
 }
 
-TEST_F(LexerTest, OctalConstant1)
+TEST_F(LexerTest, oct_const_1)
 {
 	std::string code = R"(int x = 052;)";
 
@@ -93,15 +134,7 @@ TEST_F(LexerTest, OctalConstant1)
 	ExpectIntLiteral(GetToken(3), 42);
 }
 
-TEST_F(LexerTest, BinaryConstant1)
-{
-	std::string code = R"(int x = 052;)";
-
-	Lex(code);
-	ExpectIntLiteral(GetToken(3), 42);
-}
-
-TEST_F(LexerTest, CharConstant1)
+TEST_F(LexerTest, const_const_1)
 {
 	std::string code = R"(int x = 'a';)";
 
@@ -109,7 +142,7 @@ TEST_F(LexerTest, CharConstant1)
 	ExpectIntLiteral(GetToken(3), 'a');
 }
 
-TEST_F(LexerTest, CharConstantEsc1)
+TEST_F(LexerTest, char_const_esc_1)
 {
 	std::string code = R"(int x = '\t';)";
 
@@ -117,7 +150,7 @@ TEST_F(LexerTest, CharConstantEsc1)
 	ExpectIntLiteral(GetToken(3), '\t');
 }
 
-TEST_F(LexerTest, CharConstantNull)
+TEST_F(LexerTest, char_const_null)
 {
 	std::string code = R"(int x = '\0';)";
 
@@ -125,7 +158,7 @@ TEST_F(LexerTest, CharConstantNull)
 	ExpectIntLiteral(GetToken(3), 0);
 }
 
-TEST_F(LexerTest, CharConstantEscHex)
+TEST_F(LexerTest, char_const_esc_hex)
 {
 	std::string code = R"(int x = '\xFF';)";
 
@@ -133,7 +166,7 @@ TEST_F(LexerTest, CharConstantEscHex)
 	ExpectIntLiteral(GetToken(3), 0xFF);
 }
 
-TEST_F(LexerTest, CharConstantEscHex2)
+TEST_F(LexerTest, char_const_esc_hex_2)
 {
 	std::string code = R"(int x = '\x0F';)";
 
@@ -141,7 +174,7 @@ TEST_F(LexerTest, CharConstantEscHex2)
 	ExpectIntLiteral(GetToken(3), 0x0F);
 }
 
-TEST_F(LexerTest, CharConstantEscOctal)
+TEST_F(LexerTest, char_const_esc_oct_1)
 {
 	std::string code = R"(int x = '\052';)";
 
@@ -149,7 +182,7 @@ TEST_F(LexerTest, CharConstantEscOctal)
 	ExpectIntLiteral(GetToken(3), 42);
 }
 
-TEST_F(LexerTest, ErrCharConstantBadEsc)
+TEST_F(LexerTest, err_char_const_bas_esc)
 {
 	std::string code = R"(int x = '\q';)";
 
@@ -157,7 +190,7 @@ TEST_F(LexerTest, ErrCharConstantBadEsc)
 	Lex(code);
 }
 
-TEST_F(LexerTest, ErrCharConstantEmpty)
+TEST_F(LexerTest, err_char_const_empty)
 {
 	std::string code = R"(int x = '';)";
 
@@ -165,7 +198,7 @@ TEST_F(LexerTest, ErrCharConstantEmpty)
 	Lex(code);
 }
 
-TEST_F(LexerTest, ErrCharConstantTooLong)
+TEST_F(LexerTest, err_char_const_too_long)
 {
 	std::string code = R"(int x = '\nr';)";
 
@@ -173,7 +206,7 @@ TEST_F(LexerTest, ErrCharConstantTooLong)
 	Lex(code);
 }
 
-TEST_F(LexerTest, ErrCharConstantUnterminated)
+TEST_F(LexerTest, err_char_const_unterminated)
 {
 	std::string code = R"(int x = 'a;)";
 
@@ -181,7 +214,7 @@ TEST_F(LexerTest, ErrCharConstantUnterminated)
 	Lex(code);
 }
 
-TEST_F(LexerTest, ErrCharConstantUnterminated2)
+TEST_F(LexerTest, err_char_const_unterminated_2)
 {
 	std::string code = R"(int x = 'a
 						';)";
@@ -190,7 +223,7 @@ TEST_F(LexerTest, ErrCharConstantUnterminated2)
 	Lex(code);
 }
 
-TEST_F(LexerTest, StringConstant)
+TEST_F(LexerTest, string_const)
 {
 	std::string code = R"(char* c = "abc";)";
 
@@ -198,7 +231,7 @@ TEST_F(LexerTest, StringConstant)
 	ExpectStringLiteral(GetToken(4), "abc");
 }
 
-TEST_F(LexerTest, EmptyStringConstant)
+TEST_F(LexerTest, empty_string_const)
 {
 	std::string code = R"(char* c = "";)";
 
@@ -206,7 +239,7 @@ TEST_F(LexerTest, EmptyStringConstant)
 	ExpectStringLiteral(GetToken(4), "");
 }
 
-TEST_F(LexerTest, ErrStringConstantUnterminated)
+TEST_F(LexerTest, err_string_const_unterminated)
 {
 	std::string code = R"(char* c = "abc;)";
 
@@ -214,7 +247,7 @@ TEST_F(LexerTest, ErrStringConstantUnterminated)
 	Lex(code);
 }
 
-TEST_F(LexerTest, ErrStringConstantUnterminated2)
+TEST_F(LexerTest, err_string_const_unterminated_2)
 {
 	std::string code = R"(char* c = "abc;
 							")";
@@ -222,7 +255,6 @@ TEST_F(LexerTest, ErrStringConstantUnterminated2)
 	ExpectError(ERR_SYNTAX);
 	Lex(code);
 }
-
 
 TEST_F(LexerTest, string_constant_1)
 {
@@ -238,11 +270,4 @@ TEST_F(LexerTest, tok_spelling_len)
 
 	ExpectTokTypes({ tok_identifier, tok_eof });
 	EXPECT_EQ(3, tok_spelling_len(GetToken(0)));
-}
-
-TEST_F(LexerTest, hashhash)
-{
-	//Lex(R"(##)");
-
-	//ExpectTokTypes({ tok_hashhash, tok_eof });
 }

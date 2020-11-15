@@ -161,8 +161,6 @@ void main() {})";
 	ExpectTokTypes(expected_toks);
 }
 
-
-
 TEST_F(PreProcIncludeTest, include_recursive)
 {
 	std::string inc1 = R"(int x;)";
@@ -207,4 +205,19 @@ TEST_F(PreProcIncludeTest, include_two_files)
 		tok_semi_colon,
 		tok_eof
 		});
+}
+
+TEST_F(PreProcIncludeTest, pragma_once)
+{
+	std::string inc = R"(#pragma once
+int i;)";
+
+	ExpectFileLoad("inc1.h", inc);
+
+	std::string src = R"(#include "inc1.h"
+#include "inc1.h"
+)";
+
+	PreProc(src.c_str());
+	ExpectCode("int i;");
 }

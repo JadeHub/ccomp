@@ -55,8 +55,6 @@ const char* tok_kind_spelling(tok_kind k)
 		return "*";
 	case tok_slash:
 		return "/";
-	case tok_slashslash:
-		return "//";
 	case tok_ampamp:
 		return "&&";
 	case tok_pipepipe:

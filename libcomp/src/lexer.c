@@ -522,6 +522,9 @@ lex_next_tok:
 	result->loc = pos;
 	result->len = 0;
 
+	bool slashslash = false;
+	bool slashstar = false;
+
 	switch (*pos)
 	{
 	case '\r':
@@ -618,7 +621,12 @@ lex_next_tok:
 		if (*pos == '/')
 		{
 			_adv_pos(src, &pos);
-			result->kind = tok_slashslash;
+			slashslash = true;
+		}
+		else if (*pos == '*')
+		{
+			_adv_pos(src, &pos);
+			slashstar = true;
 		}
 		else
 		{
@@ -766,19 +774,44 @@ lex_next_tok:
 		{
 			//unknown tok
 			//we allow unknown tokens here as they may eventually
-			//be excluded from compilation by the pre processor			
+			//be excluded from compilation by the pre processor
 			_adv_pos(src, &pos);
 			result->kind = tok_invalid;
 		}
 	};
 
-	if (result->kind == tok_slashslash)
+	if (slashslash)
 	{
 		//Skip up to eol
 		do
 		{
 			if (!_adv_pos(src, &pos)) goto _hit_end;
 		} while (*pos != '\n');
+
+		//replace with single space
+		result->flags |= TF_LEADING_SPACE;
+		goto lex_next_tok;
+	}
+
+	if (slashstar)
+	{
+		/**/
+		bool star = false;
+		while(1)
+		{
+			if (!_adv_pos(src, &pos))
+			{
+				diag_err(result, ERR_SYNTAX, "unterminated comment");
+				goto _hit_end;
+			}
+
+			if (star && *pos == '/')
+			{
+				_adv_pos(src, &pos);
+				break;
+			}
+			star = *pos == '*';
+		} ;
 
 		//replace with single space
 		result->flags |= TF_LEADING_SPACE;
