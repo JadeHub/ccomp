@@ -2,6 +2,7 @@
 #include "diag.h"
 
 #include <libj/include/str_buff.h>
+#include <libj/include/byte_buff.h>
 
 #include <assert.h>
 #include <stdlib.h>
@@ -154,7 +155,7 @@ static inline bool _is_white_space(char ch)
 		ch == '\r';
 }
 
-static uint32_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* pos, int* len)
+static uint8_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* pos, int* len)
 {
 	//skip the slash
 	if (!_adv_pos(sr, &pos))
@@ -216,7 +217,6 @@ static uint32_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* 
 	case 'n':
 		(*len)++;
 		return 0x0A; //new line
-
 	case 'r':
 		(*len)++;
 		return 0x0D; //carriage return
@@ -229,11 +229,13 @@ static uint32_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* 
 	case '0':
 		(*len)++;
 		return 0;
+	default:
+		(*len)++;
+		diag_err(tok, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
+		break;
 	}
-	diag_err(tok, ERR_SYNTAX, "Unrecognised escape sequence %c", *pos);
 
 esc_err_ret:
-	*len = -1;
 	return 0;
 }
 
@@ -248,7 +250,7 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	result->len = 1;
 	result->kind = tok_string_literal;
 
-	str_buff_t* sb = sb_create(256);
+	byte_buff_t* bb = bb_create(128);
 
 	//skip initial quote
 	ADV_POS_ERR(result, sr, &pos);
@@ -264,23 +266,25 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 		if (*pos == '\\')
 		{
 			int len;
-			uint32_t val = _lex_escaped_char(sr, result, pos, &len);
+			uint8_t val = _lex_escaped_char(sr, result, pos, &len);
 			if (len == -1)
 				return;
-			sb_append_ch(sb, (const char)val);
-			pos += len;			
+			bb_append(bb, val);
+			pos += len;
 		}
 		else
 		{
-			sb_append_ch(sb, *pos);
+			bb_append(bb, *pos);
 			ADV_POS_ERR(result, sr, &pos);
 		}
 	}
 	//skip closing quote
 	ADV_POS_ERR(result, sr, &pos);
+
+	bb_append(bb, 0);
 	
 	result->len = pos - result->loc;
-	result->data.str = sb_release(sb);
+	result->data.str = (const char*)bb_release(bb);
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)
@@ -296,8 +300,6 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	{
 		int len;
 		uint32_t val = _lex_escaped_char(sr, result, pos, &len);
-		if(len == -1)
-			return;
 		result->data.integer = val;
 		result->len = len;
 		pos += result->len;
@@ -762,14 +764,10 @@ lex_next_tok:
 		break;
 	default:
 		{
-			//unknown tok, consume up to next white space
-			//we allow unknown  tokens here as they may eventually
-			//be excluded from compilation by the pre processor
-			do
-			{
-				if (!_adv_pos(src, &pos))
-					break;
-			} while (!_is_white_space(*pos));
+			//unknown tok
+			//we allow unknown tokens here as they may eventually
+			//be excluded from compilation by the pre processor			
+			_adv_pos(src, &pos);
 			result->kind = tok_invalid;
 		}
 	};
@@ -781,6 +779,9 @@ lex_next_tok:
 		{
 			if (!_adv_pos(src, &pos)) goto _hit_end;
 		} while (*pos != '\n');
+
+		//replace with single space
+		result->flags |= TF_LEADING_SPACE;
 		goto lex_next_tok;
 	}
 

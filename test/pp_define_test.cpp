@@ -134,6 +134,7 @@ TEST;
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("TEST;");
 }
 
@@ -161,6 +162,7 @@ y;
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode(R"(
 (4 + (2 * x));
 (2 * (4 + y));
@@ -382,6 +384,7 @@ f(f(z));
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("z + 1 + 1;");
 }
 
@@ -466,32 +469,6 @@ f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);
 	ExpectCode("f(2 * (y+1)) + f(2 * (f(2 * (z[0])))) % f(2 * (0)) + t(1);");
 }
 
-TEST_F(PreProcDefineTest, blah)
-{
-	std::string src = R"(
-#define x 3
-#define f(a) f(x * (a))
-#undef x
-#define x 2
-#define g f
-#define z z[0]
-#define h g(~
-#define m(a) a(w)
-#define w 0,1
-#define t(a) a
-#define p() int
-#define q(x) x
-
-h 5) & m
-	(f)^m(m);
-
-)";
-
-	PreProc(src.c_str());
-	PrintTokens();
-	ExpectCode("f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");	
-}
-
 TEST_F(PreProcDefineTest, example_3_2)
 {
 	std::string src = R"(
@@ -514,6 +491,7 @@ g(x+(3,4)-w) | h 5) & m
 )";
 
 	PreProc(src.c_str());
+	PrintTokens();
 	ExpectCode("f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");
 }
 
@@ -571,7 +549,7 @@ p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };
 	ExpectCode("int i[] = { 1, 23, 4, 5, };");
 }
 
-/*TEST_F(PreProcDefineTest, example_3_4)
+TEST_F(PreProcDefineTest, example_3_4)
 {
 	std::string src = R"(
 #define x 3
@@ -596,7 +574,7 @@ char c[2][6] = { str(hello), str() };
 	PreProc(src.c_str());
 	PrintTokens();
 	ExpectCode(R"(char c[2][6] = { "hello", "" };)");
-}*/
+}
 
 TEST_F(PreProcDefineTest, hashhash_params)
 {
@@ -632,7 +610,7 @@ AB ## CD
 	ExpectCode("AB ## CD");
 }
 
-TEST_F(PreProcDefineTest, blah2)
+TEST_F(PreProcDefineTest, stringise_param)
 {
 	std::string src = R"(
 #define f(A) #A
@@ -640,6 +618,7 @@ f(hello);
 )";
 	PreProc(src.c_str());
 	PrintTokens();
+	ExpectCode(R"("hello";)");
 }
 
 TEST_F(PreProcDefineTest, hashhash_w_hash)
@@ -660,5 +639,126 @@ struct command commands[] =
   { "quit", quit_command },
   { "help", help_command },
 };
+)");
+}
+
+TEST_F(PreProcDefineTest, test123)
+{
+	std::string src = R"(
+#define f(A) A
+#define q(B) f(B)
+
+q(123);
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode("123;");
+}
+
+
+TEST_F(PreProcDefineTest, sdfsdf)
+{
+	std::string src = R"(
+#define str(s) # s
+#define xstr(q) str(q)
+#define debug(s, t) printf("x" # s "= %d, x" # t "= %s", \
+x ## s,x## t)
+#define INCFILE(n) vers ## n
+#define glue(a, b) a ## b
+#define xglue(a, b) glue(a, b)
+#define HIGHLOW "hello"
+#define LOW LOW ", world"
+
+xstr(INCFILE(2).h)
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"("vers2.h")");
+}
+
+TEST_F(PreProcDefineTest, example_4_1)
+{
+	std::string src = R"(
+#define str(s) # s
+#define xstr(s) str(s)
+#define debug(s, t) printf("x" # s "= %d, x" # t "= %s", \
+x ## s,x## t)
+#define INCFILE(n) vers ## n
+#define glue(a, b) a ## b
+#define xglue(a, b) glue(a, b)
+#define HIGHLOW "hello"
+#define LOW LOW ", world"
+
+debug(1, 2);
+fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
+	== 0) str(: @\n), s);
+xstr(INCFILE(2).h)
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(
+printf("x" "1" "= %d, x" "2" "= %s", x1, x2);
+fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
+"vers2.h"
+)");
+}
+
+TEST_F(PreProcDefineTest, example_4_2)
+{
+	std::string src = R"(
+#define str(s) # s
+#define xstr(s) str(s)
+#define debug(s, t) printf("x" # s "= %d, x" # t "= %s", \
+x ## s,x## t)
+#define INCFILE(n) vers ## n
+#define glue(a, b) a ## b
+#define xglue(a, b) glue(a, b)
+#define HIGHLOW "hello"
+#define LOW LOW ", world"
+
+		
+fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
+	== 0) str(: @\n), s);
+		
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
+)");
+}
+
+TEST_F(PreProcDefineTest, example_5)
+{
+	std::string src = R"(
+#define t(x,y,z) x ## y ## z
+
+int j[] = { t(1,2,3), t(,4,5), t(6,,7), t(8,9,),
+	t(10,,), t(,11,), t(,,12), t(,,) };
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(int j[] = { 123, 45, 67, 89,
+	10, 11, 12, };
+)");
+}
+
+TEST_F(PreProcDefineTest, args)
+{
+	std::string src = R"(
+#define glue(a, b) a ## b
+#define xglue(a, b) glue(a, b)
+#define HIGHLOW "hello"
+#define LOW LOW ", world"
+
+glue(HIGH, LOW);
+xglue(HIGH, LOW);
+
+
+)";
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(
+"hello";
+"hello" ", world";
 )");
 }

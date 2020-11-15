@@ -154,7 +154,7 @@ TEST_F(LexerTest, ErrCharConstantBadEsc)
 	std::string code = R"(int x = '\q';)";
 
 	ExpectError(ERR_SYNTAX);
-	Lex(code);	
+	Lex(code);
 }
 
 TEST_F(LexerTest, ErrCharConstantEmpty)

@@ -16,8 +16,6 @@ static pp_context_t* _context = NULL;
 
 typedef void (*emit_fn)(token_t*, token_range_t* range);
 
-/***************************************************/
-
 static void _push_dest(token_range_t* range)
 {
 	dest_range_t* dest = (dest_range_t*)malloc(sizeof(dest_range_t));
@@ -32,7 +30,6 @@ static void _pop_dest()
 {
 	dest_range_t* dest = _context->dest_stack;
 	assert(dest);
-	//_context->dest_stack->next->next_tok_flags = _context->dest_stack->next_tok_flags;
 	_context->dest_stack = _context->dest_stack->next;
 	assert(_context->dest_stack); //result should never be popped
 	free(dest);
@@ -42,85 +39,105 @@ static void _set_next_tok_flags(uint8_t flags)
 {
 	if(_context->dest_stack->next_tok_flags == FLAGS_UNSET)
 		_context->dest_stack->next_tok_flags = flags;
-	//else
-		//_context->dest_stack->next_tok_flags = FLAGS_UNSET;
 }
 
 static token_t* _peek_next()
 {
-	assert(_context->expansion_stack);
+	assert(_context->input_stack);
 
-	expansion_context_t* me = _context->expansion_stack;
-
-	while (me)
+	input_range_t* ir = _context->input_stack;
+	while (ir)
 	{
-		if (me->current != me->tokens->end || me->next == NULL)
-			return me->current;
-		me = me->next;
+		if (ir->current != ir->tokens->end || ir->next == NULL)
+			return ir->current;
+		ir = ir->next;
 	}
 	assert(false);
 	return NULL;
-
 }
 
 static token_t* _pop_next()
 {
-	assert(_context->expansion_stack);
-
-	expansion_context_t* me = _context->expansion_stack;
-
-	while (me)
+	assert(_context->input_stack);
+	
+	input_range_t* ir = _context->input_stack;
+	while (ir)
 	{
-		if (me->current != me->tokens->end || me->next == NULL)
+		if (ir->current != ir->tokens->end || ir->next == NULL)
 			break;
 
-		//we have eaten all the tokens
-		expansion_context_t* tmp = me->next;
-		free(me);
-		_context->expansion_stack = tmp;
-		me = tmp;
+		if (ir->macro_expansion)
+			ir->macro_expansion->complete = true;
+
+		_context->input_stack = ir->next;
+		free(ir);
+		ir = _context->input_stack;
 	}
+	token_t* tok = ir->current;
+	ir->current = ir->current->next;
 
-	token_t* tok = me->current;
-	me->current = me->current->next;
-
-	if (me->next)
+	if (ir->next)
 	{
 		//not the root level means we are expanding a macro or param, so duplicate tok
 		return tok_duplicate(tok);
 	}
 	return tok;
+
 }
 
-/****************************************************************************/
+static input_range_t* _begin_token_range_expansion(token_range_t* range)
+{
+	input_range_t* ir = (input_range_t*)malloc(sizeof(input_range_t));
+	memset(ir, 0, sizeof(input_range_t));
+	ir->tokens = range;
+	ir->current = range->start;
+	ir->next = _context->input_stack;
+	_context->input_stack = ir;
+	return ir;
+}
 
-static expansion_context_t* _begin_macro_expansion(macro_t* macro, hash_table_t* params)
+static input_range_t* _begin_macro_expansion(macro_t* macro, hash_table_t* params)
 {
 	expansion_context_t* me = (expansion_context_t*)malloc(sizeof(expansion_context_t));
 	memset(me, 0, sizeof(expansion_context_t));
 	me->macro = macro;
 	me->params = params;
-	me->tokens = &macro->tokens;
-	me->current = me->tokens->start;
+	input_range_t* input = _begin_token_range_expansion(&macro->tokens);
+	input->macro_expansion = me;
 	me->next = _context->expansion_stack;
 	_context->expansion_stack = me;
-	return me;
+	return input;
 }
 
-static expansion_context_t* _begin_token_range_expansion(token_range_t* range)
+static void _pop_macro_expansion(macro_t* macro)
 {
-	expansion_context_t* me = (expansion_context_t*)malloc(sizeof(expansion_context_t));
-	memset(me, 0, sizeof(expansion_context_t));
-	me->tokens = range;
-	me->current = me->tokens->start;
-	me->next = _context->expansion_stack;
-	_context->expansion_stack = me;
-	return me;
+	expansion_context_t* me = _context->expansion_stack;
+	assert(me && me->macro == macro);
+	_context->expansion_stack = me->next;
+	free(me);
 }
 
-static inline bool _is_expansion_at_end(expansion_context_t* me)
+static inline bool _is_expansion_at_end(input_range_t* ir)
 {
-	return me->current == me->tokens->end;
+	return ir->current == ir->tokens->end;
+}
+
+static bool _is_expansion_complete(input_range_t* expansion)
+{
+	input_range_t* ir = _context->input_stack;
+
+	while (ir)
+	{
+		if (!_is_expansion_at_end(ir)) //either expansion, or something before it is not complete
+			return false;
+
+		if (ir == expansion)
+			return _is_expansion_at_end(ir);
+
+		ir = ir->next;
+	}
+	//no longer in the stack, must be complete
+	return true;
 }
 
 static bool _is_macro_expanding(macro_t* macro)
@@ -129,46 +146,25 @@ static bool _is_macro_expanding(macro_t* macro)
 
 	while (me)
 	{
-		if (me->macro == macro)
+		if (me->macro == macro && !me->complete)
 			return true;
 		me = me->next;
 	}
 	return false;
 }
 
-static void _destroy_expansion_stack()
+static void _destroy_input_stack()
 {
-	expansion_context_t* me = _context->expansion_stack;
+	input_range_t* ir = _context->input_stack;
 
-	while (me)
+	while (ir)
 	{
-		assert(_is_expansion_at_end(me));
-		expansion_context_t* next = me->next;
-		free(me);
-		me = next;
+		assert(_is_expansion_at_end(ir));
+		input_range_t* next = ir->next;
+		free(ir);
+		ir = next;
 	}
-	_context->expansion_stack = NULL;
-}
-
-static bool _is_expansion_complete(expansion_context_t* expansion)
-{
-	if (!_context->expansion_stack)
-		assert(_context->expansion_stack);
-
-	expansion_context_t* me = _context->expansion_stack;
-
-	while (me)
-	{
-		if (!_is_expansion_at_end(me)) //either expansion, or something before it is not complete
-			return false;
-
-		if (me == expansion)
-			return _is_expansion_at_end(me);
-
-		me = me->next;
-	}
-	//no longer in the stack, must be complete
-	return true;
+	_context->input_stack = NULL;
 }
 
 static inline void _emit_token(token_t* tok)
@@ -597,9 +593,6 @@ static bool _process_condition(token_t* tok)
 
 static token_t* _stringize_range(token_range_t* range)
 {
-	if (!range || range->start == range->end)
-		return NULL;
-
 	str_buff_t* sb = sb_create(512);
 
 	sb_append_ch(sb, '\"');
@@ -619,11 +612,15 @@ static token_t* _stringize_range(token_range_t* range)
 		switch (tok->kind)
 		{
 		case tok_string_literal:
+		case tok_num_literal:
 		{
-			sb_append_ch(sb, '\\');
-			sb_append_ch(sb, '\"');
-			char* c = tok->data.str;
-			while (*c)
+			str_buff_t* sl_buff = sb_create(128);
+
+			tok_spelling_append(tok->loc, tok->len, sl_buff);
+
+			char* c = sl_buff->buff;
+
+			while(*c)
 			{
 				// a \ character is inserted before each " and \ character of a character constant or string literal
 				if (*c == '\\' || *c == '\"')
@@ -631,8 +628,8 @@ static token_t* _stringize_range(token_range_t* range)
 				sb_append_ch(sb, *c);
 				c++;
 			}
-			sb_append_ch(sb, '\\');
-			sb_append_ch(sb, '\"');
+
+			sb_destroy(sl_buff);
 			break;
 		}
 		default:
@@ -647,6 +644,7 @@ static token_t* _stringize_range(token_range_t* range)
 
 	source_range_t sr = { sb->buff, sb->buff + sb->len };
 
+	//todo
 	token_range_t toks = lex_source(&sr);
 	//result->len = sb->len + 1;
 	//result->loc = result->data.str = sb_release(sb);
@@ -663,13 +661,13 @@ static token_range_t* _expand_param_range(token_range_t* range)
 	memset(result, 0, sizeof(token_range_t));
 
 	//save and reset the expansion stack to prevent looking past the token range
-	expansion_context_t* prev_me_stack = _context->expansion_stack;
+	input_range_t* prev_me_stack = _context->input_stack;
+	_context->input_stack = NULL;
+	expansion_context_t* ec = _context->expansion_stack;
 	_context->expansion_stack = NULL;
-	//uint8_t nf = _context->next_tok_flags;
-	//_context->next_tok_flags = FLAGS_UNSET;
 
 	//setup the unexpanded param tokens for expansion
-	expansion_context_t* me = _begin_token_range_expansion(range);
+	input_range_t* me = _begin_token_range_expansion(range);
 
 	_push_dest(result);
 
@@ -679,15 +677,62 @@ static token_range_t* _expand_param_range(token_range_t* range)
 			return NULL;
 	}
 
+	_context->expansion_stack = ec;
+
 	//restore the expansion stack
-	_destroy_expansion_stack();
-	_context->expansion_stack = prev_me_stack;
-	//_context->next_tok_flags = nf;
+	_destroy_input_stack();
+	_context->input_stack = prev_me_stack;
 
 	_pop_dest();
 
 	result->end = _create_end_marker(result->end);
 	return result;
+}
+
+static token_range_t* _lookup_fn_param(const char* name)
+{
+	expansion_context_t* expansion = _context->expansion_stack;
+
+	while (expansion)
+	{
+		if (expansion->params)
+		{
+			token_range_t* range = (token_range_t*)sht_lookup(expansion->params, name);
+			return range;
+		}
+		expansion = expansion->next;
+	}
+	return NULL;
+}
+
+static void _token_range_add(token_range_t* range, token_t* tok)
+{
+	if (tok->flags & TF_START_LINE)
+		tok->flags = TF_LEADING_SPACE;
+
+	if (range->start == NULL)
+	{
+		tok->next = tok->prev = NULL;
+		range->start = range->end = tok;
+	}
+	else
+	{
+		range->end->next = tok;
+		tok->prev = range->end;
+		range->end = tok;
+		tok->next = NULL;
+	}
+}
+
+static void _token_range_append(token_range_t* range, token_range_t* add)
+{
+	token_t* tok = add->start;
+	while (tok != add->end)
+	{
+		token_t* next = tok->next;
+		_token_range_add(range, tok);
+		tok = next;
+	}
 }
 
 /*
@@ -728,21 +773,22 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 			if (tok->flags & TF_START_LINE)
 				tok->flags = TF_LEADING_SPACE;
 
-			if (range->start == NULL)
+			if (tok->kind == tok_identifier)
 			{
-				tok->next = tok->prev = NULL;
-				range->start = range->end = tok;
-			}
-			else
-			{
-				range->end->next = tok;
-				tok->prev = range->end;
-				range->end = tok;
-				tok->next = NULL;
+				token_range_t* p_range = _lookup_fn_param(tok->data.str);
+				if (p_range)
+				{
+					p_range = _expand_param_range(p_range);
+					_token_range_append(range, p_range);
+					tok = _pop_next();
+					continue;
+				}
 			}
 
+			_token_range_add(range, tok);
 			tok = _pop_next();
 		}
+
 		if(range->start == NULL)
 		{
 			range->start = range->end = _create_end_marker(NULL);
@@ -751,7 +797,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 		{
 			range->end = _create_end_marker(range->end);
 		}
-//		tok_print_range(range);
+
 		sht_insert(params, param->data.str, range);
 		if (tok->kind == tok_r_paren)
 		{
@@ -779,22 +825,6 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 	return params;
 }
 
-static token_range_t* _lookup_fn_param(const char* name)
-{
-	expansion_context_t* expansion = _context->expansion_stack;
-
-	while (expansion)
-	{
-		if (expansion->params)
-		{
-			token_range_t* range = (token_range_t*)sht_lookup(expansion->params, name);
-			return range;
-		}
-		expansion = expansion->next;
-	}
-	return NULL;
-}
-
 static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 {
 	if (_is_macro_expanding(macro))
@@ -807,9 +837,9 @@ static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 
 static bool _process_token_range(token_range_t* range)
 {
-	expansion_context_t* me = _begin_token_range_expansion(range);
+	input_range_t* ir = _begin_token_range_expansion(range);
 
-	while (!_is_expansion_complete(me))
+	while (!_is_expansion_complete(ir))
 	{
 		if (!_process_token(_pop_next()))
 			return false;
@@ -827,32 +857,24 @@ static bool _process_arg_substitution(token_t* identifier, token_range_t* param)
 		return true;
 	}
 
-	
 	token_range_t* range = _expand_param_range(param);
-	//range->start->flags = identifier->flags;
-
-	//_set_next_tok_flags(identifier->flags);
-
-	//if(_context->next_tok_flags == FLAGS_UNSET)
-	//	_context->next_tok_flags = identifier->flags;
 
 	return _process_token_range(range);
 }
 
 static bool _process_replacement_list(token_t* replaced, macro_t* macro, hash_table_t* params)
 {
-	expansion_context_t* me = _begin_macro_expansion(macro, params);
-	//macro->tokens.start->flags = replaced->flags;
-	//if (_context->next_tok_flags == FLAGS_UNSET)
-//		_context->next_tok_flags = replaced->flags;
+	input_range_t* ir = _begin_macro_expansion(macro, params);
 
 	_set_next_tok_flags(replaced->flags);
 
-	while (!_is_expansion_complete(me))
+	while (!_is_expansion_complete(ir))
 	{
 		if (!_process_token(_pop_next()))
 			return false;
 	}
+
+	_pop_macro_expansion(macro);
 
 	return true;
 }
@@ -899,13 +921,7 @@ static bool _process_hash_op(token_t* hash)
 		return false; //todo error
 
 	token_t* tok = _stringize_range(p_range);
-
 	_set_next_tok_flags(hash->flags);
-
-	//if (_context->next_tok_flags == FLAGS_UNSET)
-//		_context->next_tok_flags = hash->flags;
-
-	//tok->flags = hash->flags;
 
 	return _process_token(tok);
 }
@@ -937,9 +953,19 @@ static token_t* _paste_tokens(token_t* lhs, token_t* rhs)
 	token_range_t toks = lex_source(&sr);
 	if (_is_valid_pasted_tok(&toks))
 	{
-		toks.start->flags = lhs->flags;
+		toks.start->flags = 0;
+
+		if (lhs->flags & TF_LEADING_SPACE || rhs->flags & TF_LEADING_SPACE)
+			toks.start->flags = TF_LEADING_SPACE;
+
+		if (lhs->flags & TF_START_LINE)
+			toks.start->flags |= TF_START_LINE;
+
+
 		return toks.start;
 	}
+
+
 
 	return _is_valid_pasted_tok(&toks) ? toks.start : NULL;
 }
@@ -992,7 +1018,6 @@ static bool _process_hashhash(token_t* first)
 				p_range->start = p_range->start->next;
 
 				token_t* result = _paste_tokens(first, second);
-				//result->flags = flags;
 				if (!_process_token(result))
 					return false;
 
@@ -1019,7 +1044,7 @@ static bool _process_hashhash(token_t* first)
 static bool _process_token(token_t* tok)
 {
 	//Check for ## operator if we are processing a macro's replacement list
-	if (_context->expansion_stack->macro && _peek_next()->kind == tok_hashhash)
+	if (_context->expansion_stack && _context->expansion_stack->macro && _peek_next()->kind == tok_hashhash)
 	{
 		return _process_hashhash(tok);
 	}
@@ -1085,11 +1110,6 @@ void pre_proc_init()
 	_context->defs = sht_create(128);
 
 	_push_dest(&_context->result);
-
-	//_context->dest_stack = (dest_range_t*)malloc(sizeof(dest_range_t));
-	//memset(_context->dest_stack, 0, sizeof(dest_range_t));
-	//_context->dest_stack->range = &_context->result;
-	//_context->next_tok_flags = FLAGS_UNSET;
 }
 
 void pre_proc_deinit()

@@ -15,7 +15,6 @@ typedef struct
 	macro_kind kind;
 	token_range_t tokens;
 	token_t* fn_params;
-	//bool expanding;
 	const char* name;
 
 	/*Pointer hash set of macro_t*. macro is hidden from these toks*/
@@ -23,16 +22,25 @@ typedef struct
 
 }macro_t;
 
-typedef struct macro_expansion
+typedef struct expansion_context
 {
 	macro_t* macro;
 	hash_table_t* params;
 
+	bool complete;
+
+	struct expansion_context* next;
+}expansion_context_t;
+
+typedef struct input_range
+{
 	token_range_t* tokens;
 	token_t* current;
 
-	struct macro_expansion* next;
-}expansion_context_t;
+	expansion_context_t* macro_expansion;
+
+	struct input_range* next;
+}input_range_t;
 
 typedef struct dest_range
 {
@@ -59,7 +67,7 @@ typedef struct
 
 	dest_range_t* dest_stack;
 
-	//uint8_t next_tok_flags;
+	input_range_t* input_stack;
 }pp_context_t;
 
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val);
