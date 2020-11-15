@@ -68,6 +68,9 @@ typedef struct
 	dest_range_t* dest_stack;
 
 	input_range_t* input_stack;
+
+	uint8_t define_id_supression_state;
+
 }pp_context_t;
 
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val);

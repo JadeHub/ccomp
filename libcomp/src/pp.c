@@ -14,7 +14,13 @@
 static bool _process_token(token_t* tok);
 static pp_context_t* _context = NULL;
 
-typedef void (*emit_fn)(token_t*, token_range_t* range);
+static inline token_range_t* _create_token_range(token_t* start, token_t* end)
+{
+	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
+	range->start = start;
+	range->end = end;
+	return range;
+}
 
 static void _push_dest(token_range_t* range)
 {
@@ -82,7 +88,14 @@ static token_t* _pop_next()
 		return tok_duplicate(tok);
 	}
 	return tok;
+}
 
+static token_t* _pop_to_eol(token_t* tok)
+{
+	while (!(_peek_next()->flags & TF_START_LINE))
+		tok = _pop_next();
+
+	return tok;
 }
 
 static input_range_t* _begin_token_range_expansion(token_range_t* range)
@@ -167,8 +180,80 @@ static void _destroy_input_stack()
 	_context->input_stack = NULL;
 }
 
+/*
+	We need to supress expansion of identifier tokens when the output sequence contains either:
+	define (ID)
+	define ID
+
+	dss_normal = Ignore state
+	dss_in_cond = In #if or #elif line
+	dss_saw_defined = Last tok was tok_identifier 'defined'
+	dss_saw_r_paren = dss_saw_defined was followed by tok_l_paren
+*/
+typedef enum
+{
+	dss_normal,
+	dss_in_cond,		//from tok_pp_if or tok_pp_elif to eol
+	dss_saw_defined,	//last tok was tok_identifier with 'defined'
+	dss_saw_r_paren		//last tok was tok_r_paren, immediatly after the 'defined'
+}define_supress_state;
+
+static void _update_defined_id_supression_state(token_t* tok)
+{
+	if (_context->define_id_supression_state == dss_normal)
+	{
+		if (tok->kind == tok_pp_if || tok->kind == tok_pp_elif)
+		{
+			_context->define_id_supression_state = dss_in_cond;
+			return;
+		}
+		return;
+	}
+
+	if (tok->flags & TF_START_LINE)
+	{
+		//reset
+		_context->define_id_supression_state = dss_normal;
+		return;
+	}
+
+	if (_context->define_id_supression_state == dss_in_cond)
+	{
+		if (tok->kind == tok_identifier && strcmp(tok->data.str, "defined") == 0)
+			_context->define_id_supression_state = dss_saw_defined;
+		return;
+	}
+	
+	if (_context->define_id_supression_state == dss_saw_defined)
+	{
+		if (tok->kind == tok_l_paren)
+			_context->define_id_supression_state = dss_saw_r_paren;
+		else
+			_context->define_id_supression_state = dss_in_cond;
+		return;
+	}
+
+	if(_context->define_id_supression_state == dss_saw_r_paren)
+		_context->define_id_supression_state = dss_in_cond;
+}
+
+static inline bool _supress_identifier_expansion(token_t* tok)
+{
+	if ((_context->define_id_supression_state == dss_saw_defined ||
+		_context->define_id_supression_state == dss_saw_r_paren) &&
+		tok->kind == tok_identifier)
+	{
+		_context->define_id_supression_state = dss_in_cond;
+
+		return true;
+	}
+	return false;
+}
+
 static inline void _emit_token(token_t* tok)
 {
+	_update_defined_id_supression_state(tok);
+
 	token_range_t* range = _context->dest_stack->range;
 
 	if (_context->dest_stack->next_tok_flags != FLAGS_UNSET)
@@ -233,6 +318,18 @@ static token_t* _find_eol(token_t* from)
 		tok = tok->next;
 	}
 	return tok;
+}
+
+static bool _process_token_range(token_range_t* range)
+{
+	input_range_t* ir = _begin_token_range_expansion(range);
+
+	while (!_is_expansion_complete(ir))
+	{
+		if (!_process_token(_pop_next()))
+			return false;
+	}
+	return true;
 }
 
 static macro_t* _find_macro_def(token_t* ident)
@@ -408,43 +505,54 @@ static bool _process_define(token_t* def)
 
 static bool _process_include(token_t* tok)
 {
-/*	tok = _pop_next();
+	tok = _pop_next();
 	token_t* end = _find_eol(tok)->next;
-	token_range_t range = { tok, end };
+	token_range_t* range = _create_token_range(tok, _pop_to_eol(tok));
+	range->end = _create_end_marker(range->end);
+	
 	include_kind inc_kind;
 	
 	if (tok->kind == tok_identifier)
 	{
 		//#define INC <blah.h>
 		//#include INC
-		range = _expand_identifier(tok);
+		token_range_t* expanded = _create_token_range(NULL, NULL);
+
+		_context->define_id_supression_state = dss_in_cond;
+
+		_push_dest(expanded);
+		if (!_process_token_range(range))
+			return false;
+		_pop_dest();
+		expanded->end = _create_end_marker(expanded->end);
+
+		range = expanded;
 	}
 
 	char path[1024];
-	if (range.start->kind == tok_string_literal)
+	if (range->start->kind == tok_string_literal)
 	{
 		//#include "blah.h"
 		inc_kind = include_local;
-		//strcpy(path, (const char*)range.start->data);
-		strcpy(path, range.start->data.str);
-		tok = range.start->next;
-		if(tok != range.end)
+		strcpy(path, range->start->data.str);
+		tok = range->start->next;
+		if(tok != range->end)
 		{
 			diag_err(tok, ERR_SYNTAX,
 				"expected newline after #include directive");
-			return NULL;
+			return false;
 		}
 	}
-	else if (range.start->kind == tok_lesser)
+	else if (range->start->kind == tok_lesser)
 	{
 		//#include <blah.h>
 		inc_kind = include_system;
-		tok = range.start->next;
+		tok = range->start->next;
 
 		if (tok->kind != tok_identifier)
 		{
 			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
-			return NULL;
+			return false;
 		}
 		strncpy(path, tok->data.str, 1024);
 		tok = tok->next;
@@ -465,34 +573,27 @@ static bool _process_include(token_t* tok)
 		if (tok->kind != tok_greater)
 		{
 			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
-			return NULL;
+			return false;
 		}
 	}
 	else
 	{
 		diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
-		return NULL;
+		return false;
 	}
 
 	source_range_t* sr = src_load_header(path, inc_kind);
 	if (!src_is_valid_range(sr))
 	{
 		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", path);
-		return NULL;
+		return false;
 	}
 
 	token_range_t toks = lex_source(sr);
 	if (!toks.start)
 		return false;
-	tok = toks.start;
-
-	while (tok->kind != tok_eof)
-	{
-		tok = _process_token(tok);
-	}
 	
-	return end;*/
-	return true;
+	return _process_token_range(&toks);
 }
 
 /*
@@ -500,19 +601,29 @@ Evaluate the condition in a #if or #elif pre proc expression
 tok points to the start of the expression
 returns the token after the expression
 */
-static token_t* _eval_pp_expression(token_t* tok, bool* result)
+static bool _eval_pp_expression(token_t* start, bool* result)
 {
-	token_range_t range = { tok, _find_eol(tok)->next };
+	token_range_t range = { start, _pop_to_eol(start) };
+	range.end = _create_end_marker(range.end);
+	token_range_t expanded = { NULL, NULL };
+
+	_context->define_id_supression_state = dss_in_cond;
+
+	_push_dest(&expanded);
+	if (!_process_token_range(&range))
+		return false;
+	_pop_dest();
+	expanded.end = _create_end_marker(expanded.end);
 
 	uint32_t val;
-	if (!pre_proc_eval_expr(_context, range, &val))
+	if (!pre_proc_eval_expr(_context, expanded, &val))
 	{
 		diag_err(range.start, ERR_SYNTAX, "cannot parse constant expression %s",
 			tok_kind_spelling(tok_identifier));
-		return NULL;
+		return false;
 	}
 	*result = val != 0;
-	return range.end;
+	return true;
 }
 
 /*
@@ -521,73 +632,76 @@ tok points at one of: tok_pp_if, tok_pp_ifdef, tok_pp_ifndef
 */
 static bool _process_condition(token_t* tok)
 {
-	/*bool inc_group = false;
+	bool inc_group = false;
 	if (tok->kind == tok_pp_ifdef)
 	{
-		tok = tok->next;
+		tok = _pop_next();
 		if (tok->kind != tok_identifier)
 		{
 			diag_err(tok, ERR_SYNTAX, "expected %s after #ifdef",
 				tok_kind_spelling(tok_identifier));
-			return NULL;
+			return false;
 		}
 		inc_group = _find_macro_def(tok) != NULL;
-		tok = _find_eol(tok)->next;
+		assert(_peek_next()->flags & TF_START_LINE);
 	}
 	else if (tok->kind == tok_pp_ifndef)
 	{
-		tok = tok->next;
+		tok = _pop_next();
 		if (tok->kind != tok_identifier)
 		{
 			diag_err(tok, ERR_SYNTAX, "expected %s after #ifndef",
 				tok_kind_spelling(tok_identifier));
-			return NULL;
+			return false;
 		}
 		inc_group = _find_macro_def(tok) == NULL;
-		tok = _find_eol(tok)->next;
+		assert(_peek_next()->flags & TF_START_LINE);
 	}
 	else if (tok->kind == tok_pp_if)
 	{
-		if (!(tok = _eval_pp_expression(tok->next, &inc_group)))
-			return NULL;
+		tok = _pop_next();
+		if (!_eval_pp_expression(tok, &inc_group))
+			return false;
 	}
 	else
 	{
 		diag_err(tok, ERR_SYNTAX, "unexpected token looking for pp conditional");
-		return NULL;
+		return false;
 	}
 
 	//have we hit a true case yet?
 	bool any_true = inc_group;
-	while (tok->kind != tok_pp_endif)
+
+	while (_peek_next()->kind != tok_pp_endif)
 	{
+		tok = _pop_next();
+
 		if (inc_group)
 			any_true = true;
 
-		token_t* next = tok->next;
 		if (tok->kind == tok_pp_elif)
 		{
 			inc_group = !any_true;
-			if (!(next = _eval_pp_expression(tok->next, &inc_group)))
-				return NULL;
+			if (!_eval_pp_expression(_pop_next(), &inc_group))
+				return false;
 		}
 		else if (tok->kind == tok_pp_else)
 		{
 			inc_group = !any_true;
-			if (next->kind == tok_if)
+			if (_peek_next()->kind == tok_if)
 			{
-				if (!(next = _eval_pp_expression(next->next, &inc_group)))
-					return NULL;
+				tok = _pop_next();
+				if (!_eval_pp_expression(_pop_next(), &inc_group))
+					return false;
 			}
 		}
 		else if (inc_group)
 		{
-			next = _process_token(tok);
+			if (!_process_token(tok))
+				return false;
 		}
-		
-		tok = next;
 	}
-	return tok->next;*/
+	_pop_next();
 	return true;
 }
 
@@ -657,8 +771,7 @@ static token_range_t* _expand_param_range(token_range_t* range)
 	if (tok_range_empty(range))
 		return range;
 
-	token_range_t* result = (token_range_t*)malloc(sizeof(token_range_t));
-	memset(result, 0, sizeof(token_range_t));
+	token_range_t* result = _create_token_range(NULL, NULL);
 
 	//save and reset the expansion stack to prevent looking past the token range
 	input_range_t* prev_me_stack = _context->input_stack;
@@ -756,9 +869,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 		if (!param)
 			return false; //todo error
 
-		token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
-		memset(range, 0, sizeof(token_range_t));
-		range->start = range->end = NULL;
+		token_range_t* range = _create_token_range(NULL, NULL);
 
 		int paren_count = 0;
 		while (!((tok->kind == tok_comma || tok->kind == tok_r_paren) && paren_count == 0))
@@ -813,9 +924,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 		if (!sht_lookup(params, param->data.str))
 		{
 			//add empty tok range for missing parameter
-			token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
-			memset(range, 0, sizeof(token_range_t));
-			range->start = range->end = _create_end_marker(NULL);
+			token_range_t* range = _create_token_range(NULL, NULL);
 
 			sht_insert(params, param->data.str, range);
 		}
@@ -832,18 +941,6 @@ static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 
 	return !ht_contains(macro->hidden_toks, (void*)identifier->id);
 
-	return true;
-}
-
-static bool _process_token_range(token_range_t* range)
-{
-	input_range_t* ir = _begin_token_range_expansion(range);
-
-	while (!_is_expansion_complete(ir))
-	{
-		if (!_process_token(_pop_next()))
-			return false;
-	}
 	return true;
 }
 
@@ -881,6 +978,12 @@ static bool _process_replacement_list(token_t* replaced, macro_t* macro, hash_ta
 
 static bool _process_identifier(token_t* identifier)
 {
+	if (_supress_identifier_expansion(identifier))
+	{
+		_emit_token(identifier);
+		return true;
+	}
+
 	//is this identifier the parameter of a macro fn being expanded?
 	token_range_t* p_range = _lookup_fn_param(identifier->data.str);
 	if (p_range)
