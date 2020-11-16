@@ -512,17 +512,18 @@ static bool _process_pragma(token_t* tok)
 		const char* path = src_file_path(tok->loc);
 		assert(path);
 		sht_insert(_context->praga_once_paths, path, (void*)1);
+		return true;
 	}
+	//todo warn
 	return false;
 }
 
 static bool _process_include(token_t* tok)
 {
 	tok = _pop_next();
-	token_t* end = _find_eol(tok)->next;
 	token_range_t* range = _create_token_range(tok, _pop_to_eol(tok));
 	range->end = _create_end_marker(range->end);
-	
+
 	include_kind inc_kind;
 	
 	if (tok->kind == tok_identifier)

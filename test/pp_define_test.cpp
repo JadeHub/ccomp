@@ -8,7 +8,6 @@ TEST_F(PreProcDefineTest, define)
 TEST;)";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("int i;");
 }
 
@@ -19,7 +18,6 @@ TEST_F(PreProcDefineTest, define_nested)
 TEST)";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("int i;");
 }
 
@@ -134,7 +132,6 @@ TEST;
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("TEST;");
 }
 
@@ -162,7 +159,6 @@ y;
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(
 (4 + (2 * x));
 (2 * (4 + y));
@@ -194,7 +190,6 @@ TEST();
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("A;");
 }
 
@@ -208,7 +203,6 @@ TEST(1,);
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("1 |;");
 }
 
@@ -222,11 +216,10 @@ TEST(,1);
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(" 1;");
 }
 
-/*TEST_F(PreProcDefineTest, fn_no_arg)
+TEST_F(PreProcDefineTest, fn_no_arg)
 {
 	std::string src = R"(
 #define TEST(A) A
@@ -236,9 +229,8 @@ TEST();
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(";");
-}*/
+}
 
 TEST_F(PreProcDefineTest, fn_start_of_line)
 {
@@ -339,7 +331,6 @@ TEST(hello("bob");)
 	std::string expected = R"(
 "hello(\"bob\");"
 )";
-	PrintTokens();
 	ExpectCode(expected);
 }
 
@@ -384,7 +375,6 @@ f(f(z));
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("z + 1 + 1;");
 }
 
@@ -491,7 +481,6 @@ g(x+(3,4)-w) | h 5) & m
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");
 }
 
@@ -518,7 +507,6 @@ TEST_F(PreProcDefineTest, example_3_31)
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(", 4,");
 }
 
@@ -545,7 +533,6 @@ p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("int i[] = { 1, 23, 4, 5, };");
 }
 
@@ -572,7 +559,6 @@ char c[2][6] = { str(hello), str() };
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(char c[2][6] = { "hello", "" };)");
 }
 
@@ -606,7 +592,6 @@ TEST_F(PreProcDefineTest, hashhash_outside_replacement_list)
 AB ## CD
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("AB ## CD");
 }
 
@@ -617,7 +602,6 @@ TEST_F(PreProcDefineTest, stringise_param)
 f(hello);
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"("hello";)");
 }
 
@@ -651,7 +635,6 @@ TEST_F(PreProcDefineTest, test123)
 q(123);
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode("123;");
 }
 
@@ -672,7 +655,6 @@ x ## s,x## t)
 xstr(INCFILE(2).h)
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"("vers2.h")");
 }
 
@@ -695,7 +677,6 @@ fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
 xstr(INCFILE(2).h)
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(
 printf("x" "1" "= %d, x" "2" "= %s", x1, x2);
 fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
@@ -722,7 +703,6 @@ fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
 		
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
 )");
 }
@@ -736,7 +716,6 @@ int j[] = { t(1,2,3), t(,4,5), t(6,,7), t(8,9,),
 	t(10,,), t(,11,), t(,,12), t(,,) };
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(int j[] = { 123, 45, 67, 89,
 	10, 11, 12, };
 )");
@@ -756,7 +735,6 @@ xglue(HIGH, LOW);
 
 )";
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(
 "hello";
 "hello" ", world";

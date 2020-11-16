@@ -281,11 +281,11 @@ public:
 
 	MOCK_METHOD1(on_load_file, source_range_t(const std::string&));
 
-	void ExpectFileLoad(const std::string& path, const std::string& code)
+	void ExpectFileLoad(const std::string& path, const std::string& code, testing::Cardinality times = Exactly(1))
 	{
 		source_range_t sr;
 		sr.ptr = code.c_str();
 		sr.end = sr.ptr + code.size() + 1;
-		EXPECT_CALL(*this, on_load_file(path)).WillOnce(Return(sr));
+		EXPECT_CALL(*this, on_load_file(path)).Times(times).WillRepeatedly(Return(sr));
 	}
 };

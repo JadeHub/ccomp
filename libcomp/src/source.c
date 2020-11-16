@@ -15,7 +15,7 @@ typedef struct
 	source_range_t range;
 	const char** lines;
 	uint32_t line_count;
-	const char* path;
+	char* path;
 }source_file_t;
 
 /*
@@ -188,7 +188,7 @@ source_file_t* _load_file(const char* dir, const char* fn)
 
 	source_file_t* file = _init_source(src);
 	file->path = path_combine(dir, fn);
-	sht_insert(_files, file->path, file);	
+	sht_insert(_files, file->path, file);
 	return file;
 }
 
@@ -211,7 +211,7 @@ source_range_t* src_load_file(const char* fn)
 
 void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
 {
-	_src_dir = strdup(src_path);
+	_src_dir = path_resolve(src_path);
 	_files = sht_create(32);
 	_load_cb = load_cb;
 	_load_data = load_data;

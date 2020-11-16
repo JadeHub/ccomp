@@ -212,7 +212,8 @@ TEST_F(PreProcIncludeTest, pragma_once)
 	std::string inc = R"(#pragma once
 int i;)";
 
-	ExpectFileLoad("inc1.h", inc);
+	//File load will be called twice so that the handler has the opportunity to search for a file
+	ExpectFileLoad("inc1.h", inc, Exactly(2));
 
 	std::string src = R"(#include "inc1.h"
 #include "inc1.h"
