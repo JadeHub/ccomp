@@ -62,3 +62,30 @@ char* sb_append(str_buff_t* sb, const char* str)
 	sb->len += len;
 	return sb->buff;
 }
+
+//append int and return internal buffer
+char* sb_append_int(str_buff_t* sb, int64_t val, int base)
+{
+	static const char* digits = "0123456789ABCDEF";
+
+	char str[64];
+	char* p = str;
+
+	uint64_t counter = val;
+	do
+	{
+		p++;
+		counter = counter / base;
+
+	} while (counter);
+	uint32_t len = p - str;
+	*p = '\0';
+	do
+	{
+		*--p = digits[val % base];
+		val = val / base;
+
+	} while (val);
+
+	return sb_append(sb, str);
+}

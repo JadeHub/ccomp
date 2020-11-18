@@ -253,19 +253,6 @@ token_t* tok_find_next(token_t* start, tok_kind kind)
 	return NULL;
 }
 
-size_t tok_range_len(token_range_t* range)
-{
-	token_t* tok = range->start;
-	size_t len = 0;
-
-	while (tok && tok != range->end)
-	{
-		len++;
-		tok = tok->next;
-	}
-	return len;
-}
-
 void tok_destory(token_t* tok)
 {
 	if (!tok) return;
@@ -276,17 +263,6 @@ void tok_destory(token_t* tok)
 	free(tok);
 }
 
-void tok_destroy_range(token_range_t* range)
-{
-	token_t* tok = range->start;
-
-	while (tok && tok != range->end)
-	{
-		token_t* next = tok->next;
-		tok_destory(tok);
-		tok = next;
-	}
-}
 
 /*
 Two replacement lists are identical if and only if the preprocessing tokens in both have
@@ -348,7 +324,7 @@ void tok_printf(token_t* tok)
 	sb_destroy(sb);
 }
 
-void tok_print_range(token_range_t* range)
+void tok_range_print(token_range_t* range)
 {
 	token_t* tok = range->start;
 
@@ -371,6 +347,29 @@ token_t* tok_create()
 	_next++;
 
 	return tok;
+}
+
+token_range_t* tok_range_create(token_t* start, token_t* end)
+{
+	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
+	range->start = start;
+	range->end = end;
+	return range;
+}
+
+void tok_range_destroy(token_range_t* range)
+{
+	token_t* tok = range->start;
+
+	while(tok)
+	{
+		token_t* next = tok->next;
+		tok_destory(tok);
+
+		if (tok == range->end)
+			break;
+		tok = next;
+	};
 }
 
 bool tok_range_empty(token_range_t* range)

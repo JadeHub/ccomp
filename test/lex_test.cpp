@@ -2,6 +2,40 @@
 
 class LexerTest : public LexTest {};
 
+TEST_F(LexerTest, ln_cnt)
+{
+	std::string code = R"(line 1;
+line 2;
+line 3;
+line 4;
+)";
+	/*	Line		Tokens
+		1			0 - 2
+		2			3 - 5
+		3			6 - 8
+		4			9 - 11
+	*/
+
+	Lex(code);
+	EXPECT_EQ(1, src_file_position(GetToken(0)->loc).line);
+	EXPECT_EQ(1, src_file_position(GetToken(1)->loc).line);
+	EXPECT_EQ(1, src_file_position(GetToken(2)->loc).line);
+
+	EXPECT_EQ(2, src_file_position(GetToken(3)->loc).line);
+	EXPECT_EQ(2, src_file_position(GetToken(4)->loc).line);
+	EXPECT_EQ(2, src_file_position(GetToken(5)->loc).line);
+
+	EXPECT_EQ(3, src_file_position(GetToken(6)->loc).line);
+	EXPECT_EQ(3, src_file_position(GetToken(7)->loc).line);
+	EXPECT_EQ(3, src_file_position(GetToken(8)->loc).line);
+
+	EXPECT_EQ(4, src_file_position(GetToken(9)->loc).line);
+	EXPECT_EQ(4, src_file_position(GetToken(10)->loc).line);
+	EXPECT_EQ(4, src_file_position(GetToken(11)->loc).line);
+
+	
+}
+
 TEST_F(LexerTest, foo)
 {
 	Lex(R"(int foo = 0;)");
@@ -9,8 +43,7 @@ TEST_F(LexerTest, foo)
 
 TEST_F(LexerTest, eof)
 {
-	std::string code = R"(
-int foo(int a);
+	std::string code = R"(int foo(int a);
 int foo = 5;)";
 
 	Lex(code);

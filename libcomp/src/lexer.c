@@ -284,7 +284,7 @@ static void _lex_string_literal(source_range_t* sr, const char* pos, token_t* re
 	bb_append(bb, 0);
 	
 	result->len = pos - result->loc;
-	result->data.str = (const char*)bb_release(bb);
+	result->data.str = (char*)bb_release(bb);
 }
 
 static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* result)

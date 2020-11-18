@@ -80,10 +80,13 @@ int main(int argc, char* argv[])
     token_range_t range = lex_source(sr);
     if (!range.start)
         return -1;
-    
+
     pre_proc_init();
     token_range_t preproced = pre_proc_file(&range);
     pre_proc_deinit();
+
+    tok_range_print(&preproced);
+    return 0;
 
     ast_trans_unit_t* ast = parse_translation_unit(preproced.start);
     valid_trans_unit_t* tl = sem_analyse(ast);

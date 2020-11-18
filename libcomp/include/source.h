@@ -36,3 +36,6 @@ char* src_extract(const char* start, const char* end);
 source_range_t* src_load_file(const char* path);
 source_range_t* src_load_header(const char* path, include_kind kind);
 bool src_is_valid_range(source_range_t* src);
+
+//used for test code
+void src_register_range(source_range_t range, char* file);

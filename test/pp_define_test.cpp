@@ -7,7 +7,7 @@ TEST_F(PreProcDefineTest, define)
 	std::string src = R"(#define TEST int i
 TEST;)";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("int i;");
 }
 
@@ -17,7 +17,7 @@ TEST_F(PreProcDefineTest, define_nested)
 #define TEST TEST1
 TEST)";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("int i;");
 }
 
@@ -29,7 +29,7 @@ TEST_F(PreProcDefineTest, define_nested_recursive)
 #define TEST TEST1
 TEST)";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectTokTypes({tok_identifier,
 		tok_semi_colon,
 		tok_eof });
@@ -45,7 +45,7 @@ TEST_F(PreProcDefineTest, define_nested_recursive_many)
 #define D C
 D)";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("a");
 }
 
@@ -57,7 +57,7 @@ TEST
 )";
 
 	ExpectError(ERR_SYNTAX);
-	PreProc(src.c_str());
+	PreProc(src);
 }
 
 TEST_F(PreProcDefineTest, correct_whitespace)
@@ -67,7 +67,7 @@ TEST_F(PreProcDefineTest, correct_whitespace)
 TEST
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectTokTypes({ tok_plus,
 		tok_num_literal,
 		tok_eof });
@@ -81,7 +81,7 @@ TEST_F(PreProcDefineTest, err_redefinition)
 )";
 
 	ExpectError(ERR_SYNTAX);
-	PreProc(src.c_str());
+	PreProc(src);
 }
 
 TEST_F(PreProcDefineTest, duplicate_definition)
@@ -92,7 +92,7 @@ TEST_F(PreProcDefineTest, duplicate_definition)
 TEST
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectTokTypes({ tok_int,
 		tok_identifier,
 		tok_equal,
@@ -108,7 +108,7 @@ TEST_F(PreProcDefineTest, duplicate_definition_empty)
 #define TEST  
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectTokTypes({ 
 		tok_eof });
 }
@@ -120,7 +120,7 @@ TEST_F(PreProcDefineTest, self_reference)
 TEST;
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("(4 + TEST);");
 }
 
@@ -131,7 +131,7 @@ TEST_F(PreProcDefineTest, self_reference_self)
 TEST;
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("TEST;");
 }
 
@@ -144,7 +144,7 @@ TEST_F(PreProcDefineTest, two_defs)
 ONE + TWO;
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 + 2;");
 }
 
@@ -158,7 +158,7 @@ x;
 y;
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(
 (4 + (2 * x));
 (2 * (4 + y));
@@ -176,7 +176,7 @@ TEST(1);
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1;");
 }
 
@@ -189,7 +189,7 @@ TEST();
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("A;");
 }
 
@@ -202,7 +202,7 @@ TEST(1,);
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 |;");
 }
 
@@ -215,7 +215,7 @@ TEST(,1);
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(" 1;");
 }
 
@@ -228,7 +228,7 @@ TEST();
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(";");
 }
 
@@ -241,7 +241,7 @@ TEST(1 + 3, 2, 3);
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 + 3 + 2 + 3;");
 }
 
@@ -254,7 +254,7 @@ TEST_F(PreProcDefineTest, fn_mid_line)
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("2 - 1 + 3 + 2 + 3;");
 }
 
@@ -272,7 +272,7 @@ TEST(1 +
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 + 3 + 2 + 3;");
 }
 
@@ -285,7 +285,7 @@ TEST_F(PreProcDefineTest, fn_macro_in_param)
 TEST(ONE);
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1;");
 }
 
@@ -300,7 +300,7 @@ TEST_F(PreProcDefineTest, fn_macro_in_params)
 TEST(ONE, TWO, THREE);
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 + 2 + 3;");
 }
 
@@ -315,7 +315,7 @@ TEST_F(PreProcDefineTest, fn_recursive_macro_in_params1)
 TEST(TWO, ONE);
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("1 + 1;");
 }
 
@@ -327,7 +327,7 @@ TEST_F(PreProcDefineTest, fn_param_stringize)
 TEST(hello("bob");)
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	std::string expected = R"(
 "hello(\"bob\");"
 )";
@@ -343,7 +343,7 @@ TEST(12\
 345)
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	std::string expected = R"(
 "12345"
 )";
@@ -359,7 +359,7 @@ TEST("hel\
 lo")
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	std::string expected = R"(
 "\"hello\""
 )";
@@ -374,7 +374,7 @@ TEST_F(PreProcDefineTest, nested_fn)
 f(f(z));
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("z + 1 + 1;");
 }
 
@@ -388,7 +388,7 @@ f(z);
 
 )";
 	//z is only expanded to z[0] once
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("z[0];");
 }
 
@@ -401,7 +401,7 @@ TEST_F(PreProcDefineTest, fn_nested_with_double_replace)
 f(f(z));
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("z[0];");
 }
 
@@ -414,7 +414,7 @@ TEST_F(PreProcDefineTest, fn_name_replace)
 
 g(0)
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("f(2 * (0))");
 }
 
@@ -431,7 +431,7 @@ t(g)(0);
 )";
 	//g is replaced with f but does not form a call until t is expanded
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("f(2 * (0));");
 }
 
@@ -455,7 +455,7 @@ f(y+1) + f(f(z)) % t(t(g)(0) + t)(1);
 
 )";
 	
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("f(2 * (y+1)) + f(2 * (f(2 * (z[0])))) % f(2 * (0)) + t(1);");
 }
 
@@ -480,7 +480,7 @@ g(x+(3,4)-w) | h 5) & m
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("f(2 * (2+(3,4)-0,1)) | f(2 * (~ 5)) & f(2 * (0,1))^m(0,1);");
 }
 
@@ -506,7 +506,7 @@ TEST_F(PreProcDefineTest, example_3_31)
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(", 4,");
 }
 
@@ -532,7 +532,7 @@ p() i[q()] = { q(1), r(2,3), r(4,), r(,5), r(,) };
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("int i[] = { 1, 23, 4, 5, };");
 }
 
@@ -558,7 +558,7 @@ char c[2][6] = { str(hello), str() };
 
 )";
 
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(char c[2][6] = { "hello", "" };)");
 }
 
@@ -569,7 +569,7 @@ TEST_F(PreProcDefineTest, hashhash_params)
 
 f(abc 1, 2 xyz);
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("abc 12 xyz;");
 }
 
@@ -582,7 +582,7 @@ TEST_F(PreProcDefineTest, hashhash_forms_macro)
 
 f(TE, ST);
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("123;");
 }
 
@@ -591,7 +591,7 @@ TEST_F(PreProcDefineTest, hashhash_outside_replacement_list)
 	std::string src = R"(
 AB ## CD
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("AB ## CD");
 }
 
@@ -601,7 +601,7 @@ TEST_F(PreProcDefineTest, stringise_param)
 #define f(A) #A
 f(hello);
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"("hello";)");
 }
 
@@ -616,7 +616,7 @@ struct command commands[] =
   COMMAND (help),
 };
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(
 struct command commands[] =
 {
@@ -634,7 +634,7 @@ TEST_F(PreProcDefineTest, test123)
 
 q(123);
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode("123;");
 }
 
@@ -654,7 +654,7 @@ x ## s,x## t)
 
 xstr(INCFILE(2).h)
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"("vers2.h")");
 }
 
@@ -676,7 +676,7 @@ fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
 	== 0) str(: @\n), s);
 xstr(INCFILE(2).h)
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(
 printf("x" "1" "= %d, x" "2" "= %s", x1, x2);
 fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
@@ -702,7 +702,7 @@ fputs(str(strncmp("abc\0d", "abc", '\4') // this goes away
 	== 0) str(: @\n), s);
 		
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(fputs("strncmp(\"abc\\0d\", \"abc\", '\\4') == 0" ": @\n", s);
 )");
 }
@@ -715,7 +715,7 @@ TEST_F(PreProcDefineTest, example_5)
 int j[] = { t(1,2,3), t(,4,5), t(6,,7), t(8,9,),
 	t(10,,), t(,11,), t(,,12), t(,,) };
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(int j[] = { 123, 45, 67, 89,
 	10, 11, 12, };
 )");
@@ -734,9 +734,47 @@ xglue(HIGH, LOW);
 
 
 )";
-	PreProc(src.c_str());
+	PreProc(src);
 	ExpectCode(R"(
 "hello";
 "hello" ", world";
+)");
+}
+
+TEST_F(PreProcDefineTest, __line__)
+{
+	std::string src = R"(__LINE__
+A
+__LINE__
+A
+__LINE__
+A
+__LINE__
+A
+__LINE__
+A
+__LINE__
+A
+__LINE__
+A
+__LINE__
+)";
+
+	PreProc(src);
+	ExpectCode(R"(1
+A
+3
+A
+5
+A
+7
+A
+9
+A
+11
+A
+13
+A
+15
 )");
 }

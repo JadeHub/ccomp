@@ -8,21 +8,10 @@ public:
 	const std::string inc_code = R"(#include "stdio.h"
 void main() {})";
 
-	const std::vector<tok_kind> expected_toks = 
-	{ 
-		tok_void,
-		tok_identifier,
-		tok_l_paren,
-		tok_r_paren,
-		tok_semi_colon,
-		tok_void,
-		tok_identifier,
-		tok_l_paren,
-		tok_r_paren,
-		tok_l_brace,
-		tok_r_brace,
-		tok_eof
-	};
+	const std::string expected_code = R"(
+void fn();
+void main() {})";
+
 };
 
 TEST_F(PreProcIncludeTest, err_include_extra_toks_before_eol)
@@ -30,7 +19,6 @@ TEST_F(PreProcIncludeTest, err_include_extra_toks_before_eol)
 	std::string src = R"(#include "stdio.h" int i;)";
 
 	ExpectError(ERR_SYNTAX);
-
 	PreProc(src.c_str());
 }
 
@@ -40,7 +28,6 @@ TEST_F(PreProcIncludeTest, err_include_unterminated)
 int i;)";
 
 	ExpectError(ERR_SYNTAX);
-
 	PreProc(src.c_str());
 }
 
@@ -49,7 +36,7 @@ TEST_F(PreProcIncludeTest, include1)
 	ExpectFileLoad("stdio.h", stdio_code);
 
 	PreProc(inc_code.c_str());
-	ExpectTokTypes(expected_toks);
+	ExpectCode(expected_code);
 }
 
 TEST_F(PreProcIncludeTest, include2)
@@ -145,7 +132,7 @@ TEST_F(PreProcIncludeTest, include_define1)
 void main() {})";
 
 	PreProc(inc_code.c_str());
-	ExpectTokTypes(expected_toks);
+	ExpectCode(expected_code);
 }
 
 TEST_F(PreProcIncludeTest, include_define2)
@@ -158,7 +145,7 @@ TEST_F(PreProcIncludeTest, include_define2)
 void main() {})";
 
 	PreProc(inc_code.c_str());
-	ExpectTokTypes(expected_toks);
+	ExpectCode(expected_code);
 }
 
 TEST_F(PreProcIncludeTest, include_recursive)
@@ -172,16 +159,9 @@ void fn();)";
 	ExpectFileLoad("inc2.h", inc2);
 
 	PreProc(src.c_str());
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_semi_colon,
-		tok_void,
-		tok_identifier,
-		tok_l_paren,
-		tok_r_paren,
-		tok_semi_colon,
-		tok_eof
-		});
+	ExpectCode(R"(int x;
+void fn();
+)");
 }
 
 TEST_F(PreProcIncludeTest, include_two_files)
@@ -195,16 +175,9 @@ TEST_F(PreProcIncludeTest, include_two_files)
 	ExpectFileLoad("inc2.h", inc2);
 
 	PreProc(src.c_str());
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_semi_colon,
-		tok_void,
-		tok_identifier,
-		tok_l_paren,
-		tok_r_paren,
-		tok_semi_colon,
-		tok_eof
-		});
+	ExpectCode(R"(int x;
+void fn();
+)");
 }
 
 TEST_F(PreProcIncludeTest, pragma_once)
@@ -221,4 +194,27 @@ int i;)";
 
 	PreProc(src.c_str());
 	ExpectCode("int i;");
+}
+
+TEST_F(PreProcIncludeTest, __line__)
+{
+	std::string inc = R"(int i = 1;
+int b = 1;
+__LINE__
+
+)";
+
+	//File load will be called twice so that the handler has the opportunity to search for a file
+	ExpectFileLoad("inc1.h", inc);
+
+	std::string src = R"(#include "inc1.h"
+__LINE__
+)";
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectCode(R"(int i = 1;
+int b = 1;
+3
+2)");
 }

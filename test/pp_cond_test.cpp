@@ -25,8 +25,7 @@ int i;
 
 TEST_F(PreProcCondTest, if_false)
 {
-	std::string src = R"(
-#if 0
+	std::string src = R"(#if 0
 int i;
 #endif)";
 

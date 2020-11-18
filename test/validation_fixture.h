@@ -173,11 +173,15 @@ public:
 
 	LexTest()
 	{
+		src_init("./", &load_file, this);
 		lex_init();
+		pre_proc_init();
 	}
 
 	~LexTest()
 	{
+		pre_proc_deinit();
+		src_deinit();
 	}
 
 	void Lex(const std::string& src)
@@ -186,11 +190,12 @@ public:
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 
+		src_register_range(sr, strdup("test"));
+
 		tokens = lex_source(&sr);
 	}
 
 	token_range_t tokens = { NULL, NULL };
-	//token_t* tokens = nullptr;
 
 	token_t* GetToken(uint32_t idx)
 	{
@@ -248,34 +253,17 @@ public:
 		
 		EXPECT_TRUE(tok_range_equals(&tokens, &expected));
 	}
-};
-
-class LexPreProcTest : public LexTest
-{
-public:
-
-	LexPreProcTest()
-	{
-		src_init("./", &load_file, this);
-		pre_proc_init();
-	}
-
-	~LexPreProcTest()
-	{
-		pre_proc_deinit();
-		src_deinit();
-	}
 
 	static source_range_t load_file(const char* dir, const char* file, void* data)
 	{
-		LexPreProcTest* This = (LexPreProcTest*)data;
+		LexTest* This = (LexTest*)data;
 		return This->on_load_file(file);
 	}
 
 	void PreProc(const std::string& src)
 	{
 		Lex(src);
-		if(!tok_range_empty(&tokens))
+		if (!tok_range_empty(&tokens))
 			tokens = pre_proc_file(&tokens);
 	}
 
@@ -288,4 +276,23 @@ public:
 		sr.end = sr.ptr + code.size() + 1;
 		EXPECT_CALL(*this, on_load_file(path)).Times(times).WillRepeatedly(Return(sr));
 	}
+};
+
+class LexPreProcTest : public LexTest
+{
+public:
+
+	LexPreProcTest()
+	{
+		
+	
+	}
+
+	~LexPreProcTest()
+	{
+	
+		
+	}
+
+	
 };

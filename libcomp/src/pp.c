@@ -14,12 +14,21 @@
 static bool _process_token(token_t* tok);
 static pp_context_t* _context = NULL;
 
-static inline token_range_t* _create_token_range(token_t* start, token_t* end)
+static token_t* _lex_single_tok(str_buff_t* sb)
 {
-	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));
-	range->start = start;
-	range->end = end;
-	return range;
+	source_range_t sr = { sb->buff, sb->buff + sb->len };
+
+	token_range_t range = lex_source(&sr);
+
+	if (range.start && range.start->next == range.end)
+	{
+		tok_destory(range.end);
+		range.start->next = NULL;
+		return range.start;
+	}
+	sb_destroy(sb);
+	tok_range_destroy(&range);
+	return NULL;
 }
 
 static void _push_dest(token_range_t* range)
@@ -82,11 +91,17 @@ static token_t* _pop_next()
 	token_t* tok = ir->current;
 	ir->current = ir->current->next;
 
+	if (tok->flags & TF_START_LINE)
+	{
+		ir->line_num = src_file_position(tok->loc).line;
+	}
+
 	if (ir->next)
 	{
 		//not the root level means we are expanding a macro or param, so duplicate tok
 		return tok_duplicate(tok);
 	}
+
 	return tok;
 }
 
@@ -105,6 +120,10 @@ static input_range_t* _begin_token_range_expansion(token_range_t* range)
 	ir->tokens = range;
 	ir->current = range->start;
 	ir->next = _context->input_stack;
+
+	ir->path = src_file_path(range->start->loc);
+	ir->line_num = src_file_position(range->start->loc).line;
+
 	_context->input_stack = ir;
 	return ir;
 }
@@ -342,6 +361,40 @@ static inline bool _leadingspace_or_startline(token_t* tok)
 	return tok->flags & TF_LEADING_SPACE || tok->flags & TF_START_LINE;
 }
 
+static token_t* _is_standard_macro(token_t* tok)
+{
+	if (tok->kind != tok_identifier)
+		return NULL;
+
+	if (strcmp(tok->data.str, "__FILE__") == 0)
+	{
+		str_buff_t* sb = sb_create(128);
+		sb_append_ch(sb, '\"');
+		sb_append(sb, _context->input_stack->path);
+		sb_append_ch(sb, '\"');
+
+		return _lex_single_tok(sb);
+	}
+	else if (strcmp(tok->data.str, "__LINE__") == 0)
+	{
+		str_buff_t* sb = sb_create(128);
+		sb_append_int(sb, _context->input_stack->line_num, 10);
+		//sb_append(sb, _context->input_stack->path);
+		//sb_append_ch(sb, '\"');
+
+		return _lex_single_tok(sb);
+	}
+	else if (strcmp(tok->data.str, "__DATE__") == 0)
+	{
+
+	}
+	else if (strcmp(tok->data.str, "__TIME__") == 0)
+	{
+
+	}
+	return NULL;
+}
+
 static bool _process_undef(token_t* tok)
 {
 	token_t* identifier = _pop_next();
@@ -521,7 +574,7 @@ static bool _process_pragma(token_t* tok)
 static bool _process_include(token_t* tok)
 {
 	tok = _pop_next();
-	token_range_t* range = _create_token_range(tok, _pop_to_eol(tok));
+	token_range_t* range = tok_range_create(tok, _pop_to_eol(tok));
 	range->end = _create_end_marker(range->end);
 
 	include_kind inc_kind;
@@ -530,7 +583,7 @@ static bool _process_include(token_t* tok)
 	{
 		//#define INC <blah.h>
 		//#include INC
-		token_range_t* expanded = _create_token_range(NULL, NULL);
+		token_range_t* expanded = tok_range_create(NULL, NULL);
 
 		_context->define_id_supression_state = dss_in_cond;
 
@@ -776,14 +829,7 @@ static token_t* _stringize_range(token_range_t* range)
 	}
 	sb_append_ch(sb, '\"');
 
-	source_range_t sr = { sb->buff, sb->buff + sb->len };
-
-	//todo
-	token_range_t toks = lex_source(&sr);
-	//result->len = sb->len + 1;
-	//result->loc = result->data.str = sb_release(sb);
-	
-	return toks.start;
+	return _lex_single_tok(sb);
 }
 
 static token_range_t* _expand_param_range(token_range_t* range)
@@ -791,7 +837,7 @@ static token_range_t* _expand_param_range(token_range_t* range)
 	if (tok_range_empty(range))
 		return range;
 
-	token_range_t* result = _create_token_range(NULL, NULL);
+	token_range_t* result = tok_range_create(NULL, NULL);
 
 	//save and reset the expansion stack to prevent looking past the token range
 	input_range_t* prev_me_stack = _context->input_stack;
@@ -889,7 +935,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 		if (!param)
 			return false; //todo error
 
-		token_range_t* range = _create_token_range(NULL, NULL);
+		token_range_t* range = tok_range_create(NULL, NULL);
 
 		int paren_count = 0;
 		while (!((tok->kind == tok_comma || tok->kind == tok_r_paren) && paren_count == 0))
@@ -944,7 +990,7 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 		if (!sht_lookup(params, param->data.str))
 		{
 			//add empty tok range for missing parameter
-			token_range_t* range = _create_token_range(NULL, NULL);
+			token_range_t* range = tok_range_create(NULL, NULL);
 
 			sht_insert(params, param->data.str, range);
 		}
@@ -1004,6 +1050,13 @@ static bool _process_identifier(token_t* identifier)
 		return true;
 	}
 
+	token_t* built_in = _is_standard_macro(identifier);
+	if (built_in)
+	{
+		_emit_token(built_in);
+		return true;
+	}
+
 	//is this identifier the parameter of a macro fn being expanded?
 	token_range_t* p_range = _lookup_fn_param(identifier->data.str);
 	if (p_range)
@@ -1049,14 +1102,9 @@ static bool _process_hash_op(token_t* hash)
 	return _process_token(tok);
 }
 
-static bool _is_valid_pasted_tok(token_range_t* range)
+static bool _is_valid_pasted_tok(token_t* tok)
 {
-	return (range &&
-		range->start &&
-		range->start->kind != tok_invalid &&
-		range->start->kind != tok_eof &&
-		range->start->next &&
-		range->start->next->kind == tok_eof);
+	return (tok && tok->kind != tok_invalid && tok->kind != tok_eof);
 }
 
 static token_t* _paste_tokens(token_t* lhs, token_t* rhs)
@@ -1071,26 +1119,21 @@ static token_t* _paste_tokens(token_t* lhs, token_t* rhs)
 	tok_spelling_append(lhs->loc, lhs->len, sb);
 	tok_spelling_append(rhs->loc, rhs->len, sb);
 
-	source_range_t sr = { sb->buff, sb->buff + sb->len };
+	token_t* tok = _lex_single_tok(sb);
 
-	token_range_t toks = lex_source(&sr);
-	if (_is_valid_pasted_tok(&toks))
+	if (tok && tok->kind != tok_invalid && tok->kind != tok_eof)
 	{
-		toks.start->flags = 0;
+		tok->flags = 0;
 
 		if (lhs->flags & TF_LEADING_SPACE || rhs->flags & TF_LEADING_SPACE)
-			toks.start->flags = TF_LEADING_SPACE;
+			tok->flags = TF_LEADING_SPACE;
 
 		if (lhs->flags & TF_START_LINE)
-			toks.start->flags |= TF_START_LINE;
+			tok->flags |= TF_START_LINE;
 
-
-		return toks.start;
+		return tok;
 	}
-
-
-
-	return _is_valid_pasted_tok(&toks) ? toks.start : NULL;
+	return NULL;
 }
 
 static bool _process_hashhash(token_t* first)
@@ -1144,8 +1187,9 @@ static bool _process_hashhash(token_t* first)
 				if (!_process_token(result))
 					return false;
 
-				if (!_process_token_range(p_range))
-					return false;
+				if (!tok_range_empty(p_range))
+					if (!_process_token_range(p_range))
+						return false;
 				first = p_range->end;
 				return true;
 			}
@@ -1167,7 +1211,7 @@ static bool _process_hashhash(token_t* first)
 static bool _process_token(token_t* tok)
 {
 	//Check for ## operator if we are processing a macro's replacement list
-	if (_context->expansion_stack && _context->expansion_stack->macro && _peek_next()->kind == tok_hashhash)
+	if (_context->expansion_stack && _peek_next()->kind == tok_hashhash)
 	{
 		return _process_hashhash(tok);
 	}
@@ -1223,7 +1267,11 @@ token_range_t pre_proc_file(token_range_t* range)
 	token_t* tok = _pop_next();
 	while (tok->kind != tok_eof)
 	{
-		_process_token(tok);
+		if (!_process_token(tok))
+		{
+			token_range_t result = { NULL, NULL };
+			return result;
+		}
 		tok = _pop_next();
 	}
 	_emit_token(tok);

@@ -75,7 +75,6 @@ static void _init_line_data(source_file_t* f)
 		int adv = _is_line_ending(ptr);
 		if (adv)
 		{
-			f->line_count++;
 			ptr += adv;
 			f->lines[line] = ptr;
 			line++;
@@ -179,6 +178,13 @@ char* src_extract(const char* start, const char* end)
 bool src_is_valid_range(source_range_t* src)
 {
 	return src && src->ptr && src->end && src->ptr < src->end;
+}
+
+void src_register_range(source_range_t src, char* path)
+{
+	source_file_t* file = _init_source(src);
+	file->path = path;
+	sht_insert(_files, file->path, file);
 }
 
 source_file_t* _load_file(const char* dir, const char* fn)

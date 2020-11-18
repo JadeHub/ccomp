@@ -39,6 +39,9 @@ typedef struct input_range
 
 	expansion_context_t* macro_expansion;
 
+	const char* path;
+	uint32_t line_num;
+
 	struct input_range* next;
 }input_range_t;
 
