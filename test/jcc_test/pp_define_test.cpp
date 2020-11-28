@@ -30,9 +30,7 @@ TEST_F(PreProcDefineTest, define_nested_recursive)
 TEST)";
 
 	PreProc(src);
-	ExpectTokTypes({tok_identifier,
-		tok_semi_colon,
-		tok_eof });
+	ExpectCode("TEST;");
 }
 
 TEST_F(PreProcDefineTest, define_nested_recursive_many)
@@ -68,9 +66,7 @@ TEST
 )";
 
 	PreProc(src);
-	ExpectTokTypes({ tok_plus,
-		tok_num_literal,
-		tok_eof });
+	ExpectCode("+12");
 }
 
 TEST_F(PreProcDefineTest, err_redefinition)
@@ -93,12 +89,7 @@ TEST
 )";
 
 	PreProc(src);
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_equal,
-		tok_num_literal,
-		tok_semi_colon,
-		tok_eof });
+	ExpectCode("int i = 7;");
 }
 
 TEST_F(PreProcDefineTest, duplicate_definition_empty)
@@ -164,6 +155,20 @@ y;
 (2 * (4 + y));
 )");
 }
+
+TEST_F(PreProcDefineTest, inc_def_no_eol)
+{
+	//include a file which contains a #define and no eol
+	std::string inc = R"(#define TEST abc)";
+	ExpectFileLoad("inc.h", inc);
+
+	std::string src = R"(#include "inc.h"
+TEST)";
+
+	PreProc(src);
+	ExpectCode(R"(abc)");
+}
+
 
 /////////////////////////////////////////////
 

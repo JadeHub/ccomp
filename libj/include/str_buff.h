@@ -19,6 +19,8 @@ str_buff_t* sb_attach(char* buff, size_t sz);
 //append str and return internal buffer
 char* sb_append(str_buff_t* sb, const char* str);
 
+char* sb_str(str_buff_t* sb);
+
 //append int and return internal buffer
 char* sb_append_int(str_buff_t* sb, int64_t val, int base);
 

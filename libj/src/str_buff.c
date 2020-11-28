@@ -89,3 +89,8 @@ char* sb_append_int(str_buff_t* sb, int64_t val, int base)
 
 	return sb_append(sb, str);
 }
+
+char* sb_str(str_buff_t* sb)
+{
+	return sb->buff;
+}

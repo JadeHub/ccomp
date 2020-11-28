@@ -503,7 +503,8 @@ static bool _process_define(token_t* def)
 	}
 	else
 	{
-		macro->tokens.start = macro->tokens.end = tok;
+		macro->tokens.start = macro->tokens.end = _pop_next();
+		tok = _peek_next();
 		while (!(tok->flags & TF_START_LINE))
 		{
 			macro->tokens.end = _pop_next();
@@ -596,12 +597,14 @@ static bool _process_include(token_t* tok)
 		range = expanded;
 	}
 
-	char path[1024];
+	str_buff_t* path_buff = sb_create(128);
+
 	if (range->start->kind == tok_string_literal)
 	{
 		//#include "blah.h"
 		inc_kind = include_local;
-		strcpy(path, range->start->data.str);
+
+		sb_append(path_buff, range->start->data.str);
 		tok = range->start->next;
 		if(tok != range->end)
 		{
@@ -621,18 +624,16 @@ static bool _process_include(token_t* tok)
 			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
 			return false;
 		}
-		strncpy(path, tok->data.str, 1024);
+		sb_append(path_buff, tok->data.str);
 		tok = tok->next;
 
 		if (tok->kind == tok_fullstop)
 		{
-			strncat(path, ".", 1);
+			sb_append_ch(path_buff, '.');
 			tok = tok->next;
 			if (tok->kind == tok_identifier)
 			{
-				char buff[128];
-				strncpy(buff, tok->data.str, 128);
-				strncat(path, buff, strlen(buff));
+				sb_append(path_buff, tok->data.str);
 				tok = tok->next;
 			}			
 		}
@@ -649,12 +650,14 @@ static bool _process_include(token_t* tok)
 		return false;
 	}
 
-	source_range_t* sr = src_load_header(path, inc_kind);
+	source_range_t* sr = src_load_header(sb_str(path_buff), inc_kind);
 	if (!src_is_valid_range(sr))
 	{
-		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", path);
+		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", sb_str(path_buff));
 		return false;
 	}
+
+	sb_destroy(path_buff);
 
 	const char* inc_path = src_file_path(sr->ptr);
 	assert(inc_path);

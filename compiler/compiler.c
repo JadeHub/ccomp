@@ -9,6 +9,7 @@
 #include <libcomp/include/parse.h>
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/sema.h>
+#include "libcomp/include/comp_opt.h"
 
 #include <libj/include/platform.h>
 
@@ -57,10 +58,21 @@ int main(int argc, char* argv[])
 {
     diag_set_handler(&diag_err_print, NULL);
 
-    if (argc != 2)
-        return -1;
-    
-    char* path = path_resolve(argv[1]);
+    comp_opt_t options = parse_command_line(argc, argv);
+
+    if (!options.valid)
+    {
+        puts("invalid parameters");
+        return 0;
+    }
+
+    if (options.display_version)
+    {
+        puts("jcompiler version 0.1");
+        return 0;
+    }
+
+    char* path = path_resolve(options.input_path);
     char* src_dir = path_dirname(path);
     char* src_file = path_filename(path);
     free(path);
@@ -85,8 +97,11 @@ int main(int argc, char* argv[])
     token_range_t preproced = pre_proc_file(&range);
     pre_proc_deinit();
 
-    tok_range_print(&preproced);
-    return 0;
+    if (options.pre_proc_only)
+    {
+        tok_range_print(&preproced);
+        return 0;
+    }
 
     ast_trans_unit_t* ast = parse_translation_unit(preproced.start);
     valid_trans_unit_t* tl = sem_analyse(ast);
