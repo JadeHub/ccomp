@@ -70,15 +70,14 @@ public:
 
 	void Parse()
 	{
-		mAst = parse_translation_unit(mTokens);
+		parse_init(mTokens);
+		mAst = parse_translation_unit();
 	}
 
 	void Validate()
 	{
 		mTL = sem_analyse(mAst);
 	}
-
-private:
 
 	std::string mSrc;
 	token_t* mTokens = nullptr;
@@ -105,8 +104,9 @@ public:
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 		token_t* toks = lex_source(&sr).start;
-				
-		ast = parse_translation_unit(toks);
+		
+		parse_init(toks);
+		ast = parse_translation_unit();
 	}
 
 	void validate()
@@ -184,13 +184,13 @@ public:
 		src_deinit();
 	}
 
-	void Lex(const std::string& src)
+	void Lex(const std::string& src, const std::string path = "test.c")
 	{
 		source_range_t sr;
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 
-		src_register_range(sr, strdup("test"));
+		src_register_range(sr, strdup(path.c_str()));
 
 		tokens = lex_source(&sr);
 	}
@@ -212,7 +212,7 @@ public:
 	void ExpectIntLiteral(token_t* t, T val)
 	{
 		EXPECT_EQ(t->kind, tok_num_literal);
-		EXPECT_EQ(t->data.integer, (uint32_t)val);
+		EXPECT_EQ(int_val_as_uint32(&t->data.int_val), (uint32_t)val);
 	}
 
 	void ExpectStringLiteral(token_t* t, const char* expected)
@@ -260,9 +260,9 @@ public:
 		return This->on_load_file(file);
 	}
 
-	void PreProc(const std::string& src)
+	void PreProc(const std::string& src, const std::string path = "test.c")
 	{
-		Lex(src);
+		Lex(src, path);
 		if (!tok_range_empty(&tokens))
 			tokens = pre_proc_file(&tokens);
 	}

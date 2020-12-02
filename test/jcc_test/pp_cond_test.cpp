@@ -2,6 +2,9 @@
 
 class PreProcCondTest : public LexPreProcTest {};
 
+int x = -1 + 9;
+
+
 TEST_F(PreProcCondTest, pp_null)
 {
 	std::string src = R"(

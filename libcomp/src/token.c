@@ -280,7 +280,7 @@ bool tok_equals(token_t* lhs, token_t* rhs)
 	if (lhs->kind == tok_identifier || lhs->kind == tok_string_literal)
 		result = strcmp(lhs->data.str, rhs->data.str) == 0;		
 	else if (lhs->kind == tok_num_literal)
-		result = lhs->data.integer == rhs->data.integer;
+		result = int_val_eq(&lhs->data.int_val, &rhs->data.int_val);
 	return result;
 }
 

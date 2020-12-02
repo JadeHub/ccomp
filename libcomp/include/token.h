@@ -2,6 +2,7 @@
 
 #include "tok_kind.h"
 #include "source.h"
+#include "int_val.h"
 
 #include <libj/include/str_buff.h>
 
@@ -23,7 +24,7 @@ typedef struct token
 
     union
     {
-        uint32_t integer;
+        int_val_t int_val;
         char* str;
     }data;
 

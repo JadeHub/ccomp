@@ -78,7 +78,6 @@ char* sb_append_int(str_buff_t* sb, int64_t val, int base)
 		counter = counter / base;
 
 	} while (counter);
-	uint32_t len = p - str;
 	*p = '\0';
 	do
 	{

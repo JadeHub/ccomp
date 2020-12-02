@@ -101,14 +101,6 @@
 <enum_specifier> ::= "enum" [ <id> ] [ "{" { <id> [ = <int> ] } "}" ]
 */
 
-ast_statement_t* parse_statement();
-ast_expression_t* parse_expression();
-ast_block_item_t* parse_block_item();
-ast_expression_t* parse_unary_expr();
-ast_expression_t* parse_constant_expression();
-ast_type_spec_t* try_parse_pointer_decl_spec();
-ast_expression_t* try_parse_literal();
-
 static token_t* _cur_tok = NULL;
 static bool _parse_err = false;
 
@@ -416,7 +408,7 @@ ast_struct_member_t* parse_struct_member()
 	{
 		next_tok();
 		expect_cur(tok_num_literal);
-		result->bit_size = current()->data.integer;
+		result->bit_size = int_val_as_uint32(&current()->data.int_val);
 		next_tok();
 	}
 
@@ -446,7 +438,7 @@ ast_user_type_spec_t* parse_enum_spec()
 	{
 		next_tok();
 		
-		uint32_t next_val = 0;
+		int_val_t next_val = int_val_zero();
 		while (true)
 		{
 			expect_cur(tok_identifier);
@@ -461,7 +453,7 @@ ast_user_type_spec_t* parse_enum_spec()
 			{
 				next_tok();
 				member->const_value = try_parse_literal();
-				next_val = member->const_value->data.int_literal.value + 1;
+				next_val = int_val_inc(member->const_value->data.int_literal.val);
 			}
 			else
 			{
@@ -469,9 +461,9 @@ ast_user_type_spec_t* parse_enum_spec()
 				member->const_value->tokens.start = member->tokens.start;
 				member->const_value->tokens.end = current();
 				member->const_value->kind = expr_int_literal;				
-				member->const_value->data.int_literal.value = next_val;
+				member->const_value->data.int_literal.val = next_val;
 				member->const_value->data.int_literal.type = NULL;
-				next_val++;
+				next_val = int_val_inc(next_val);
 			}
 
 			member->next = result->enum_members;
@@ -1007,7 +999,7 @@ ast_expression_t* try_parse_literal()
 		//<factor> ::= <int>
 		ast_expression_t* expr = _alloc_expr();
 		expr->kind = expr_int_literal;
-		expr->data.int_literal.value = current()->data.integer;
+		expr->data.int_literal.val = current()->data.int_val;
 		expr->data.int_literal.type = NULL;
 		next_tok();
 		return expr;
@@ -1544,7 +1536,7 @@ ast_statement_t* parse_statement()
 		{
 			//if no condition add a constant literal of 1
 			result->data.for_smnt.condition->kind = expr_int_literal;
-			result->data.for_smnt.condition->data.int_literal.value = 1;
+			result->data.for_smnt.condition->data.int_literal.val = int_val_one();
 		}
 	}
 	else if (current_is(tok_while))
@@ -1751,18 +1743,20 @@ ast_declaration_t* parse_top_level_decl(bool* found_semi)
 	return result;
 }
 
-//<translation_unit> :: = { <function> | <declaration> }
-ast_trans_unit_t* parse_translation_unit(token_t* tok)
+void parse_init(token_t* tok)
 {
 	types_init();
-
 	_cur_tok = tok;
+	_parse_err = false;
+}
 
+//<translation_unit> :: = { <function> | <declaration> }
+ast_trans_unit_t* parse_translation_unit()
+{
 	ast_trans_unit_t* result = (ast_trans_unit_t*)malloc(sizeof(ast_trans_unit_t));
 	memset(result, 0, sizeof(ast_trans_unit_t));
 	result->tokens.start = current();
-	_parse_err = false;
-
+	
 	while (!current_is(tok_eof))
 	{
 		bool found_semi;

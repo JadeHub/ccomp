@@ -245,7 +245,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	}
 	else if (expr->kind == expr_int_literal)
 	{
-		_gen_asm("movl $%d, %%eax", expr->data.int_literal.value);
+		_gen_asm("movl $%d, %%eax", int_val_as_uint32(&expr->data.int_literal.val));
 		result->lval.type = expr->data.int_literal.type;
 	}
 	else if (expr->kind == expr_str_literal)
@@ -843,7 +843,7 @@ void gen_switch_statement(ast_statement_t* smnt)
 		case_labels[case_idx] = (char*)malloc(16);
 		_make_label_name(case_labels[case_idx]);
 
-		_gen_asm("cmpl $%d, %%eax", case_data->const_expr->data.int_literal.value);
+		_gen_asm("cmpl $%d, %%eax", int_val_as_uint32(&case_data->const_expr->data.int_literal.val));
 		_gen_asm("je %s", case_labels[case_idx]);
 
 		case_data = case_data->next;
@@ -1164,14 +1164,23 @@ void gen_global_var(ast_var_decl_t* var)
 {	
 	_gen_asm(".globl _var_%s", var->name); //export symbol
 
-	if (var->expr && var->expr->kind == expr_int_literal && var->expr->data.int_literal.value != 0)
+	if (var->expr && var->expr->kind == expr_int_literal && int_val_as_uint32(&var->expr->data.int_literal.val) != 0)
 	{
 		//initialised var goes in .data section
 		_gen_asm(".data"); //data section
 		_gen_asm(".align 4");
 		_gen_asm("_var_%s:", var->name); //label
-		//todo?	
-		_gen_asm(".long %d", var->expr->data.int_literal.value); //data and init value
+		
+		if (int_val_required_width(&var->expr->data.int_literal.val) <= 32)
+		{
+			if (var->expr->data.int_literal.val.is_signed)
+				_gen_asm(".long %d", int_val_as_int32(&var->expr->data.int_literal.val)); //data and init value
+			else
+				_gen_asm(".long %d", int_val_as_uint32(&var->expr->data.int_literal.val)); //data and init value
+		}
+		else
+			assert(false);
+		
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
 	}

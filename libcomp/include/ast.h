@@ -2,54 +2,13 @@
 
 #include <stdint.h>
 #include "token.h"
+#include "int_val.h"
+#include "ast_op_kinds.h"
 
 struct ast_expression;
 
 #define MAX_LITERAL_NAME 32
 
-typedef enum
-{
-	op_unknown,
-	//unary operators
-	op_negate,
-	op_compliment,
-	op_not,
-	op_address_of,
-	op_dereference,
-	//binary operators
-	op_add,
-	op_sub,
-	op_mul,
-	op_div,
-	op_mod,
-
-	op_shiftleft,
-	op_shiftright,
-
-	op_bitwise_or,
-	op_bitwise_xor,
-	op_bitwise_and,
-
-	op_member_access,
-	op_ptr_member_access,
-	op_array_subscript,
-
-	//logical operators
-	op_and,
-	op_or,
-	op_eq,
-	op_neq,
-	op_lessthan,
-	op_lessthanequal,
-	op_greaterthan,
-	op_greaterthanequal,
-
-	op_prefix_inc,
-	op_prefix_dec,
-	op_postfix_inc,
-	op_postfix_dec
-
-}op_kind;
 
 /************************************************/
 /*												*/
@@ -84,6 +43,7 @@ eg x = 5
 */
 typedef struct
 {
+	//todo - remove name?
 	char name[MAX_LITERAL_NAME];
 	struct ast_expression* target;
 	struct ast_expression* expr;
@@ -91,7 +51,7 @@ typedef struct
 
 /*
 variable reference data
-eg x in x = y + 5;
+eg x or y in x = y + 5;
 */
 typedef struct
 {
@@ -134,7 +94,9 @@ typedef struct
 
 typedef struct
 {
-	uint32_t value;
+	//uint32_t value;
+
+	int_val_t val;
 
 	//Type to ultimatly be set to the smallest size required to hold 'value'
 	struct ast_type_spec* type;
@@ -170,7 +132,7 @@ typedef struct ast_expression
 	expression_kind kind;
 	union
 	{
-		ast_expr_unary_op_t unary_op;
+		ast_expr_unary_op_t unary_op; //expr_unary_op & expr_postfix_op
 		ast_expr_binary_op_t binary_op;
 		ast_int_literal_t int_literal;
 		ast_string_literal_t str_literal;
@@ -190,10 +152,12 @@ typedef enum
 	type_int8,
 	type_int16,
 	type_int32,
+	type_int64,
 
 	type_uint8,
 	type_uint16,
 	type_uint32,
+	type_uint64,
 	
 	/*type_float,
 	type_double,*/
@@ -307,6 +271,7 @@ typedef struct ast_func_decl
 
 }ast_function_decl_t;
 
+//todo - used only for enum values
 typedef struct
 {
 	char name[MAX_LITERAL_NAME];
@@ -332,6 +297,8 @@ typedef struct ast_declaration
 		ast_var_decl_t var;
 		ast_function_decl_t func;
 		ast_type_spec_t* type;
+
+		//todo - used only for enums
 		ast_const_decl_t const_val;
 	}data;
 

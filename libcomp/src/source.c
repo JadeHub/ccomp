@@ -121,12 +121,12 @@ file_pos_t src_file_position(const char* pos)
 			if (line == 0)
 			{
 				result.line = 1;
-				result.col = (pos - file->range.ptr) + 1;
+				result.col = (uint16_t)((pos - file->range.ptr) + 1);
 			}
 			else
 			{
 				result.line = line + 1;
-				result.col = pos - file->lines[line-1] + 1;
+				result.col = (uint16_t)(pos - file->lines[line-1] + 1);
 			}
 			return result;
 		}

@@ -299,8 +299,8 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	if (*pos == '\\')
 	{
 		int len;
-		uint32_t val = _lex_escaped_char(sr, result, pos, &len);
-		result->data.integer = val;
+		uint8_t val = _lex_escaped_char(sr, result, pos, &len);
+		result->data.int_val = int_val_unsigned(val);
 		result->len = len;
 		pos += result->len;
 	}
@@ -312,7 +312,8 @@ static void _lex_char_literal(source_range_t* sr, const char* pos, token_t* resu
 	}
 	else
 	{
-		result->data.integer = *pos;
+		uint8_t val = *pos;
+		result->data.int_val = int_val_unsigned(val);
 		ADV_POS_ERR(result, sr, &pos);
 	}
 
@@ -357,7 +358,8 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 		i = i * base + _get_char_int_val(*pos);
 		ADV_POS(sr, &pos);
 	} while (_is_valid_num_char(base, *pos));
-	result->data.integer = (uint32_t)i;
+
+	result->data.int_val = int_val_unsigned(i);
 
 	while (_is_valid_num_suffix(*pos))
 		ADV_POS(sr, &pos);

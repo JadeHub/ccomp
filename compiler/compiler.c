@@ -103,7 +103,8 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    ast_trans_unit_t* ast = parse_translation_unit(preproced.start);
+    parse_init(preproced.start);
+    ast_trans_unit_t* ast = parse_translation_unit();
     valid_trans_unit_t* tl = sem_analyse(ast);
     if (!tl)
     {

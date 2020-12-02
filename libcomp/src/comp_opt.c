@@ -1,6 +1,7 @@
 #include "comp_opt.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 comp_opt_t parse_command_line(int argc, char* argv[])
 {

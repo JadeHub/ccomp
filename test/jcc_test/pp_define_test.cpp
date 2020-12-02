@@ -744,42 +744,6 @@ xglue(HIGH, LOW);
 "hello";
 "hello" ", world";
 )");
+
 }
 
-TEST_F(PreProcDefineTest, __line__)
-{
-	std::string src = R"(__LINE__
-A
-__LINE__
-A
-__LINE__
-A
-__LINE__
-A
-__LINE__
-A
-__LINE__
-A
-__LINE__
-A
-__LINE__
-)";
-
-	PreProc(src);
-	ExpectCode(R"(1
-A
-3
-A
-5
-A
-7
-A
-9
-A
-11
-A
-13
-A
-15
-)");
-}

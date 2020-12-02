@@ -2,12 +2,14 @@
 #include "pp_internal.h"
 #include "diag.h"
 #include "ast.h"
+#include "int_val.h"
 
 #include <string.h>
 
 typedef struct
 {
-	uint32_t value;
+	int_val_t val;
+	//uint32_t value;
 	token_range_t range;
 }const_expr_result_t;
 
@@ -79,7 +81,7 @@ static token_t* _eval_sub_expr(token_t* tok,
 
 		//eval the RHS
 		const_expr_result_t rhs_result;
-		rhs_result.value = 0;
+		rhs_result.val = int_val_zero();
 		tok = _eval_value(tok, &rhs_result, pp);
 		if (!tok) return NULL;
 
@@ -112,62 +114,69 @@ static token_t* _eval_sub_expr(token_t* tok,
 		{
 		//arithmetic
 		case tok_plus:
-			result->value += rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_add);
 			break;
 		case tok_minus:
-			result->value -= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_sub);
 			break;
 		case tok_star:
-			result->value *= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_mul);
 			break;
 		case tok_slash:
-			result->value /= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_div);
 			break;
 		case tok_percent:
-			result->value %= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_mod);
 			break;
 		//shift
 		case tok_lesserlesser:
-			result->value = result->value << rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_shiftleft);
 			break;
 		case tok_greatergreater:
-			result->value = result->value >> rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_shiftright);
 			break;
 		//logical
 		case tok_equalequal:
-			result->value = result->value == rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_eq);
 			break;
 		case tok_exclaimequal:
-			result->value = result->value != rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_neq);
 			break;
 		case tok_lesserequal:
-			result->value = result->value <= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_lessthanequal);
 			break;
 		case tok_lesser:
-			result->value = result->value < rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_lessthan);
 			break;
 		case tok_greaterequal:
-			result->value = result->value >= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_greaterthanequal);
 			break;
 		case tok_greater:
-			result->value = result->value > rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_greaterthan);
 			break;
 		case tok_ampamp:
-			result->value = result->value && rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_and);
 			break;
 		case tok_pipepipe:
-			result->value = result->value || rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_or);
 			break;
 		//bitwise
 		case tok_amp:
-			result->value &= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_bitwise_and);
 			break;
 		case tok_caret:
-			result->value ^= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_bitwise_xor);
 			break;
 		case tok_pipe:
-			result->value |= rhs_result.value;
+			result->val = int_val_binary_op(&result->val, &rhs_result.val, op_bitwise_or);
 			break;
+		}
+
+		if (int_val_required_width(&result->val) > 32)
+		{
+			//overflow
+			diag_err(tok, ERR_VALUE_OVERFLOW, "expression overflowed");
+			return NULL;
 		}
 	}
 
@@ -182,7 +191,7 @@ static token_t* _eval_defined(token_t* tok, const_expr_result_t* result, pp_cont
 
 	if (!_expect_kind(tok, tok_identifier)) return NULL;
 
-	result->value  = sht_lookup(pp->defs, tok->data.str) ? 1 : 0;
+	result->val = sht_lookup(pp->defs, tok->data.str) ? int_val_one() : int_val_zero();
 	tok = tok->next;
 	if (paren)
 	{
@@ -208,28 +217,32 @@ static token_t* _eval_value(token_t* tok, const_expr_result_t* result, pp_contex
 		return NULL;
 	}
 	case tok_num_literal:
-		result->value = tok->data.integer;
+		//result->value = int_val_as_uint32(&tok->data.int_val);
+		result->val = tok->data.int_val;
 		return tok->next;
 		break;
 	case tok_exclaim:
 		tok = tok->next;
 		tok = _eval_value(tok, result, pp);
-		result->value = !result->value;
+		result->val = int_val_unary_op(&result->val, op_not);
+//		result->value = !result->value;
 		return tok;
 	case tok_minus:
 		tok = tok->next;
 		tok = _eval_value(tok, result, pp);
-		result->value = -result->value;
+		//result->value = -result->value;
+		result->val = int_val_unary_op(&result->val, op_negate);
 		return tok;
 	case tok_plus:
 		tok = tok->next;
 		tok = _eval_value(tok, result, pp);
-		result->value = result->value;
+		//result->value = result->value;
 		return tok;
 	case tok_tilda:
 		tok = tok->next;
 		tok = _eval_value(tok, result, pp);
-		result->value = ~result->value;
+		//result->value = ~result->value;
+		result->val = int_val_unary_op(&result->val, op_compliment);
 		return tok;
 		break;
 	case tok_l_paren:
@@ -253,7 +266,7 @@ static token_t* _eval_value(token_t* tok, const_expr_result_t* result, pp_contex
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val)
 {
 	const_expr_result_t result;
-	result.value = 0;
+	result.val = int_val_zero();
 	result.range = range;
 
 	token_t* tok = _eval_value(range.start, &result, pp);
@@ -267,7 +280,7 @@ bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val)
 
 	if (tok == range.end)
 	{
-		*val = result.value;
+		*val = int_val_as_uint32(&result.val);
 		return true;
 	}
 	

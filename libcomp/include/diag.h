@@ -23,6 +23,8 @@
 #define ERR_DUP_LABEL 17
 #define ERR_UNKNOWN_LABEL 18
 #define ERR_UNKNOWN_SRC_FILE 19
+#define ERR_INITIALISER_NOT_CONST 20
+#define ERR_VALUE_OVERFLOW 21
 
 struct token;
 

@@ -1,4 +1,5 @@
 #include "sema.h"
+#include "sema_internal.h"
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
@@ -66,6 +67,9 @@ static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 	}
 }
 
+/*
+Create asl_declaration_t objects for each item in the enum
+*/
 static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind == user_type_enum);
@@ -671,7 +675,7 @@ bool process_sizeof_expr(ast_expression_t* expr)
 
 	//change expression to represent a constant int and re-process
 	expr->kind = expr_int_literal;
-	expr->data.int_literal.value = type->size;
+	expr->data.int_literal.val = int_val_unsigned(type->size);
 	return process_expression(expr);
 }
 
@@ -683,18 +687,19 @@ bool process_str_literal(ast_expression_t* expr)
 
 bool process_int_literal(ast_expression_t* expr)
 {
-	if (expr->data.int_literal.value <= 0xFF)
-	{
-		expr->data.int_literal.type = uint8_type_spec;
-	}
-	else if (expr->data.int_literal.value <= 0xFFFF)
-	{
-		expr->data.int_literal.type = uint16_type_spec;
-	}
+	size_t width = int_val_required_width(&expr->data.int_literal.val);
+
+	if (width == 8)
+		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int8_type_spec : uint8_type_spec;
+	else if (width == 16)
+		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int16_type_spec : uint16_type_spec;
+	else if (width == 32)
+		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int32_type_spec : uint32_type_spec;
+	else if (width == 64)
+		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int64_type_spec : uint64_type_spec;
 	else
-	{
-		expr->data.int_literal.type = uint32_type_spec;
-	}
+		return false;
+
 	return true;
 }
 
@@ -1111,6 +1116,29 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 	return _is_fn_definition(decl) ? proc_decl_new_def : proc_decl_ignore;
 }
 
+static void _process_global_init_expression(ast_declaration_t* decl)
+{
+	process_expression(decl->data.var.expr);
+	if (!sema_is_constant_expression(decl->data.var.expr))
+	{
+		_report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
+			"global var '%s' initialised with non-const expression", decl->data.var.name);
+	}
+
+	if (decl->data.var.expr->kind != expr_int_literal)
+	{
+		int_val_t val = sema_eval_constant_expr(decl->data.var.expr);
+
+		ast_expression_t* expr = (ast_expression_t*)malloc(sizeof(ast_expression_t));
+		memset(expr, 0, sizeof(ast_expression_t));
+		expr->kind = expr_int_literal;
+		expr->data.int_literal.val = val;
+		process_expression(expr);
+		ast_destroy_expression(decl->data.var.expr);
+		decl->data.var.expr = expr;
+	}
+}
+
 /*
 Multiple declarations are allowed
 Only a single definition is permitted
@@ -1176,7 +1204,9 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 
 	if (decl->data.var.expr)
 	{
-		process_expression(decl->data.var.expr);
+		_process_global_init_expression(decl);
+
+		
 	}
 
 	idm_add_id(_id_map, decl);

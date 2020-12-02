@@ -8,8 +8,8 @@ typedef struct
 	bool display_version;
 	bool pre_proc_only;
 
-	const char* output_path;
-	const char* input_path;
+	char* output_path;
+	char* input_path;
 
 }comp_opt_t;
 
