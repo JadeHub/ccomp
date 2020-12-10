@@ -1,10 +1,15 @@
 #pragma once
 
 #include "ast_op_kinds.h"
+#include "ast_type_spec.h"
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+
+#define IV_SIGNED		1
+#define IV_OVERFLOW		2
+#define IV_ERR		2
 
 typedef struct
 {
@@ -26,6 +31,7 @@ int_val_t int_val_signed(int64_t val);
 uint32_t int_val_as_uint32(int_val_t* val);
 int32_t int_val_as_int32(int_val_t* val);
 
+//todo - only used to generate enum values which needs reworking
 int_val_t int_val_inc(int_val_t val);
 
 int_val_t int_val_unary_op(int_val_t* val, op_kind op);

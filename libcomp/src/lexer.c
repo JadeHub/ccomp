@@ -352,7 +352,7 @@ static void _lex_num_literal(source_range_t* sr, const char* pos, token_t* resul
 		}
 	}
 
-	int i = 0;
+	uint32_t i = 0;
 	do
 	{
 		i = i * base + _get_char_int_val(*pos);

@@ -77,6 +77,5 @@ TEST_F(PtrValidationTest, string_literal)
 {
 	std::string code = R"(char *p = "Hello";)";
 
-
 	ExpectNoError(code);
 }

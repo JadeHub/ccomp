@@ -41,6 +41,8 @@ TEST_F(ConstExprEvalTest, Addition)
 	EvalExpectUnsigned(2, "1 + 1");
 	EvalExpectSigned(-9, "-10 + 1");
 	EvalExpectUnsigned(0, "-1 + 1");
+	uint64_t t = 0xFFFFFFFFLL + 1;
+	EvalExpectUnsigned(t, "0xFFFFFFFF + 1");
 }
 
 TEST_F(ConstExprEvalTest, Subtraction)
@@ -130,3 +132,4 @@ TEST_F(ConstExprEvalTest, OrFalse)
 {
 	EvalExpectUnsigned(0, "0 || 0");
 }
+

@@ -66,15 +66,15 @@ TEST_F(GlobalVarsValidationTest, struct_referenced)
 
 	ExpectNoError(code);
 }
-/*
+
 TEST_F(GlobalVarsValidationTest, invalid_init)
 {
 	std::string code = R"(
 	int fooA = 4;
 	int foo = fooA;	)";
 
-	ExpectError(code, ERR_INVALID_INIT);
-}*/
+	ExpectError(code, ERR_INITIALISER_NOT_CONST);
+}
 
 TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
 {
@@ -85,3 +85,47 @@ TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
 	ExpectError(code, ERR_DUP_SYMBOL);
 }
 
+TEST_F(GlobalVarsValidationTest, overflow_uint)
+{
+	std::string code = R"(
+	unsigned int foo = 0xFFFFFFFF + 1;
+	)";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(GlobalVarsValidationTest, overflow_uchar)
+{
+	std::string code = R"(
+	unsigned char foo = 0xFF + 1;
+	)";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(GlobalVarsValidationTest, overflow_char)
+{
+	std::string code = R"(
+	char foo = 0xFF;
+	)";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(GlobalVarsValidationTest, valid_char)
+{
+	std::string code = R"(
+	char foo = 10;
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(GlobalVarsValidationTest, init_ptr)
+{
+	std::string code = R"(
+	char* foo = "hello world!";
+	)";
+
+	ExpectNoError(code);
+}

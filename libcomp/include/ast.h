@@ -3,11 +3,11 @@
 #include <stdint.h>
 #include "token.h"
 #include "int_val.h"
+#include "ast_internal.h"
 #include "ast_op_kinds.h"
+#include "ast_type_spec.h"
 
 struct ast_expression;
-
-#define MAX_LITERAL_NAME 32
 
 
 /************************************************/
@@ -147,7 +147,7 @@ typedef struct ast_expression
 
 /* Type */
 typedef enum
-{	
+{
 	type_void,
 	type_int8,
 	type_int16,
@@ -158,7 +158,7 @@ typedef enum
 	type_uint16,
 	type_uint32,
 	type_uint64,
-	
+
 	/*type_float,
 	type_double,*/
 	type_user,
@@ -438,9 +438,12 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, c
 uint32_t ast_struct_size(ast_user_type_spec_t*);
 uint32_t ast_struct_member_size(ast_struct_member_t* member);
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
+bool ast_type_is_signed_int(ast_type_spec_t* type);
+bool ast_type_is_int(ast_type_spec_t* type);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);
 void ast_destroy_expression(ast_expression_t*);
+void ast_destroy_expression_data(ast_expression_t*);
 void ast_destroy_declaration(ast_declaration_t*);
 void ast_destroy_type_spec(ast_type_spec_t*);

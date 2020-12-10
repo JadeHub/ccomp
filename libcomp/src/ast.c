@@ -7,6 +7,43 @@
 void ast_destroy_statement(ast_statement_t* smnt);
 void ast_destroy_type_ref(ast_type_ref_t* type_ref);
 
+//destroy any data held by the expression. used to 'reset' an expression before reusing
+void ast_destroy_expression_data(ast_expression_t* expr)
+{
+	if (!expr) return;
+
+	switch (expr->kind)
+	{
+	case expr_postfix_op:
+	case expr_unary_op:
+		ast_destroy_expression(expr->data.unary_op.expression);
+		break;
+	case expr_binary_op:
+		ast_destroy_expression(expr->data.binary_op.lhs);
+		ast_destroy_expression(expr->data.binary_op.rhs);
+		break;
+	case expr_int_literal:
+		break;
+	case expr_assign:
+		ast_destroy_expression(expr->data.assignment.expr);
+		break;
+	case expr_identifier:
+		break;
+	case expr_condition:
+		ast_destroy_expression(expr->data.condition.cond);
+		ast_destroy_expression(expr->data.condition.true_branch);
+		ast_destroy_expression(expr->data.condition.false_branch);
+		break;
+	case expr_func_call:
+		ast_destroy_expression(expr->data.func_call.params);
+		break;
+	}
+
+	ast_destroy_expression(expr->next);
+	//don't free the expression
+	expr->kind = expr_null;
+}
+
 void ast_destroy_expression(ast_expression_t* expr)
 {
 	if (!expr) return;
@@ -317,4 +354,35 @@ ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
 	result->size = 4;
 	result->ptr_type = ptr_type;
 	return result;
+}
+
+bool ast_type_is_signed_int(ast_type_spec_t* type)
+{
+	switch (type->kind)
+	{
+	case type_int8:
+	case type_int16:
+	case type_int32:
+	case type_int64:
+		return true;
+	}
+	return false;
+}
+
+bool ast_type_is_int(ast_type_spec_t* spec)
+{
+	switch (spec->kind)
+	{
+	case type_int8:
+	case type_uint8:
+	case type_int16:
+	case type_uint16:
+	case type_int32:
+	case type_uint32:
+	case type_int64:
+	case type_uint64:
+		return true;
+	}
+
+	return spec->kind == type_user && spec->user_type_spec->kind == user_type_enum;
 }

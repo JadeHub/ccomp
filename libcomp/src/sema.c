@@ -1,5 +1,6 @@
 #include "sema.h"
 #include "sema_internal.h"
+#include "sema_types.h"
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
@@ -42,7 +43,7 @@ bool process_statement(ast_statement_t* smnt);
 static bool _resolve_type_ref(ast_type_ref_t* ref);
 static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr);
 
-static void _report_err(token_t* tok, int err, const char* format, ...)
+static bool _report_err(token_t* tok, int err, const char* format, ...)
 {
 	char buff[512];
 
@@ -52,6 +53,7 @@ static void _report_err(token_t* tok, int err, const char* format, ...)
 	va_end(args);
 
 	diag_err(tok, err, buff);
+	return false;
 }
 
 static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref);
@@ -239,22 +241,6 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	return typeref;
 }
 
-static bool _is_int_type(ast_type_spec_t* spec)
-{
-	switch (spec->kind)
-	{
-	case type_int8:
-	case type_uint8:
-	case type_int16:
-	case type_uint16:
-	case type_int32:
-	case type_uint32:
-		return true;
-	}
-
-	return spec->kind == type_user && spec->user_type_spec->kind == user_type_enum;
-}
-
 static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
 	if (!type)
@@ -264,8 +250,11 @@ static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 		return true;
 
 	//integer promotion
-	if (_is_int_type(target) && _is_int_type(type) && target->size >= type->size)
+	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size > type->size)
+	{
 		return true;
+	}
+		
 
 	if (target->kind == type_ptr && type->kind == type_ptr)
 		return _can_convert_type(target->ptr_type, type->ptr_type);
@@ -280,16 +269,16 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name, decl_var);
 	if (existing)
 	{
-		_report_err(decl->tokens.start, ERR_DUP_VAR, "var %s already declared at",
+		return _report_err(decl->tokens.start, ERR_DUP_VAR,
+			"var %s already declared at",
 			ast_declaration_name(decl));
-		return false;
 	}
 
 	if(!_resolve_type_ref(var->type_ref) || var->type_ref->spec->size == 0)
 	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
+		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"var %s is of incomplete type",
 			ast_declaration_name(decl));
-		return false;
 	}
 
 	if (decl->data.var.expr)
@@ -300,11 +289,10 @@ bool process_variable_declaration(ast_declaration_t* decl)
 
 		if (!_can_convert_type(var->type_ref->spec, init_type))
 		{
-			_report_err(decl->data.var.expr->tokens.start,
+			return _report_err(decl->data.var.expr->tokens.start,
 				ERR_INCOMPATIBLE_TYPE,
 				"assignment to incompatible type. expected %s",
 				ast_type_name(var->type_ref->spec));
-			return false;
 		}
 	}
 
@@ -340,9 +328,9 @@ bool process_variable_reference(ast_expression_t* expr)
 	{
 		if(decl->data.var.type_ref->spec->size == 0)
 		{
-			_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE, "var %s is of incomplete type",
+			return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+				"var %s is of incomplete type",
 				ast_declaration_name(decl));
-			return false;
 		}
 		return true;
 	}
@@ -356,9 +344,9 @@ bool process_variable_reference(ast_expression_t* expr)
 		return process_expression(expr);
 	}
 
-	_report_err(expr->tokens.start, ERR_UNKNOWN_VAR, "unknown var %s",
+	return _report_err(expr->tokens.start, ERR_UNKNOWN_VAR,
+		"unknown var %s",
 		expr->data.var_reference.name);
-	return false;
 }
 
 static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
@@ -370,22 +358,51 @@ static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
 	{
 	case expr_postfix_op:
 	case expr_unary_op:
+	{
+		ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
 
 		if (expr->data.unary_op.operation == op_address_of)
 		{
-			ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
-			assert(expr_type);
 			ast_type_spec_t* ptr_type = ast_make_ptr_type(expr_type);
 			return _resolve_type(ptr_type);
 		}
 		else if (expr->data.unary_op.operation == op_dereference)
 		{
-			ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
 			assert(expr_type->kind == type_ptr);
 			return expr_type->ptr_type;
 		}
-		//todo handle signed/unisgned here, eg uint32 x = 5; int32 y = -x;
-		return _resolve_expr_type(expr->data.unary_op.expression);
+		else if (expr->data.unary_op.operation == op_negate)
+		{
+			switch (expr_type->kind)
+			{
+			case type_int8:
+				return uint8_type_spec;
+			case type_uint8:
+				return int8_type_spec;
+			case type_int16:
+				return uint16_type_spec;
+			case type_uint16:
+				return int16_type_spec; 
+			case type_int32:
+				return uint32_type_spec;
+			case type_uint32:
+				return int32_type_spec;
+			case type_int64:
+				return uint64_type_spec;
+			case type_uint64:
+				return int64_type_spec;
+			}
+			
+			if (!ast_type_is_int(expr_type))
+			{
+				_report_err(expr->tokens.start, ERR_SYNTAX,
+					"negation applied to non integer expression of type %s",
+					ast_type_name(expr_type));
+				return NULL;
+			}
+		}
+		return expr_type;
+	}
 	case expr_binary_op:
 	{
 		if (expr->data.binary_op.operation == op_member_access)
@@ -485,20 +502,16 @@ bool process_func_call(ast_expression_t* expr)
 	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.func_call.name, decl_func);
 	if (!decl)
 	{
-		_report_err(expr->tokens.start,
-			ERR_UNKNOWN_FUNC, 
+		return _report_err(expr->tokens.start, ERR_UNKNOWN_FUNC, 
 			"function '%s' not defined", 
 			expr->data.func_call.name);
-		return false;
 	}
 
 	if (expr->data.func_call.param_count != decl->data.func.param_count)
 	{
-		_report_err(expr->tokens.start,
-			ERR_INVALID_PARAMS,
+		return _report_err(expr->tokens.start, ERR_INVALID_PARAMS,
 			"incorrect number of params in call to function '%s'. Expected %d",
 			expr->data.func_call.name, decl->data.func.param_count);
-		return false;
 	}
 
 	/*
@@ -516,11 +529,9 @@ bool process_func_call(ast_expression_t* expr)
 
 		if (!_can_convert_type(func_param->decl->data.var.type_ref->spec, _resolve_expr_type(call_param)))
 		{
-			_report_err(expr->tokens.start,
-				ERR_INVALID_PARAMS,
+			return _report_err(expr->tokens.start,ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
 				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type_ref->spec));
-			return false;
 		}
 
 		call_param = call_param->next;
@@ -539,22 +550,18 @@ bool process_array_subscript_expression(ast_expression_t* expr)
 	ast_type_spec_t* type = _resolve_expr_type(expr->data.binary_op.lhs);
 	if (type->kind != type_ptr)
 	{
-		_report_err(expr->tokens.start,
-			ERR_INCOMPATIBLE_TYPE,
+		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
 			"'[]' must be applied to a pointer type");
-		return false;
 	}
 
 	if (!process_expression(expr->data.binary_op.rhs))
 		return false;
 
 	ast_type_spec_t* idx_type = _resolve_expr_type(expr->data.binary_op.rhs);
-	if (!_can_convert_type(uint32_type_spec, idx_type))
+	if (!_can_convert_type(int32_type_spec, idx_type))
 	{
-		_report_err(expr->data.binary_op.rhs->tokens.start,
-			ERR_INCOMPATIBLE_TYPE,
+		return _report_err(expr->data.binary_op.rhs->tokens.start, ERR_INCOMPATIBLE_TYPE,
 			"'[]' subscript must be an integer");
-		return false;
 	}
 
 	return true;
@@ -572,10 +579,8 @@ bool process_member_access_expression(ast_expression_t* expr)
 	{
 		if (user_type_spec->kind != type_ptr)
 		{
-			_report_err(expr->tokens.start,
-				ERR_INCOMPATIBLE_TYPE,
+			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
 				"'->' must be applied to a pointer type");
-			return false;
 		}
 		user_type_spec = user_type_spec->ptr_type;
 	}
@@ -583,38 +588,30 @@ bool process_member_access_expression(ast_expression_t* expr)
 	{
 		if (user_type_spec->kind == type_ptr)
 		{
-			_report_err(expr->tokens.start,
-				ERR_INCOMPATIBLE_TYPE,
+			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
 				"'.' cannot be applied to a pointer type");
-			return false;
 		}
 	}
 	
 	if (user_type_spec->kind != type_user)
 	{
-		_report_err(expr->tokens.start,
-			ERR_INCOMPATIBLE_TYPE,
+		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
 			"'->' or '.' can only be applied to user defined types");
-		return false;
 	}
 
 	if (expr->data.binary_op.rhs->kind != expr_identifier)
 	{
-		_report_err(expr->tokens.start,
-			ERR_INCOMPATIBLE_TYPE,
+		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
 			"operand of '->' or '.' must be an identifier");
-		return false;
 	}
 
 	ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
 	if (member == NULL)
 	{
-		_report_err(expr->tokens.start,
-			ERR_UNKNOWN_MEMBER_REF,
+		return _report_err(expr->tokens.start, ERR_UNKNOWN_MEMBER_REF,
 			"%s is not a member of %s",
 			expr->data.binary_op.rhs->data.var_reference.name,
 			ast_type_name(user_type_spec));
-		return false;
 	}
 	
 	return true;
@@ -626,34 +623,41 @@ bool process_assignment_expression(ast_expression_t* expr)
 		return false;
 
 	ast_type_spec_t* target_type = _resolve_expr_type(expr->data.assignment.target);
-	ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.assignment.expr);
 
 	if (!target_type)
 	{
-		_report_err(expr->tokens.start,
-			ERR_UNKNOWN_TYPE,
+		return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
 			"cannot determine assignment target type");
-		return false;
 	}
 
-	if (!expr_type)
+	if (expr->data.assignment.expr->kind == expr_int_literal)
 	{
-		_report_err(expr->tokens.start,
-			ERR_UNKNOWN_TYPE,
-			"cannot determine assignment type");
-		return false;
+		if (!int_val_will_fit(&expr->data.assignment.expr->data.int_literal.val, target_type))
+		{
+			return _report_err(expr->data.assignment.expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(target_type));
+		}
 	}
-
-	if (!_can_convert_type(target_type, expr_type))
+	else
 	{
-		_report_err(expr->tokens.start,
-			ERR_INCOMPATIBLE_TYPE,
-			"assignment to incompatible type. expected %s",
-			ast_type_name(target_type));
-		return false;
+		ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.assignment.expr);
+
+		if (!expr_type)
+		{
+			return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
+				"cannot determine assignment type");
+		}
+
+		if (!_can_convert_type(target_type, expr_type))
+		{
+			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(target_type));
+		}
 	}
 
-	return process_expression(expr->data.assignment.target);
+	return true;
 }
 
 bool process_sizeof_expr(ast_expression_t* expr)
@@ -667,10 +671,8 @@ bool process_sizeof_expr(ast_expression_t* expr)
 
 	if (!type || type->size == 0)
 	{
-		_report_err(expr->tokens.start,
-			ERR_UNKNOWN_TYPE,
+		return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
 			"could not determin type for sizeof call");
-		return false;
 	}
 
 	//change expression to represent a constant int and re-process
@@ -687,41 +689,59 @@ bool process_str_literal(ast_expression_t* expr)
 
 bool process_int_literal(ast_expression_t* expr)
 {
-	size_t width = int_val_required_width(&expr->data.int_literal.val);
+	expr->data.int_literal.type = int_val_smallest_size(&expr->data.int_literal.val);
+	return expr->data.int_literal.type != NULL;
+}
 
-	if (width == 8)
-		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int8_type_spec : uint8_type_spec;
-	else if (width == 16)
-		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int16_type_spec : uint16_type_spec;
-	else if (width == 32)
-		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int32_type_spec : uint32_type_spec;
-	else if (width == 64)
-		expr->data.int_literal.type = expr->data.int_literal.val.is_signed ? int64_type_spec : uint64_type_spec;
-	else
+bool process_unary_op_expression(ast_expression_t* expr)
+{
+	//todo
+	return process_expression(expr->data.unary_op.expression);
+}
+
+bool process_binary_op_expression(ast_expression_t* expr)
+{
+	if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
+		return process_member_access_expression(expr);
+	if (expr->data.binary_op.operation == op_array_subscript)
+		return process_array_subscript_expression(expr);
+
+	if (!process_expression(expr->data.binary_op.lhs))
 		return false;
+	return process_expression(expr->data.binary_op.rhs);
+}
 
-	return true;
+bool process_cond_expression(ast_expression_t* expr)
+{
+	if (!process_expression(expr->data.condition.cond))
+		return false;
+	if (!process_expression(expr->data.condition.true_branch))
+		return false;
+	return process_expression(expr->data.condition.false_branch);
 }
 
 bool process_expression(ast_expression_t* expr)
 {
-	if (!expr)
+	if (!expr || expr->kind == expr_null)
 		return true;
+
+	if (sema_is_int_constant_expression(expr) && expr->kind != expr_int_literal)
+	{
+		//we can eval
+		int_val_t val = sema_eval_constant_expr(expr);
+		ast_destroy_expression_data(expr);
+		memset(expr, 0, sizeof(ast_expression_t));
+		expr->kind = expr_int_literal;
+		expr->data.int_literal.val = val;
+	}
 
 	switch (expr->kind)
 	{
 		case expr_postfix_op:
 		case expr_unary_op:
-			return process_expression(expr->data.unary_op.expression);
+			return process_unary_op_expression(expr);
 		case expr_binary_op:
-			if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
-				return process_member_access_expression(expr);
-			if (expr->data.binary_op.operation == op_array_subscript)
-				return process_array_subscript_expression(expr);	
-
-			if (!process_expression(expr->data.binary_op.lhs))
-				return false;
-			return process_expression(expr->data.binary_op.rhs);
+			return process_binary_op_expression(expr);
 		case expr_int_literal:
 			return process_int_literal(expr);
 		case expr_str_literal:
@@ -731,11 +751,7 @@ bool process_expression(ast_expression_t* expr)
 		case expr_identifier:
 			return process_variable_reference(expr);
 		case expr_condition:
-			if (!process_expression(expr->data.condition.cond))
-				return false;
-			if (!process_expression(expr->data.condition.true_branch))
-				return false;
-			return process_expression(expr->data.condition.false_branch);
+			return process_cond_expression(expr);
 		case expr_func_call:
 			return process_func_call(expr);
 		case expr_sizeof:			
@@ -803,10 +819,9 @@ bool process_label_statement(ast_statement_t* smnt)
 {
 	if(sht_contains(_cur_func_ctx.labels, smnt->data.label_smnt.label))
 	{
-		_report_err(smnt->tokens.start, ERR_DUP_LABEL,
+		return _report_err(smnt->tokens.start, ERR_DUP_LABEL,
 			"dupliate label '%s' in function '%s'",
 			smnt->data.label_smnt.label, _cur_func_ctx.decl->name);
-		return false;
 	}
 	sht_insert(_cur_func_ctx.labels, smnt->data.label_smnt.label, 0);
 
@@ -817,9 +832,8 @@ bool process_switch_statement(ast_statement_t * smnt)
 {
 	if (!smnt->data.switch_smnt.default_case && !smnt->data.switch_smnt.cases)
 	{
-		_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+		return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
 			"switch statement has no case or default statement");
-		return false;
 	}
 
 	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
@@ -827,9 +841,8 @@ bool process_switch_statement(ast_statement_t * smnt)
 	{
 		if (case_data->const_expr->kind != expr_int_literal)
 		{
-			_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+			return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
 				"case must be a constant expression");
-			return false;
 		}
 
 		if (case_data->next == NULL && case_data->statement == NULL)
@@ -846,9 +859,8 @@ bool process_switch_statement(ast_statement_t * smnt)
 				return;
 			case 2:
 			*/
-			_report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+			return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
 				"invalid case in switch");
-			return false;
 		}
 
 		case_data = case_data->next;
@@ -868,16 +880,14 @@ bool process_return_statement(ast_statement_t* smnt)
 	{
 		if (!_can_convert_type(_cur_func_ctx.decl->return_type_ref->spec, _resolve_expr_type(smnt->data.expr)))
 		{
-			_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
-			return false;
 		}
 	}
 	else if (_cur_func_ctx.decl->return_type_ref->spec->kind != type_void)
 	{
-		_report_err(smnt->tokens.start, ERR_INVALID_RETURN,
+		return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 			"function must return a value");
-		return false;
 	}
 	return true;
 }
@@ -952,7 +962,7 @@ bool process_function_definition(ast_function_decl_t* decl)
 
 		if (!sht_contains(_cur_func_ctx.labels, goto_smnt->data.goto_smnt.label))
 		{
-			_report_err(goto_smnt->tokens.start, ERR_UNKNOWN_LABEL,
+			return _report_err(goto_smnt->tokens.start, ERR_UNKNOWN_LABEL,
 				"goto statement references unknown label '%s'",
 				goto_smnt->data.goto_smnt.label);
 
@@ -990,10 +1000,9 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		ret_type->kind != type_void && 
 		ret_type->size == 0)
 	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"function '%s' returns incomplete type '%s'",
 			func->name, ret_type->user_type_spec->name);
-		return false;
 	}
 	
 	//parameter types
@@ -1002,10 +1011,9 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	{
 		if (param->decl->data.var.type_ref->spec->kind == type_void)
 		{
-			_report_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
+			return _report_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
 				"function param '%s' of void type",
 				param->decl->data.var.name);
-			return false;
 		}
 
 		if (!_resolve_type_ref(param->decl->data.var.type_ref))
@@ -1017,10 +1025,9 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			param_type->kind != type_void &&
 			param_type->size == 0)
 		{
-			_report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			return _report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
 				"function param '%s' returns incomplete type '%s'",
 				param->decl->data.var.name, param_type->user_type_spec->name);
-			return false;
 		}
 		
 		param = param->next;
@@ -1032,20 +1039,16 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 {
 	if (exist->data.func.return_type_ref->spec != func->data.func.return_type_ref->spec)
 	{
-		_report_err(func->tokens.start,
-			ERR_INVALID_PARAMS,
+		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"differing return type in declaration of function '%s'. Expected '%s'",
 			ast_declaration_name(func), ast_type_ref_name(exist->data.func.return_type_ref));
-		return false;
 	}
 
 	if (exist->data.func.param_count != func->data.func.param_count)
 	{
-		_report_err(func->tokens.start, 
-			ERR_INVALID_PARAMS,
+		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"incorrect number of params in declaration of function '%s'. Expected %d",
 			ast_declaration_name(func), exist->data.func.param_count);
-		return false;
 	}
 
 	ast_func_param_decl_t* p_exist = exist->data.func.first_param;
@@ -1056,11 +1059,9 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 	{
 		if (p_exist->decl->data.var.type_ref->spec != _resolve_type(p_func->decl->data.var.type_ref->spec))
 		{
-			_report_err(func->tokens.start,
-				ERR_INVALID_PARAMS,
+			return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
 				p_count, ast_declaration_name(func), ast_type_ref_name(p_exist->decl->data.var.type_ref));
-			return false;
 		}
 
 		p_exist = p_exist->next;
@@ -1116,12 +1117,12 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 	return _is_fn_definition(decl) ? proc_decl_new_def : proc_decl_ignore;
 }
 
-static void _process_global_init_expression(ast_declaration_t* decl)
+static bool _process_global_init_expression(ast_declaration_t* decl)
 {
 	process_expression(decl->data.var.expr);
-	if (!sema_is_constant_expression(decl->data.var.expr))
+	if (!sema_is_int_constant_expression(decl->data.var.expr))
 	{
-		_report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
+		return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
 			"global var '%s' initialised with non-const expression", decl->data.var.name);
 	}
 
@@ -1137,6 +1138,7 @@ static void _process_global_init_expression(ast_declaration_t* decl)
 		ast_destroy_expression(decl->data.var.expr);
 		decl->data.var.expr = expr;
 	}
+	return true;
 }
 
 /*
@@ -1200,11 +1202,40 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"global var '%s' uses incomplete type '%s'",
 			name, ast_type_ref_name(decl->data.var.type_ref));
+		return proc_decl_error;
 	}
 
 	if (decl->data.var.expr)
 	{
-		_process_global_init_expression(decl);
+		if (!process_expression(decl->data.var.expr))
+			return false;
+
+		ast_type_spec_t* var_type = decl->data.var.type_ref->spec;
+
+		if (decl->data.var.expr->kind == expr_int_literal)
+		{
+			if (!int_val_will_fit(&decl->data.var.expr->data.int_literal.val, var_type))
+			{
+				_report_err(decl->data.var.expr->tokens.start,
+					ERR_INCOMPATIBLE_TYPE,
+					"assignment to incompatible type. expected %s",
+					ast_type_name(var_type));
+				return proc_decl_error;
+			}
+		}
+		else if (decl->data.var.expr->kind == expr_str_literal)
+		{
+
+		}
+		else
+		{
+			return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
+				"global var '%s' initialised with non-const expression", decl->data.var.name);
+		}
+
+		//_process_global_init_expression(decl);
+
+		
 
 		
 	}
