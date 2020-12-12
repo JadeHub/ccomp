@@ -133,3 +133,8 @@ TEST_F(ConstExprEvalTest, OrFalse)
 	EvalExpectUnsigned(0, "0 || 0");
 }
 
+TEST_F(ConstExprEvalTest, Tilda)
+{
+	EvalExpectUnsigned(~(1 + 1), "~(1 + 1)");
+}
+

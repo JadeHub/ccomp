@@ -211,9 +211,9 @@ static inline bool _is_unary_op(ast_expression_t* expr, op_kind op)
 
 void start_expr(ast_expression_t* expr)
 {
-	char* src = src_extract(expr->tokens.start->loc, expr->tokens.end->loc);
-	_gen_asm("\n# Expr %s \"%s\"", src_file_pos_str(src_file_position(expr->tokens.start->loc)), src);
-	free(src);
+	//char* src = src_extract(expr->tokens.start->loc, expr->tokens.end->loc);
+	//_gen_asm("\n# Expr %s \"%s\"", src_file_pos_str(src_file_position(expr->tokens.start->loc)), src);
+	//free(src);
 }
 
 void gen_expression(ast_expression_t* expr, expr_result* result)

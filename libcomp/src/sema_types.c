@@ -2,6 +2,8 @@
 
 #include "std_types.h"
 
+#include <limits.h>
+
 ast_type_spec_t* int_val_smallest_size(int_val_t* val)
 {
 	if (val->is_signed && val->int64 < 0)

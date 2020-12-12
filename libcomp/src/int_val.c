@@ -132,22 +132,22 @@ static bool _lessthan(int_val_t* lhs, int_val_t* rhs)
 static bool _lessthanequal(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->int64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
-	return lhs->uint64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
+		return lhs->int64 <= (rhs->is_signed ? rhs->int64 : rhs->uint64);
+	return lhs->uint64 <= (rhs->is_signed ? rhs->int64 : rhs->uint64);
 }
 
 static bool _greaterthan(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->int64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
-	return lhs->uint64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
+		return lhs->int64 > (rhs->is_signed ? rhs->int64 : rhs->uint64);
+	return lhs->uint64 > (rhs->is_signed ? rhs->int64 : rhs->uint64);
 }
 
 static bool _greaterthanequal(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->int64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
-	return lhs->uint64 < (rhs->is_signed ? rhs->int64 : rhs->uint64);
+		return lhs->int64 >= (rhs->is_signed ? rhs->int64 : rhs->uint64);
+	return lhs->uint64 >= (rhs->is_signed ? rhs->int64 : rhs->uint64);
 }
 
 static int_val_t _eq(int_val_t* lhs, int_val_t* rhs)

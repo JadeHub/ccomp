@@ -60,7 +60,7 @@ int_val_t sema_eval_constant_expr(ast_expression_t* expr)
 		return expr->data.int_literal.val;
 	case expr_sizeof:
 		if (!process_sizeof_expr(expr))
-			return int_val_zero();
+			return int_val_zero(); //this is not ideal
 		return expr->data.int_literal.val;
 	case expr_null:
 		break;
