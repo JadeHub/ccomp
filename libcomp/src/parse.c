@@ -466,8 +466,8 @@ ast_user_type_spec_t* parse_enum_spec()
 				next_val = int_val_inc(next_val);
 			}
 
-			member->next = result->enum_members;
-			result->enum_members = member;
+			member->next = result->data.enum_members;
+			result->data.enum_members = member;
 
 			member->tokens.end = current();
 
@@ -507,8 +507,8 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 		{
 			ast_struct_member_t* member = parse_struct_member();
 			member->offset = offset;
-			member->next = result->struct_members;
-			result->struct_members = member;
+			member->next = result->data.struct_members;
+			result->data.struct_members = member;
 			offset += member->type_ref->spec->size;
 		}
 		next_tok();
@@ -535,14 +535,14 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 #define DECL_SPEC_TYPE_FLAGS	0x3FFF
 
 //storage class specifiers
-#define DECL_SPEC_EXTERN		1 << 20
-#define DECL_SPEC_STATIC		1 << 21
-#define DECL_SPEC_AUTO			1 << 22
-#define DECL_SPEC_REGISTER		1 << 23
+#define DECL_SPEC_EXTERN		(1 << 20)
+#define DECL_SPEC_STATIC		(1 << 21)
+#define DECL_SPEC_AUTO			(1 << 22)
+#define DECL_SPEC_REGISTER		(1 << 23)
 
 //type-qualifiers
-#define DECL_SPEC_CONST			1 << 30
-#define DECL_SPEC_VOLATILE		1 << 31
+#define DECL_SPEC_CONST			(1 << 25)
+#define DECL_SPEC_VOLATILE		(1 << 26)
 
 uint32_t _get_decl_spec_flag(token_t* tok)
 {
@@ -632,9 +632,9 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	{
 		ast_type_spec_t* result = _make_type_spec();
 		result->kind = type_user;
-		result->user_type_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
-		result->user_type_spec->tokens.start = start;
-		result->size = ast_struct_size(result->user_type_spec);
+		result->data.user_type_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
+		result->data.user_type_spec->tokens.start = start;
+		result->size = ast_struct_size(result->data.user_type_spec);
 		return result;
 	}
 
@@ -643,8 +643,8 @@ ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
 	{
 		ast_type_spec_t* result = _make_type_spec();
 		result->kind = type_user;
-		result->user_type_spec = parse_enum_spec();
-		result->user_type_spec->tokens.start = start;
+		result->data.user_type_spec = parse_enum_spec();
+		result->data.user_type_spec->tokens.start = start;
 		result->size = 4;
 		return result;
 	}
@@ -746,7 +746,6 @@ ast_type_spec_t* try_parse_decl_spec()
 	token_t* start = current();
 
 	//consume all type_specifier, type_qualifier, storage_class_specifier
-	uint32_t spec_flags = 0;
 	while (_is_type_specifier(current()) || 
 		_is_type_qualifier(current()) || 
 		_is_storage_class_specifier(current()))
@@ -821,10 +820,9 @@ ast_expression_t* opt_parse_array_spec()
 */
 void parse_function_parameters(ast_function_decl_t* func)
 {
-	ast_type_spec_t* type;
-
 	token_t* start = current();
-	while ((type = try_parse_pointer_decl_spec()))
+	ast_type_spec_t* type = try_parse_pointer_decl_spec();
+	while (type)
 	{
 		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(decl, 0, sizeof(ast_declaration_t));
@@ -865,6 +863,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 		next_tok();
 
 		start = current();
+		type = try_parse_pointer_decl_spec();
 	}
 
 	// if single void param remove it
@@ -1175,12 +1174,12 @@ ast_expression_t* parse_sizeof_expr()
 		if (type)
 		{
 			expr->data.sizeof_call.kind = sizeof_type;
-			expr->data.sizeof_call.type = type;
+			expr->data.sizeof_call.data.type = type;
 		}
 		else
 		{
 			expr->data.sizeof_call.kind = sizeof_expr;
-			expr->data.unary_op.expression = parse_unary_expr();
+			expr->data.sizeof_call.data.expr = parse_unary_expr();
 		}
 
 		expect_cur(tok_r_paren);
@@ -1189,7 +1188,7 @@ ast_expression_t* parse_sizeof_expr()
 	else
 	{
 		expr->data.sizeof_call.kind = sizeof_expr;
-		expr->data.unary_op.expression = parse_unary_expr();
+		expr->data.sizeof_call.data.expr = parse_unary_expr();
 	}
 	
 	expr->tokens.end = current();
@@ -1704,12 +1703,12 @@ ast_block_item_t* parse_block_item()
 	if (decl)
 	{
 		result->kind = blk_decl;
-		result->decl = decl;
+		result->data.decl = decl;
 	}
 	else
 	{
 		result->kind = blk_smnt;
-		result->smnt = parse_statement();
+		result->data.smnt = parse_statement();
 	}
 	if (_parse_err)
 		return NULL;

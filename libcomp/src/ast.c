@@ -95,7 +95,7 @@ void ast_destroy_user_type(ast_user_type_spec_t* user_type)
 {
 	if (user_type->kind == user_type_enum)
 	{
-		ast_enum_member_t* member = user_type->enum_members;
+		ast_enum_member_t* member = user_type->data.enum_members;
 		while (member)
 		{
 			ast_enum_member_t* next = member->next;
@@ -105,7 +105,7 @@ void ast_destroy_user_type(ast_user_type_spec_t* user_type)
 	}
 	else
 	{
-		ast_struct_member_t* member = user_type->struct_members;
+		ast_struct_member_t* member = user_type->data.struct_members;
 		while (member)
 		{
 			ast_struct_member_t* next = member->next;
@@ -118,6 +118,7 @@ void ast_destroy_user_type(ast_user_type_spec_t* user_type)
 
 void ast_destroy_type_spec(ast_type_spec_t* type)
 {
+	type;
 	/*if (!type) return;
 
 	if (type->kind == type_ptr)
@@ -166,10 +167,10 @@ void ast_destroy_block_item(ast_block_item_t* b)
 	switch (b->kind)
 	{
 	case blk_smnt:
-		ast_destroy_statement(b->smnt);
+		ast_destroy_statement(b->data.smnt);
 		break;
 	case blk_decl:
-		ast_destroy_declaration(b->decl);
+		ast_destroy_declaration(b->data.decl);
 	};
 	free(b);
 
@@ -282,7 +283,7 @@ const char* ast_type_name(ast_type_spec_t* type)
 	case type_uint32:
 		return "uint32";
 	case type_user:
-		return type->user_type_spec->name;
+		return type->data.user_type_spec->name;
 	case type_ptr:
 		return "pointer"; //todo
 	}
@@ -308,7 +309,7 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec, const char* name)
 {
 	assert(user_type_spec->kind != user_type_enum);
-	ast_struct_member_t* member = user_type_spec->struct_members;
+	ast_struct_member_t* member = user_type_spec->data.struct_members;
 	while (member)
 	{
 		if (strcmp(member->name, name) == 0)
@@ -334,7 +335,7 @@ uint32_t ast_struct_size(ast_user_type_spec_t* spec)
 	uint32_t total = 0;
 	uint32_t max_member = 0;
 
-	ast_struct_member_t* member = spec->struct_members;
+	ast_struct_member_t* member = spec->data.struct_members;
 	while (member)
 	{
 		uint32_t size = ast_struct_member_size(member);
@@ -352,7 +353,7 @@ ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
 	memset(result, 0, sizeof(ast_type_spec_t));
 	result->kind = type_ptr;
 	result->size = 4;
-	result->ptr_type = ptr_type;
+	result->data.ptr_type = ptr_type;
 	return result;
 }
 
@@ -384,5 +385,5 @@ bool ast_type_is_int(ast_type_spec_t* spec)
 		return true;
 	}
 
-	return spec->kind == type_user && spec->user_type_spec->kind == user_type_enum;
+	return spec->kind == type_user && spec->data.user_type_spec->kind == user_type_enum;
 }

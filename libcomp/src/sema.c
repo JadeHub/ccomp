@@ -17,6 +17,11 @@
 
 static identfier_map_t* _id_map;
 
+identfier_map_t* sema_id_map()
+{
+	return _id_map; 
+}
+
 typedef struct
 {
 	ast_function_decl_t* decl;
@@ -38,10 +43,8 @@ typedef enum
 }proc_decl_result;
 
 proc_decl_result process_function_decl(ast_declaration_t* decl);
-bool process_expression(ast_expression_t* expr);
 bool process_statement(ast_statement_t* smnt);
-static bool _resolve_type_ref(ast_type_ref_t* ref);
-static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr);
+static bool sema_resolve_type_ref(ast_type_ref_t* ref);
 
 static bool _report_err(token_t* tok, int err, const char* format, ...)
 {
@@ -56,17 +59,22 @@ static bool _report_err(token_t* tok, int err, const char* format, ...)
 	return false;
 }
 
-static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref);
-
 static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind != user_type_enum);
-	ast_struct_member_t* member = user_type_spec->struct_members;
+	ast_struct_member_t* member = user_type_spec->data.struct_members;
 	while (member)
 	{
-		_resolve_type_ref(member->type_ref);
+		sema_resolve_type_ref(member->type_ref);
 		member = member->next;
 	}
+}
+
+static bool process_expression(ast_expression_t* expr)
+{
+	expr_result_t result = sema_process_expression(expr);
+
+	return !result.failure;
 }
 
 /*
@@ -75,7 +83,7 @@ Create asl_declaration_t objects for each item in the enum
 static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind == user_type_enum);
-	ast_enum_member_t* member = user_type_spec->enum_members;
+	ast_enum_member_t* member = user_type_spec->data.enum_members;
 	while (member)
 	{
 		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
@@ -96,17 +104,17 @@ static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 static bool _user_type_is_definition(ast_user_type_spec_t* type)
 {
 	if (type->kind == user_type_enum)
-		return type->enum_members != NULL;
-	return type->struct_members != NULL;
+		return type->data.enum_members != NULL;
+	return type->data.struct_members != NULL;
 }
 
 static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 {
-	if (typeref->user_type_spec->kind == user_type_enum)
+	if (typeref->data.user_type_spec->kind == user_type_enum)
 		return 4;
 
 	uint32_t result = 0;
-	ast_struct_member_t* member = typeref->user_type_spec->struct_members;
+	ast_struct_member_t* member = typeref->data.user_type_spec->data.struct_members;
 	while (member)
 	{
 		result += member->type_ref->spec->size;
@@ -117,18 +125,18 @@ static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 
 static void _add_user_type(ast_type_spec_t* typeref)
 {
-	if (typeref->user_type_spec->kind == user_type_enum)
-		_register_enum_constants(typeref->user_type_spec);
+	if (typeref->data.user_type_spec->kind == user_type_enum)
+		_register_enum_constants(typeref->data.user_type_spec);
 	else
-		_resolve_struct_member_types(typeref->user_type_spec);
+		_resolve_struct_member_types(typeref->data.user_type_spec);
 	typeref->size = _calc_user_type_size(typeref);
 	idm_add_tag(_id_map, typeref);
 }
 
-static bool _resolve_type_ref(ast_type_ref_t* ref)
+static bool sema_resolve_type_ref(ast_type_ref_t* ref)
 {
 	assert(ref->spec);
-	ast_type_spec_t* spec = _resolve_type(ref->spec);
+	ast_type_spec_t* spec = sema_resolve_type(ref->spec);
 	if (spec)
 	{
 		ref->spec = spec;
@@ -137,19 +145,14 @@ static bool _resolve_type_ref(ast_type_ref_t* ref)
 	return false;
 }
 
-static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
+ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref)
 {
 	if (typeref->kind == type_ptr)
 	{
-		typeref->ptr_type = _resolve_type(typeref->ptr_type);
+		typeref->data.ptr_type = sema_resolve_type(typeref->data.ptr_type);
 		return typeref;
 	}
-	/*else if (typeref->kind == type_array)
-	{
-		typeref->ptr_type = _resolve_type(typeref->ptr_type);
-		return typeref;
-	}*/
-
+	
 	if (typeref->kind != type_user)
 		return typeref;
 
@@ -166,47 +169,47 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 		If found: return
 		If not found: Add to id_map
 	*/
-	token_t* loc = typeref->user_type_spec->tokens.start;
-	if (_user_type_is_definition(typeref->user_type_spec))
+	token_t* loc = typeref->data.user_type_spec->tokens.start;
+	if (_user_type_is_definition(typeref->data.user_type_spec))
 	{
-		ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->user_type_spec->name);
+		ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->data.user_type_spec->name);
 		if (typeref == exist)
 			return exist;
 
 		if (exist)
 		{
-			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
+			if (exist->data.user_type_spec->kind != typeref->data.user_type_spec->kind)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
-					user_type_kind_name(exist->user_type_spec->kind),
-					typeref->user_type_spec->name,
-					user_type_kind_name(typeref->user_type_spec->kind));
+					user_type_kind_name(exist->data.user_type_spec->kind),
+					typeref->data.user_type_spec->name,
+					user_type_kind_name(typeref->data.user_type_spec->kind));
 				return NULL;
 			}
 
-			if (_user_type_is_definition(exist->user_type_spec))
+			if (_user_type_is_definition(exist->data.user_type_spec))
 			{
 				//multiple definitions
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s'",
-					user_type_kind_name(typeref->user_type_spec->kind),
-					typeref->user_type_spec->name);
+					user_type_kind_name(typeref->data.user_type_spec->kind),
+					typeref->data.user_type_spec->name);
 				return NULL;
 			}
 			//update the existing declaration
-			if (typeref->user_type_spec->kind == user_type_enum)
+			if (typeref->data.user_type_spec->kind == user_type_enum)
 			{
-				exist->user_type_spec->enum_members = typeref->user_type_spec->enum_members;
-				typeref->user_type_spec->enum_members = NULL;
-				_register_enum_constants(exist->user_type_spec);
+				exist->data.user_type_spec->data.enum_members = typeref->data.user_type_spec->data.enum_members;
+				typeref->data.user_type_spec->data.enum_members = NULL;
+				_register_enum_constants(exist->data.user_type_spec);
 			}
 			else
 			{
 				//update definition
-				exist->user_type_spec->struct_members = typeref->user_type_spec->struct_members;
-				typeref->user_type_spec->struct_members = NULL;
-				_resolve_struct_member_types(exist->user_type_spec);
+				exist->data.user_type_spec->data.struct_members = typeref->data.user_type_spec->data.struct_members;
+				typeref->data.user_type_spec->data.struct_members = NULL;
+				_resolve_struct_member_types(exist->data.user_type_spec);
 			}
 			exist->size = _calc_user_type_size(exist);
 			ast_destroy_type_spec(typeref);
@@ -220,16 +223,16 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	else
 	{
 		//declaration
-		ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->user_type_spec->name);
+		ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->data.user_type_spec->name);
 		if (exist)
 		{
-			if (exist->user_type_spec->kind != typeref->user_type_spec->kind)
+			if (exist->data.user_type_spec->kind != typeref->data.user_type_spec->kind)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
-					user_type_kind_name(exist->user_type_spec->kind),
-					typeref->user_type_spec->name,
-					user_type_kind_name(typeref->user_type_spec->kind));
+					user_type_kind_name(exist->data.user_type_spec->kind),
+					typeref->data.user_type_spec->name,
+					user_type_kind_name(typeref->data.user_type_spec->kind));
 				return NULL;
 			}
 			ast_destroy_type_spec(typeref);
@@ -241,7 +244,7 @@ static ast_type_spec_t* _resolve_type(ast_type_spec_t* typeref)
 	return typeref;
 }
 
-static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
+bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
 	if (!type)
 		return false;
@@ -257,7 +260,7 @@ static bool _can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 		
 
 	if (target->kind == type_ptr && type->kind == type_ptr)
-		return _can_convert_type(target->ptr_type, type->ptr_type);
+		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
 
 	return false;
 }
@@ -274,7 +277,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 			ast_declaration_name(decl));
 	}
 
-	if(!_resolve_type_ref(var->type_ref) || var->type_ref->spec->size == 0)
+	if(!sema_resolve_type_ref(var->type_ref) || var->type_ref->spec->size == 0)
 	{
 		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"var %s is of incomplete type",
@@ -283,11 +286,13 @@ bool process_variable_declaration(ast_declaration_t* decl)
 
 	if (decl->data.var.expr)
 	{
-		if (!process_expression(decl->data.var.expr))
+		expr_result_t result = sema_process_expression(decl->data.var.expr);
+		if (result.failure)
 			return false;
-		ast_type_spec_t* init_type = _resolve_expr_type(decl->data.var.expr);
 
-		if (!_can_convert_type(var->type_ref->spec, init_type))
+		ast_type_spec_t* init_type = result.result_type;
+
+		if (!sema_can_convert_type(var->type_ref->spec, init_type))
 		{
 			return _report_err(decl->data.var.expr->tokens.start,
 				ERR_INCOMPATIBLE_TYPE,
@@ -313,455 +318,12 @@ bool process_declaration(ast_declaration_t* decl)
 	case decl_func:
 		return process_function_decl(decl) != proc_decl_error;
 	case decl_type:
-		return _resolve_type(decl->data.type);		
+		return sema_resolve_type(decl->data.type);		
 	}
 	return true;
 }
 
-bool process_variable_reference(ast_expression_t* expr)
-{
-	if (!expr)
-		return true;
 
-	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
-	if (decl)
-	{
-		if(decl->data.var.type_ref->spec->size == 0)
-		{
-			return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-				"var %s is of incomplete type",
-				ast_declaration_name(decl));
-		}
-		return true;
-	}
-
-	//enum value?
-	decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_const);
-	if (decl)
-	{
-		expr->kind = expr_int_literal;
-		expr->data.int_literal = decl->data.const_val.expr->data.int_literal;
-		return process_expression(expr);
-	}
-
-	return _report_err(expr->tokens.start, ERR_UNKNOWN_VAR,
-		"unknown var %s",
-		expr->data.var_reference.name);
-}
-
-static ast_type_spec_t* _resolve_expr_type(ast_expression_t* expr)
-{
-	if (!expr)
-		return NULL;
-
-	switch (expr->kind)
-	{
-	case expr_postfix_op:
-	case expr_unary_op:
-	{
-		ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.unary_op.expression);
-
-		if (expr->data.unary_op.operation == op_address_of)
-		{
-			ast_type_spec_t* ptr_type = ast_make_ptr_type(expr_type);
-			return _resolve_type(ptr_type);
-		}
-		else if (expr->data.unary_op.operation == op_dereference)
-		{
-			assert(expr_type->kind == type_ptr);
-			return expr_type->ptr_type;
-		}
-		else if (expr->data.unary_op.operation == op_negate)
-		{
-			switch (expr_type->kind)
-			{
-			case type_int8:
-				return uint8_type_spec;
-			case type_uint8:
-				return int8_type_spec;
-			case type_int16:
-				return uint16_type_spec;
-			case type_uint16:
-				return int16_type_spec; 
-			case type_int32:
-				return uint32_type_spec;
-			case type_uint32:
-				return int32_type_spec;
-			case type_int64:
-				return uint64_type_spec;
-			case type_uint64:
-				return int64_type_spec;
-			}
-			
-			if (!ast_type_is_int(expr_type))
-			{
-				_report_err(expr->tokens.start, ERR_SYNTAX,
-					"negation applied to non integer expression of type %s",
-					ast_type_name(expr_type));
-				return NULL;
-			}
-		}
-		return expr_type;
-	}
-	case expr_binary_op:
-	{
-		if (expr->data.binary_op.operation == op_member_access)
-		{
-			// a.b (lhs.rhs)
-			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-			assert(user_type_spec);
-			ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
-			assert(member);
-			return member->type_ref->spec;
-		}
-
-		if (expr->data.binary_op.operation == op_ptr_member_access)
-		{
-			// a->b (lhs.rhs)
-			ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-			assert(user_type_spec);
-			ast_struct_member_t* member = ast_find_struct_member(user_type_spec->ptr_type->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
-			assert(member);
-			return member->type_ref->spec;
-		}
-		if (expr->data.unary_op.operation == op_array_subscript)
-		{
-			//lhs = array
-			//rhs = subscript
-			ast_type_spec_t* array_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-			assert(array_type_spec);
-			assert(array_type_spec->kind == type_ptr);
-			return array_type_spec->ptr_type;
-		}
-
-		
-		ast_type_spec_t* l = _resolve_expr_type(expr->data.binary_op.lhs);
-		ast_type_spec_t* r = _resolve_expr_type(expr->data.binary_op.rhs);
-		if (l == r)
-			return r;
-
-		//can r be promoted to l?
-		if (_can_convert_type(l, r))
-			return l;
-
-		//can l be promoted to r?
-		if (_can_convert_type(r, l))
-			return r;
-		
-
-		//if (!process_expression(expr->data.binary_op.lhs))
-		//	return false;
-		//return process_expression(expr->data.binary_op.rhs);
-		break;
-	}
-	case expr_int_literal:
-		assert(expr->data.int_literal.type);
-		return expr->data.int_literal.type;
-	case expr_str_literal:
-		return ast_make_ptr_type(int8_type_spec);
-	case expr_assign:
-		return _resolve_expr_type(expr->data.assignment.target);
-	case expr_identifier:
-	{
-		ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_var);
-		if (decl)
-			return decl->data.var.type_ref->spec;
-		return NULL;
-	}
-	
-	case expr_condition:
-		//if (!process_expression(expr->data.condition.cond))
-		//	return false;
-		//if (!process_expression(expr->data.condition.true_branch))
-		//	return false;
-		//return process_expression(expr->data.condition.false_branch);
-		return uint32_type_spec;
-		break;
-	case expr_func_call:
-	{
-		ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.var_reference.name, decl_func);
-		if (decl)
-			return decl->data.func.return_type_ref->spec;
-		return NULL;
-	}
-	case expr_sizeof:
-		return uint32_type_spec;
-
-	case expr_null:
-		return void_type_spec;
-		break;
-	}
-	return NULL;
-}
-
-bool process_func_call(ast_expression_t* expr)
-{	
-	if (!expr)
-		return true;
-
-	ast_declaration_t* decl = idm_find_decl(_id_map, expr->data.func_call.name, decl_func);
-	if (!decl)
-	{
-		return _report_err(expr->tokens.start, ERR_UNKNOWN_FUNC, 
-			"function '%s' not defined", 
-			expr->data.func_call.name);
-	}
-
-	if (expr->data.func_call.param_count != decl->data.func.param_count)
-	{
-		return _report_err(expr->tokens.start, ERR_INVALID_PARAMS,
-			"incorrect number of params in call to function '%s'. Expected %d",
-			expr->data.func_call.name, decl->data.func.param_count);
-	}
-
-	/*
-	Compare param types
-	*/
-
-	ast_expression_t* call_param = expr->data.func_call.params;
-	ast_func_param_decl_t* func_param = decl->data.func.last_param;
-
-	int p_count = 1;
-	while (call_param && func_param)
-	{
-		if (!process_expression(call_param))
-			return false;
-
-		if (!_can_convert_type(func_param->decl->data.var.type_ref->spec, _resolve_expr_type(call_param)))
-		{
-			return _report_err(expr->tokens.start,ERR_INVALID_PARAMS,
-				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type_ref->spec));
-		}
-
-		call_param = call_param->next;
- 		func_param = func_param->prev;
-		p_count++;
-	}
-	expr->data.func_call.func_decl = decl;
-	return true;
-}
-
-bool process_array_subscript_expression(ast_expression_t* expr)
-{
-	if (!process_expression(expr->data.binary_op.lhs))
-		return false;
-
-	ast_type_spec_t* type = _resolve_expr_type(expr->data.binary_op.lhs);
-	if (type->kind != type_ptr)
-	{
-		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-			"'[]' must be applied to a pointer type");
-	}
-
-	if (!process_expression(expr->data.binary_op.rhs))
-		return false;
-
-	ast_type_spec_t* idx_type = _resolve_expr_type(expr->data.binary_op.rhs);
-	if (!_can_convert_type(int32_type_spec, idx_type))
-	{
-		return _report_err(expr->data.binary_op.rhs->tokens.start, ERR_INCOMPATIBLE_TYPE,
-			"'[]' subscript must be an integer");
-	}
-
-	return true;
-}
-
-bool process_member_access_expression(ast_expression_t* expr)
-{
-	// a.b (lhs.rhs)
-	if (!process_expression(expr->data.binary_op.lhs))
-		return false;
-
-	ast_type_spec_t* user_type_spec = _resolve_expr_type(expr->data.binary_op.lhs);
-
-	if (expr->data.binary_op.operation == op_ptr_member_access)
-	{
-		if (user_type_spec->kind != type_ptr)
-		{
-			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-				"'->' must be applied to a pointer type");
-		}
-		user_type_spec = user_type_spec->ptr_type;
-	}
-	else
-	{
-		if (user_type_spec->kind == type_ptr)
-		{
-			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-				"'.' cannot be applied to a pointer type");
-		}
-	}
-	
-	if (user_type_spec->kind != type_user)
-	{
-		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-			"'->' or '.' can only be applied to user defined types");
-	}
-
-	if (expr->data.binary_op.rhs->kind != expr_identifier)
-	{
-		return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-			"operand of '->' or '.' must be an identifier");
-	}
-
-	ast_struct_member_t* member = ast_find_struct_member(user_type_spec->user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
-	if (member == NULL)
-	{
-		return _report_err(expr->tokens.start, ERR_UNKNOWN_MEMBER_REF,
-			"%s is not a member of %s",
-			expr->data.binary_op.rhs->data.var_reference.name,
-			ast_type_name(user_type_spec));
-	}
-	
-	return true;
-}
-
-bool process_assignment_expression(ast_expression_t* expr)
-{
-	if (!process_expression(expr->data.assignment.expr) || !process_expression(expr->data.assignment.target))
-		return false;
-
-	ast_type_spec_t* target_type = _resolve_expr_type(expr->data.assignment.target);
-
-	if (!target_type)
-	{
-		return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
-			"cannot determine assignment target type");
-	}
-
-	if (expr->data.assignment.expr->kind == expr_int_literal)
-	{
-		if (!int_val_will_fit(&expr->data.assignment.expr->data.int_literal.val, target_type))
-		{
-			return _report_err(expr->data.assignment.expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_type));
-		}
-	}
-	else
-	{
-		ast_type_spec_t* expr_type = _resolve_expr_type(expr->data.assignment.expr);
-
-		if (!expr_type)
-		{
-			return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
-				"cannot determine assignment type");
-		}
-
-		if (!_can_convert_type(target_type, expr_type))
-		{
-			return _report_err(expr->tokens.start, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_type));
-		}
-	}
-
-	return true;
-}
-
-bool process_sizeof_expr(ast_expression_t* expr)
-{
-	ast_type_spec_t* type;
-	
-	if (expr->data.sizeof_call.kind == sizeof_type)
-		type = _resolve_type(expr->data.sizeof_call.type);
-	else
-		type = _resolve_expr_type(expr->data.sizeof_call.expr);
-
-	if (!type || type->size == 0)
-	{
-		return _report_err(expr->tokens.start, ERR_UNKNOWN_TYPE,
-			"could not determin type for sizeof call");
-	}
-
-	//change expression to represent a constant int and re-process
-	expr->kind = expr_int_literal;
-	expr->data.int_literal.val = int_val_unsigned(type->size);
-	return process_expression(expr);
-}
-
-bool process_str_literal(ast_expression_t* expr)
-{
-	expr->data.str_literal.label = idm_add_string_literal(_id_map, expr->data.str_literal.value);
-	return true;
-}
-
-bool process_int_literal(ast_expression_t* expr)
-{
-	expr->data.int_literal.type = int_val_smallest_size(&expr->data.int_literal.val);
-	return expr->data.int_literal.type != NULL;
-}
-
-bool process_unary_op_expression(ast_expression_t* expr)
-{
-	//todo
-	return process_expression(expr->data.unary_op.expression);
-}
-
-bool process_binary_op_expression(ast_expression_t* expr)
-{
-	if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
-		return process_member_access_expression(expr);
-	if (expr->data.binary_op.operation == op_array_subscript)
-		return process_array_subscript_expression(expr);
-
-	if (!process_expression(expr->data.binary_op.lhs))
-		return false;
-	return process_expression(expr->data.binary_op.rhs);
-}
-
-bool process_cond_expression(ast_expression_t* expr)
-{
-	if (!process_expression(expr->data.condition.cond))
-		return false;
-	if (!process_expression(expr->data.condition.true_branch))
-		return false;
-	return process_expression(expr->data.condition.false_branch);
-}
-
-bool process_expression(ast_expression_t* expr)
-{
-	if (!expr || expr->kind == expr_null)
-		return true;
-
-	if (sema_is_int_constant_expression(expr) && expr->kind != expr_int_literal)
-	{
-		//we can eval
-		int_val_t val = sema_eval_constant_expr(expr);
-		ast_destroy_expression_data(expr);
-		memset(expr, 0, sizeof(ast_expression_t));
-		expr->kind = expr_int_literal;
-		expr->data.int_literal.val = val;
-	}
-
-	switch (expr->kind)
-	{
-		case expr_postfix_op:
-		case expr_unary_op:
-			return process_unary_op_expression(expr);
-		case expr_binary_op:
-			return process_binary_op_expression(expr);
-		case expr_int_literal:
-			return process_int_literal(expr);
-		case expr_str_literal:
-			return process_str_literal(expr);
-		case expr_assign:
-			return process_assignment_expression(expr);
-		case expr_identifier:
-			return process_variable_reference(expr);
-		case expr_condition:
-			return process_cond_expression(expr);
-		case expr_func_call:
-			return process_func_call(expr);
-		case expr_sizeof:			
-			return process_sizeof_expr(expr);
-		case expr_null:
-			break;
-	}
-
-	return true;
-}
 
 bool process_block_item(ast_block_item_t* block)
 {
@@ -770,11 +332,11 @@ bool process_block_item(ast_block_item_t* block)
 
 	if (block->kind == blk_smnt)
 	{
-		return process_statement(block->smnt);
+		return process_statement(block->data.smnt);
 	}
 	else if (block->kind == blk_decl)
 	{
-		return process_declaration(block->decl);
+		return process_declaration(block->data.decl);
 	}	
 	return false;
 }
@@ -873,12 +435,13 @@ bool process_return_statement(ast_statement_t* smnt)
 {
 	assert(_cur_func_ctx.decl);
 
-	if (!process_expression(smnt->data.expr))
+	expr_result_t result = sema_process_expression(smnt->data.expr);
+	if (result.failure)
 		return false;
-
+	
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!_can_convert_type(_cur_func_ctx.decl->return_type_ref->spec, _resolve_expr_type(smnt->data.expr)))
+		if (!sema_can_convert_type(_cur_func_ctx.decl->return_type_ref->spec, result.result_type))
 		{
 			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
@@ -926,10 +489,12 @@ bool process_statement(ast_statement_t* smnt)
 			return false;
 		break;
 	case smnt_compound:
+	{
 		idm_enter_block(_id_map);
 		bool ret = process_block_list(smnt->data.compound.blocks);
 		idm_leave_block(_id_map);
-		break;
+		return ret;
+	}
 	case smnt_return:
 		return process_return_statement(smnt);
 	case smnt_switch:
@@ -991,7 +556,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	ast_function_decl_t* func = &decl->data.func;
 
 	//return type
-	if (!_resolve_type_ref(func->return_type_ref))
+	if (!sema_resolve_type_ref(func->return_type_ref))
 		return false;
 	
 	ast_type_spec_t* ret_type = func->return_type_ref->spec;
@@ -1002,7 +567,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	{
 		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"function '%s' returns incomplete type '%s'",
-			func->name, ret_type->user_type_spec->name);
+			func->name, ret_type->data.user_type_spec->name);
 	}
 	
 	//parameter types
@@ -1016,7 +581,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 				param->decl->data.var.name);
 		}
 
-		if (!_resolve_type_ref(param->decl->data.var.type_ref))
+		if (!sema_resolve_type_ref(param->decl->data.var.type_ref))
 			return false;
 
 		ast_type_spec_t* param_type = param->decl->data.var.type_ref->spec;
@@ -1027,7 +592,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		{
 			return _report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
 				"function param '%s' returns incomplete type '%s'",
-				param->decl->data.var.name, param_type->user_type_spec->name);
+				param->decl->data.var.name, param_type->data.user_type_spec->name);
 		}
 		
 		param = param->next;
@@ -1057,7 +622,7 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 	int p_count = 1;
 	while (p_exist && p_func)
 	{
-		if (p_exist->decl->data.var.type_ref->spec != _resolve_type(p_func->decl->data.var.type_ref->spec))
+		if (p_exist->decl->data.var.type_ref->spec != sema_resolve_type(p_func->decl->data.var.type_ref->spec))
 		{
 			return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
@@ -1159,7 +724,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		return proc_decl_error;
 	}
 
-	if (!_resolve_type_ref(decl->data.var.type_ref))
+	if (!sema_resolve_type_ref(decl->data.var.type_ref))
 	{		
 		return proc_decl_error;
 	}
@@ -1321,7 +886,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 		}
 		else if (decl->kind == decl_type)
 		{
-			ast_type_spec_t* type = _resolve_type(decl->data.type);
+			ast_type_spec_t* type = sema_resolve_type(decl->data.type);
 
 			if (!ht_contains(types, type))
 			{

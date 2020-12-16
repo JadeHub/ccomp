@@ -44,7 +44,7 @@ eg x = 5
 typedef struct
 {
 	//todo - remove name?
-	char name[MAX_LITERAL_NAME];
+	//char name[MAX_LITERAL_NAME];
 	struct ast_expression* target;
 	struct ast_expression* expr;
 }ast_expr_assign_t;
@@ -89,7 +89,7 @@ typedef struct
 	{
 		struct ast_expression* expr;
 		struct ast_type_spec* type;
-	};
+	}data;
 }ast_sizeof_call_t;
 
 typedef struct
@@ -211,7 +211,7 @@ typedef struct ast_user_type_spec
 	{
 		ast_struct_member_t* struct_members;
 		ast_enum_member_t* enum_members;
-	};
+	}data;
 }ast_user_type_spec_t;
 
 typedef struct ast_type_spec
@@ -227,7 +227,7 @@ typedef struct ast_type_spec
 		type pointed to if kind is type_ptr or type_array
 		*/
 		struct ast_type_spec* ptr_type;
-	};
+	}data;
 
 }ast_type_spec_t;
 
@@ -417,7 +417,7 @@ typedef struct ast_block_item
 	{
 		ast_statement_t* smnt;
 		ast_declaration_t* decl;
-	};
+	}data;
 	struct ast_block_item* next;
 }ast_block_item_t;
 

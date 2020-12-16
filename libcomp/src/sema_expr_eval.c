@@ -10,6 +10,7 @@ bool sema_is_int_constant_expression(ast_expression_t* expr)
 	case expr_assign:
 	case expr_postfix_op:	
 	case expr_str_literal:
+	case expr_null:
 		return false;
 	case expr_unary_op:
 		switch (expr->data.unary_op.operation)
@@ -34,7 +35,7 @@ bool sema_is_int_constant_expression(ast_expression_t* expr)
 		return sema_is_int_constant_expression(expr->data.binary_op.lhs) && sema_is_int_constant_expression(expr->data.binary_op.rhs);
 	case expr_int_literal:	
 	case expr_sizeof:
-	case expr_null:
+	
 		break;
 	}
 	return true;

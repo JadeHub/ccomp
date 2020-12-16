@@ -25,14 +25,14 @@ public:
 	{
 		int_val_t result = Eval(expr);
 		EXPECT_EQ(false, result.is_signed);
-		EXPECT_EQ(val, result.uint64);
+		EXPECT_EQ(val, result.v.uint64);
 	}
 
 	void EvalExpectSigned(int64_t val, const std::string& expr)
 	{
 		int_val_t result = Eval(expr);
 		EXPECT_EQ(true, result.is_signed);
-		EXPECT_EQ(val, result.int64);
+		EXPECT_EQ(val, result.v.int64);
 	}
 };
 
@@ -135,6 +135,6 @@ TEST_F(ConstExprEvalTest, OrFalse)
 
 TEST_F(ConstExprEvalTest, Tilda)
 {
-	EvalExpectUnsigned(~(1 + 1), "~(1 + 1)");
+	EvalExpectSigned(~(1 + 1), "~(1 + 1)");
 }
 

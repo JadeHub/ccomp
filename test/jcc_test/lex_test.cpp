@@ -17,23 +17,21 @@ line 4;
 	*/
 
 	Lex(code);
-	EXPECT_EQ(1, src_file_position(GetToken(0)->loc).line);
-	EXPECT_EQ(1, src_file_position(GetToken(1)->loc).line);
-	EXPECT_EQ(1, src_file_position(GetToken(2)->loc).line);
+	EXPECT_EQ(1U, src_file_position(GetToken(0)->loc).line);
+	EXPECT_EQ(1U, src_file_position(GetToken(1)->loc).line);
+	EXPECT_EQ(1U, src_file_position(GetToken(2)->loc).line);
 
-	EXPECT_EQ(2, src_file_position(GetToken(3)->loc).line);
-	EXPECT_EQ(2, src_file_position(GetToken(4)->loc).line);
-	EXPECT_EQ(2, src_file_position(GetToken(5)->loc).line);
+	EXPECT_EQ(2U, src_file_position(GetToken(3)->loc).line);
+	EXPECT_EQ(2U, src_file_position(GetToken(4)->loc).line);
+	EXPECT_EQ(2U, src_file_position(GetToken(5)->loc).line);
 
-	EXPECT_EQ(3, src_file_position(GetToken(6)->loc).line);
-	EXPECT_EQ(3, src_file_position(GetToken(7)->loc).line);
-	EXPECT_EQ(3, src_file_position(GetToken(8)->loc).line);
+	EXPECT_EQ(3U, src_file_position(GetToken(6)->loc).line);
+	EXPECT_EQ(3U, src_file_position(GetToken(7)->loc).line);
+	EXPECT_EQ(3U, src_file_position(GetToken(8)->loc).line);
 
-	EXPECT_EQ(4, src_file_position(GetToken(9)->loc).line);
-	EXPECT_EQ(4, src_file_position(GetToken(10)->loc).line);
-	EXPECT_EQ(4, src_file_position(GetToken(11)->loc).line);
-
-	
+	EXPECT_EQ(4U, src_file_position(GetToken(9)->loc).line);
+	EXPECT_EQ(4U, src_file_position(GetToken(10)->loc).line);
+	EXPECT_EQ(4U, src_file_position(GetToken(11)->loc).line);
 }
 
 TEST_F(LexerTest, foo)

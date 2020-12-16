@@ -143,18 +143,13 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 		return NULL;
 	}
 	
-	//vars->bsp_offset -= var_decl->type->size;
 	var = _make_stack_var(vars->bsp_offset - var_decl->type_ref->spec->size, var_decl->name);
 	var->kind = var_stack;
 	var->data.decl = var_decl;
 
-	int t = (var_decl->type_ref->spec->size + 0x01) & ~0x01;
+	
 	vars->bsp_offset -= (var_decl->type_ref->spec->size + 0x01) & ~0x01;
 	
-	/*if (var_decl->type->size < 4)
-	{
-		vars->bsp_offset -= (4 - var_decl->type->size);
-	}*/
 	
 	// add to start of list
 	var->next = vars->vars;
@@ -194,6 +189,7 @@ var_data_t* var_find(var_set_t* vars, const char* name)
 
 token_t* var_get_tok(var_data_t* var)
 {
+	var;
 	return NULL;
 	/*assert(var->kind != var_block_mark);
 	

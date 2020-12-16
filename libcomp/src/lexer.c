@@ -194,7 +194,7 @@ static uint8_t _lex_escaped_char(source_range_t* sr, token_t* tok, const char* p
 			diag_err(tok, ERR_SYNTAX, "Hex/Octal literal too large %d", i);
 			goto esc_err_ret;
 		}
-		return i;
+		return (uint8_t)i;
 	}
 
 	switch (*pos)

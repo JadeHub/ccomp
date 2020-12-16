@@ -154,6 +154,7 @@ ht_iterator_t ht_begin(hash_table_t* ht)
 
 bool ht_end(hash_table_t* ht, ht_iterator_t* it)
 {
+	ht;
 	return it->node == NULL;
 }
 
@@ -218,6 +219,7 @@ static bool _sht_comp(void* lhs, void* rhs)
 
 static void _sht_destroy_item(void* key, void* val)
 {
+	val;
 	free(key);
 }
 
@@ -228,7 +230,7 @@ hash_table_t* sht_create(uint32_t sz)
 
 void sht_insert(hash_table_t* ht, const char* key, void* val)
 {
-	char* keydup = strdup(key);
+	char* keydup = _strdup(key);
 	ht_insert(ht, keydup, val);
 }
 
@@ -291,6 +293,7 @@ static bool _phs_comp(void* lhs, void* rhs)
 
 static void _phs_destroy_item(void* key, void* val)
 {
+	key = val = 0;
 }
 
 hash_table_t* phs_create(uint32_t sz)

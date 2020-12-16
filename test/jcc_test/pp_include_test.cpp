@@ -126,12 +126,12 @@ TEST_F(PreProcIncludeTest, include_define1)
 {
 	ExpectFileLoad("stdio.h", stdio_code);
 
-	const std::string inc_code = R"(
+	const std::string inc_code1 = R"(
 #define STDIO_H "stdio.h"
 #include STDIO_H
 void main() {})";
 
-	PreProc(inc_code.c_str());
+	PreProc(inc_code1.c_str());
 	ExpectCode(expected_code);
 }
 
@@ -139,12 +139,12 @@ TEST_F(PreProcIncludeTest, include_define2)
 {
 	ExpectFileLoad("stdio.h", stdio_code);
 
-	const std::string inc_code = R"(
+	const std::string inc_code1 = R"(
 #define STDIO_H <stdio.h>
 #include STDIO_H
 void main() {})";
 
-	PreProc(inc_code.c_str());
+	PreProc(inc_code1.c_str());
 	ExpectCode(expected_code);
 }
 

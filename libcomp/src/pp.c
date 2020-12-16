@@ -397,6 +397,7 @@ static token_t* _is_standard_macro(token_t* tok)
 
 static bool _process_undef(token_t* tok)
 {
+	tok;
 	token_t* identifier = _pop_next();
 
 	if (!_expect_kind(identifier, tok_identifier))
@@ -423,7 +424,6 @@ static bool _process_fn_params(macro_t* macro)
 
 	//Process parameters
 	tok = _pop_next();
-	token_t* last_param = NULL;
 
 	token_range_t param = { NULL, NULL };
 
@@ -460,6 +460,7 @@ static bool _process_fn_params(macro_t* macro)
 
 static bool _process_define(token_t* def)
 {
+	def;
 	token_t* identifier = _pop_next();
 
 	//must be a token
@@ -929,7 +930,6 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 	tok = _pop_next();
 
 	hash_table_t* params = sht_create(8);
-	token_t* result = NULL;
 
 	//process the parameters and build a table of param name to token range
 	token_t* param = macro->fn_params;
@@ -1009,8 +1009,6 @@ static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 		return false;
 
 	return !ht_contains(macro->hidden_toks, (void*)identifier->id);
-
-	return true;
 }
 
 static bool _process_arg_substitution(token_t* identifier, token_range_t* param)
@@ -1143,8 +1141,6 @@ static bool _process_hashhash(token_t* first)
 {
 	if (!_expect_kind(_pop_next(), tok_hashhash))
 		return false;
-
-	uint8_t flags = first->flags;
 
 	token_t* second = _pop_next();
 

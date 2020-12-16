@@ -14,7 +14,7 @@ SET(CMAKE_CXX_FLAGS${MODE} "${TMP}" CACHE STRING "" FORCE)
 MESSAGE(STATUS "CXX_${MODE}=${CMAKE_CXX_FLAGS${MODE}}")
 ENDFOREACH (MODE)
 
-add_compile_options(/wd4996) # code may be unsafe - sprintf etc
+add_definitions("/D_CRT_SECURE_NO_WARNINGS /W4")
 
 
 ENDIF (WIN32)

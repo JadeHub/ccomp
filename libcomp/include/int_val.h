@@ -17,7 +17,7 @@ typedef struct
 	{
 		int64_t	int64;
 		uint64_t uint64;
-	};
+	}v;
 
 	bool is_signed;
 }int_val_t;

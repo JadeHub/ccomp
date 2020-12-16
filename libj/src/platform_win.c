@@ -4,7 +4,18 @@
 
 #ifdef PLATFORM_WIN
 
+#pragma warning (push)
+
+//warning C4668: '_WIN32_WINNT_WIN10_RS4' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif'
+#pragma warning (disable : 4668)
+//warning C4255: 'EnableMouseInPointerForThread': no function prototype given: converting '()' to '(void)'
+#pragma warning (disable : 4255)
+
 #include <windows.h>
+
+#pragma warning (pop)
+
+
 #include <fileapi.h>
 
 char* path_resolve(const char* path)

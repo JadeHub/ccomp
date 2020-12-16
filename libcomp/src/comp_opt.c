@@ -29,7 +29,7 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 				{
 					if (++idx == argc)
 						goto _err_ret;
-					result.output_path = strdup(argv[idx]);
+					result.output_path = _strdup(argv[idx]);
 					break;
 				}
 				pos++;
@@ -40,7 +40,7 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 			//input file
 			if (result.input_path)
 				goto _err_ret;
-			result.input_path = strdup(argv[idx]);
+			result.input_path = _strdup(argv[idx]);
 		}
 		idx++;
 	}

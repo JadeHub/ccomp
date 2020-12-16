@@ -6,7 +6,7 @@
 
 ast_type_spec_t* int_val_smallest_size(int_val_t* val)
 {
-	if (val->is_signed && val->int64 < 0)
+	if (val->is_signed && val->v.int64 < 0)
 	{
 		if (int_val_will_fit(val, int8_type_spec))
 			return int8_type_spec;
@@ -81,9 +81,9 @@ bool int_val_will_fit(int_val_t* val, ast_type_spec_t* type)
 
 	if (val->is_signed)
 	{
-		return val->int64 >= ast_int_type_min(type) && val->int64 <= (int64_t)ast_int_type_max(type);
+		return val->v.int64 >= ast_int_type_min(type) && val->v.int64 <= (int64_t)ast_int_type_max(type);
 	}
-	return val->uint64 <= ast_int_type_max(type);
+	return val->v.uint64 <= ast_int_type_max(type);
 
 	
 }

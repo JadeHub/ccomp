@@ -69,7 +69,7 @@ ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name)
 		if (!tag->spec) //indicates the end of the current scope block
 			break;
 
-		if (strcmp(name, tag->spec->user_type_spec->name) == 0)
+		if (strcmp(name, tag->spec->data.user_type_spec->name) == 0)
 		{
 			return tag->spec;
 		}
@@ -85,7 +85,7 @@ ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name)
 	while (tag)
 	{
 		if (tag->spec &&
-			strcmp(name, tag->spec->user_type_spec->name) == 0)
+			strcmp(name, tag->spec->data.user_type_spec->name) == 0)
 		{
 			return tag->spec;
 		}

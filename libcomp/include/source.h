@@ -12,7 +12,7 @@ typedef struct
 
 typedef struct
 {
-    uint16_t line;
+    uint32_t line;
     uint16_t col;
 }file_pos_t;
 

@@ -200,6 +200,7 @@ source_file_t* _load_file(const char* dir, const char* fn)
 
 source_range_t* src_load_header(const char* fn, include_kind kind)
 {
+	kind;
 	assert(_src_dir);
 	
 	source_file_t* file = _load_file(_src_dir, fn);

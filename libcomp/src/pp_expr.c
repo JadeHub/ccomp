@@ -43,7 +43,7 @@ static uint32_t _op_precedence(tok_kind kind)
 	case tok_r_paren:              return 0;// Lowest priority, end of expr.
 	case tok_eof:                  return 0;// Lowest priority, end of directive.
 	}
-	return ~0;
+	return ~0U;
 }
 
 static inline bool _expect_kind(token_t* tok, tok_kind kind)
@@ -254,7 +254,8 @@ static token_t* _eval_value(token_t* tok, const_expr_result_t* result, pp_contex
 			return tok->next;
 
 		//otherwise we have something like (X+Y) and result contains the eval of X
-		if (!(tok = _eval_sub_expr(tok, result, 1, pp))) return NULL;
+		tok = _eval_sub_expr(tok, result, 1, pp);
+		if (!tok) return NULL;
 
 		if (!_expect_kind(tok, tok_r_paren)) return NULL;
 

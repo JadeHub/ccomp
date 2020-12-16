@@ -15,12 +15,14 @@
 
 void asm_print(const char* line, void* data)
 {
+    data;
     if(line[0] != '\n' && line[0] != '#')
         printf("%s\n", line);
 }
 
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 {
+    data;
     fprintf(stderr, "%s(%s): Err %d: %s\n",
         src_file_path(tok->loc),
         diag_pos_str(tok),
@@ -28,8 +30,9 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
     exit(1); 
 }
 
-source_range_t _file_loader(const char* dir, const char* file, void* d)
+source_range_t _file_loader(const char* dir, const char* file, void* data)
 {
+    data;
     char* path = path_combine(dir, file);
 
  //   printf("opening %s dir %s file %s\n", path, dir, file);
