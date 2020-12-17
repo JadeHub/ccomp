@@ -24,14 +24,12 @@ public:
 	void EvalExpectUnsigned(uint64_t val, const std::string& expr)
 	{
 		int_val_t result = Eval(expr);
-		EXPECT_EQ(false, result.is_signed);
 		EXPECT_EQ(val, result.v.uint64);
 	}
 
 	void EvalExpectSigned(int64_t val, const std::string& expr)
 	{
 		int_val_t result = Eval(expr);
-		EXPECT_EQ(true, result.is_signed);
 		EXPECT_EQ(val, result.v.int64);
 	}
 };
