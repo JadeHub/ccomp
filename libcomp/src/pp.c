@@ -85,6 +85,7 @@ static token_t* _pop_next()
 			ir->macro_expansion->complete = true;
 
 		_context->input_stack = ir->next;
+		free(ir->tokens);
 		free(ir);
 		ir = _context->input_stack;
 	}
@@ -117,8 +118,8 @@ static input_range_t* _begin_token_range_expansion(token_range_t* range)
 {
 	input_range_t* ir = (input_range_t*)malloc(sizeof(input_range_t));
 	memset(ir, 0, sizeof(input_range_t));
-	ir->tokens = range;
-	ir->current = range->start;
+	ir->tokens = tok_range_dup(range);
+	ir->current = ir->tokens->start;
 	ir->next = _context->input_stack;
 
 	ir->path = src_file_path(range->start->loc);

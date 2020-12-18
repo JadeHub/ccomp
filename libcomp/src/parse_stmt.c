@@ -185,7 +185,7 @@ ast_statement_t* parse_return_statement()
 ast_statement_t* parse_for_statement()
 {
 	ast_statement_t* result = _alloc_smnt();
-	result->kind = smnt_for;
+	result->kind = smnt_for_decl;
 	ast_for_smnt_data_t* data = &result->data.for_smnt;
 
 	next_tok();
@@ -198,6 +198,7 @@ ast_statement_t* parse_for_statement()
 	data->init_decl = try_parse_declaration();
 	if (!data->init_decl)
 	{
+		result->kind = smnt_for;
 		data->init = parse_optional_expression(tok_semi_colon);
 		if (!data->init)
 		{

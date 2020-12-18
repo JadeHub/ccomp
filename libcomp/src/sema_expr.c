@@ -162,15 +162,18 @@ static expr_result_t _process_unary_op(ast_expression_t* expr)
 	return result;
 }
 
-static expr_result_t _process_int_literal(ast_expression_t* expr)
+expr_result_t sema_process_int_literal(ast_expression_t* expr)
 {
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
 	ast_type_spec_t* type = int_val_smallest_size(&expr->data.int_literal.val);
-
+		
 	if (type)
 	{
+		expr->data.int_literal.val.is_signed = ast_type_is_signed_int(type);
+
+
 		result.result_type = type;
 		expr->data.int_literal.type = type;
 	}
@@ -244,12 +247,12 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	}
 
 	//enum value?
-	decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name, decl_const);
-	if (decl)
+	int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.var_reference.name);
+	if (enum_val)
 	{
 		ast_destroy_expression_data(expr);
 		expr->kind = expr_int_literal;
-		expr->data.int_literal = decl->data.const_val.expr->data.int_literal;
+		expr->data.int_literal.val = *enum_val;
 		return sema_process_expression(expr);
 	}
 
@@ -401,7 +404,7 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	case expr_binary_op:
 		return _process_binary_op(expr);
 	case expr_int_literal:
-		return _process_int_literal(expr);
+		return sema_process_int_literal(expr);
 	case expr_str_literal:
 		return _process_str_literal(expr);
 	case expr_assign:

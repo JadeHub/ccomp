@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include "int_val.h"
 
 #include <libj/include/hash_table.h>
 
@@ -12,9 +13,27 @@ local variables
 glocal variables
 */
 
+typedef enum
+{
+	id_decl,
+	id_const,
+	id_marker
+}id_kind;
+
+typedef struct
+{
+	const char* name;
+	int_val_t val;
+}enum_val_t;
+
 typedef struct identifier
 {
-	ast_declaration_t* decl;
+	id_kind kind;
+	union
+	{
+		ast_declaration_t* decl;
+		enum_val_t enum_val;
+	}data;
 	struct identifier* next;
 }identifier_t;
 
@@ -44,11 +63,12 @@ void idm_destroy(identfier_map_t*);
 
 void idm_add_id(identfier_map_t* map, ast_declaration_t* decl);
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* typeref);
+void idm_add_enum_val(identfier_map_t* map, const char* name, int_val_t val);
 
 ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl);
 ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
 ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
-
+int_val_t* idm_find_enum_val(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name);
 

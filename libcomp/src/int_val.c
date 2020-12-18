@@ -125,29 +125,29 @@ static int_val_t _shiftright(int_val_t* lhs, int_val_t* rhs)
 static bool _lessthan(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->v.int64 < (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
-	return lhs->v.uint64 < (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
+		return lhs->v.int64 < rhs->v.int64;
+	return lhs->v.uint64 < rhs->v.uint64;
 }
 
 static bool _lessthanequal(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->v.int64 <= (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
-	return lhs->v.uint64 <= (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
+		return lhs->v.int64 <= rhs->v.int64;
+	return lhs->v.uint64 <= rhs->v.uint64;
 }
 
 static bool _greaterthan(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->v.int64 > (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
-	return lhs->v.uint64 > (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
+		return lhs->v.int64 > rhs->v.int64;
+	return lhs->v.uint64 > rhs->v.uint64;
 }
 
 static bool _greaterthanequal(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
-		return lhs->v.int64 >= (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
-	return lhs->v.uint64 >= (rhs->is_signed ? rhs->v.int64 : rhs->v.uint64);
+		return lhs->v.int64 >= rhs->v.int64;
+	return lhs->v.uint64 >= rhs->v.uint64;
 }
 
 static int_val_t _eq(int_val_t* lhs, int_val_t* rhs)
@@ -262,7 +262,7 @@ int_val_t int_val_unary_op(int_val_t* val, op_kind op)
 		else if (val->is_signed)
 		{
 			result.v.int64 = -val->v.int64;
-			result.is_signed = false;
+			result.is_signed = true;
 		}
 		else
 		{
@@ -272,15 +272,15 @@ int_val_t int_val_unary_op(int_val_t* val, op_kind op)
 		}
 		break;
 	case op_compliment:
-		if (val->is_signed)
+	//	if (val->is_signed)
 		{
 			result.v.int64 = ~val->v.int64;
 			result.is_signed = true;
 		}
-		else
+	//	else
 		{
-			result.v.uint64 = ~val->v.uint64;
-			result.is_signed = false;
+			//result.v.uint64 = ~val->v.uint64;
+			//result.is_signed = false;
 		}
 		break;
 	case op_not:

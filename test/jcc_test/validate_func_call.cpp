@@ -2,6 +2,23 @@
 
 class FnCallValidationTest : public ValidationTest {};
 
+TEST_F(FnCallValidationTest, err_var_shaddows_fn)
+{
+	std::string code = R"(
+	void foo()
+	{
+	}
+
+	void bar()
+	{
+		int foo = 0;
+		foo();
+	}
+	)";
+
+	ExpectError(code, ERR_DUP_SYMBOL);
+}
+
 TEST_F(FnCallValidationTest, err_undefined)
 {
 	std::string code = R"(

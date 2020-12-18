@@ -153,7 +153,9 @@ TEST_F(PreProcIncludeTest, include_recursive)
 	std::string inc1 = R"(int x;)";
 	std::string inc2 = R"(#include "inc1.h"
 void fn();)";
-	std::string src = R"(#include "inc2.h")";
+	std::string src = R"(#include "inc2.h"
+int j;
+)";
 
 	ExpectFileLoad("inc1.h", inc1);
 	ExpectFileLoad("inc2.h", inc2);
@@ -161,6 +163,7 @@ void fn();)";
 	PreProc(src.c_str());
 	ExpectCode(R"(int x;
 void fn();
+int j;
 )");
 }
 

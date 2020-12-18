@@ -22,6 +22,7 @@ typedef struct
 }expr_result_t;
 
 expr_result_t sema_process_expression(ast_expression_t* expr);
+expr_result_t sema_process_int_literal(ast_expression_t* expr);
 
 identfier_map_t* sema_id_map();
 ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref);

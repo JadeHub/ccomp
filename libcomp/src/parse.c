@@ -414,7 +414,7 @@ ast_struct_member_t* parse_struct_member()
 }
 
 /*
-<enum_specifier> :: = "enum" [<id>] ["{" { <id> [= <int>] } "}"]
+<enum_specifier> :: = "enum" [<id>] ["{" { <id> [= <const_expr>] } "}"]
 */
 ast_user_type_spec_t* parse_enum_spec()
 {
@@ -432,11 +432,13 @@ ast_user_type_spec_t* parse_enum_spec()
 	if (current_is(tok_l_brace))
 	{
 		next_tok();
+
+		ast_enum_member_t* last_member = NULL;
 		
-		int_val_t next_val = int_val_zero();
 		while (true)
 		{
-			expect_cur(tok_identifier);
+			if(!expect_cur(tok_identifier))
+				goto _enum_parse_err;
 
 			ast_enum_member_t* member = (ast_enum_member_t*)malloc(sizeof(ast_enum_member_t));
 			memset(member, 0, sizeof(ast_enum_member_t));
@@ -447,22 +449,26 @@ ast_user_type_spec_t* parse_enum_spec()
 			if (current_is(tok_equal))
 			{
 				next_tok();
-				member->const_value = try_parse_literal();
-				next_val = int_val_inc(member->const_value->data.int_literal.val);
+				member->value = parse_constant_expression();
+				if (!member->value)
+				{
+					report_err(ERR_SYNTAX, "error parsing enum initialisation expression");
+					goto _enum_parse_err;
+				}
+			}
+
+			if (!last_member)
+			{
+				result->data.enum_members = member;
+				last_member = member;
 			}
 			else
 			{
-				member->const_value = _alloc_expr();
-				member->const_value->tokens.start = member->tokens.start;
-				member->const_value->tokens.end = current();
-				member->const_value->kind = expr_int_literal;				
-				member->const_value->data.int_literal.val = next_val;
-				member->const_value->data.int_literal.type = NULL;
-				next_val = int_val_inc(next_val);
+				last_member->next = member;
 			}
-
-			member->next = result->data.enum_members;
-			result->data.enum_members = member;
+			last_member = member;
+			//member->next = result->data.enum_members;
+			//result->data.enum_members = member;
 
 			member->tokens.end = current();
 
@@ -470,11 +476,15 @@ ast_user_type_spec_t* parse_enum_spec()
 				break;
 			next_tok();
 		}
-		expect_cur(tok_r_brace);
+		if(!expect_cur(tok_r_brace))
+			goto _enum_parse_err;
 		next_tok();
 	}
 	result->tokens.end = current();
 	return result;
+_enum_parse_err:
+	free(result);
+	return NULL;
 }
 
 
@@ -1280,14 +1290,6 @@ ast_expression_t* try_parse_unary_expr()
 	}
 	return try_parse_postfix_expr();
 }
-
-/*ast_expression_t* parse_unary_expr()
-{
-	ast_expression_t* expr = try_parse_unary_expr();
-	if (!expr && !_supress_expr_err)
-		report_err(ERR_SYNTAX, "failed to parse expression");
-	return expr;
-}*/
 
 static tok_kind logical_or_ops[] = { tok_pipepipe, tok_invalid };
 static tok_kind logical_and_ops[] = { tok_ampamp, tok_invalid };

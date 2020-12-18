@@ -126,3 +126,64 @@ TEST_F(EnumValidationTest, var_assign_same_name)
 	ExpectNoError(code);
 }
 
+TEST_F(EnumValidationTest, global_var_assign)
+{
+	std::string code = R"(	
+	enum foo {foo1,	foo2};
+	enum foo bar;
+
+	void fn()
+	{
+		bar = foo1;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(EnumValidationTest, return_enum)
+{
+	std::string code = R"(	
+	enum foo {foo1,	foo2};
+	
+	enum foo fn()
+	{
+		return foo1;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(EnumValidationTest, enum_member)
+{
+	std::string code = R"(	
+	enum foo {foo1,	foo2};
+	struct A { enum foo f;};
+	
+	enum foo fn()
+	{
+		struct A a;
+		a.f = foo2;
+		return a.f;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(EnumValidationTest, enum_param)
+{
+	std::string code = R"(	
+	enum foo {foo1,	foo2};
+
+	int bar(enum foo f)
+	{	
+		return f;
+	}	
+
+	)";
+
+	ExpectNoError(code);
+}
+

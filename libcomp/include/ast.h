@@ -189,7 +189,7 @@ typedef struct ast_enum_member
 {
 	token_range_t tokens;
 	char name[MAX_LITERAL_NAME]; //name is optional
-	ast_expression_t* const_value;
+	ast_expression_t* value;
 	struct ast_enum_member* next;
 }ast_enum_member_t;
 
@@ -279,20 +279,11 @@ typedef struct ast_func_decl
 
 }ast_function_decl_t;
 
-//todo - used only for enum values
-typedef struct
-{
-	char name[MAX_LITERAL_NAME];
-	ast_type_spec_t* type;
-	ast_expression_t* expr;
-}ast_const_decl_t;
-
 typedef enum
 {
 	decl_var,
 	decl_func,
-	decl_type,
-	decl_const
+	decl_type
 }ast_decl_type;
 
 typedef struct ast_declaration
@@ -305,9 +296,6 @@ typedef struct ast_declaration
 		ast_var_decl_t var;
 		ast_function_decl_t func;
 		ast_type_spec_t* type;
-
-		//todo - used only for enums
-		ast_const_decl_t const_val;
 	}data;
 
 	struct ast_declaration* next;
@@ -448,6 +436,7 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member);
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
 bool ast_type_is_signed_int(ast_type_spec_t* type);
 bool ast_type_is_int(ast_type_spec_t* type);
+bool ast_type_is_enum(ast_type_spec_t* type);
 
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);

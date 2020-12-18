@@ -5,6 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static inline bool _id_is_decl(identifier_t* id, const char* name, ast_decl_type kind)
+{
+	return (id->kind == id_decl &&
+		id->data.decl->kind == kind &&
+		strcmp(name, ast_declaration_name(id->data.decl)) == 0);
+}
+
 identfier_map_t* idm_create()
 {
 	identfier_map_t* result = (identfier_map_t*)malloc(sizeof(identfier_map_t));
@@ -40,6 +47,18 @@ const char* idm_add_string_literal(identfier_map_t* map, const char* literal)
 	return sl->label;
 }
 
+void idm_add_enum_val(identfier_map_t* map, const char* name, int_val_t val)
+{
+	identifier_t* id = (identifier_t*)malloc(sizeof(identifier_t));
+	memset(id, 0, sizeof(identifier_t));
+
+	id->kind = id_const;
+	id->data.enum_val.name = strdup(name);
+	id->data.enum_val.val = val;
+	id->next = map->identifiers;
+	map->identifiers = id;
+}
+
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* type)
 {
 	type_t* tag = (type_t*)malloc(sizeof(type_t));
@@ -55,9 +74,26 @@ void idm_add_id(identfier_map_t* map, ast_declaration_t* decl)
 	identifier_t* id = (identifier_t*)malloc(sizeof(identifier_t));
 	memset(id, 0, sizeof(identifier_t));
 
-	id->decl = decl;
+	id->kind = id_decl;
+	id->data.decl = decl;
 	id->next = map->identifiers;
 	map->identifiers = id;
+}
+
+int_val_t* idm_find_enum_val(identfier_map_t* map, const char* name)
+{
+	identifier_t* id = map->identifiers;
+
+	while (id)
+	{
+		if (id->kind == id_const &&
+			strcmp(name, id->data.enum_val.name) == 0)
+		{
+			return &id->data.enum_val.val;
+		}
+		id = id->next;
+	}
+	return NULL;
 }
 
 ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name)
@@ -100,12 +136,10 @@ ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl
 
 	while (id)
 	{
-		if (id->decl &&
-			id->decl->kind == decl->kind &&
-			strcmp(ast_declaration_name(decl), ast_declaration_name(id->decl)) == 0)
+		if(_id_is_decl(id, ast_declaration_name(decl), decl->kind))
 		{
-			id->decl = decl;
-			return id->decl;
+			id->data.decl = decl;
+			return id->data.decl;
 		}
 		id = id->next;
 	}
@@ -118,11 +152,9 @@ ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_dec
 
 	while (id)
 	{
-		if (id->decl && 
-			id->decl->kind == kind && 
-			strcmp(name, ast_declaration_name(id->decl)) == 0)
+		if (_id_is_decl(id, name, kind))
 		{
-			return id->decl;
+			return id->data.decl;
 		}
 		id = id->next;
 	}
@@ -135,13 +167,12 @@ ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, a
 
 	while (id)
 	{
-		if (!id->decl)
+		if (id->kind == id_marker)
 			break;
 
-		if (id->decl->kind == kind &&
-			strcmp(name, ast_declaration_name(id->decl)) == 0)
+		if (_id_is_decl(id, name, kind))
 		{
-			return id->decl;
+			return id->data.decl;
 		}
 		id = id->next;
 	}
@@ -172,7 +203,7 @@ void idm_enter_block(identfier_map_t* map)
 	identifier_t* id = (identifier_t*)malloc(sizeof(identifier_t));
 	memset(id, 0, sizeof(identifier_t));
 
-	id->decl = NULL;
+	id->kind = id_marker;
 	id->next = map->identifiers;
 	map->identifiers = id;
 
@@ -192,7 +223,7 @@ void idm_leave_block(identfier_map_t* map)
 	while (id)
 	{
 		identifier_t* next = id->next;
-		if (id->decl == NULL)
+		if (id->kind == id_marker)
 		{
 			map->identifiers = id->next;
 			free(id);

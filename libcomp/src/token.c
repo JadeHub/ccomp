@@ -349,6 +349,11 @@ token_t* tok_create()
 	return tok;
 }
 
+token_range_t* tok_range_dup(token_range_t* range)
+{
+	return tok_range_create(range->start, range->end);
+}
+
 token_range_t* tok_range_create(token_t* start, token_t* end)
 {
 	token_range_t* range = (token_range_t*)malloc(sizeof(token_range_t));

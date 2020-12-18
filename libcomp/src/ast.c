@@ -39,7 +39,6 @@ void ast_destroy_expression_data(ast_expression_t* expr)
 		break;
 	}
 
-	ast_destroy_expression(expr->next);
 	//don't free the expression
 	expr->kind = expr_null;
 }
@@ -87,7 +86,7 @@ void ast_destroy_struct_member(ast_struct_member_t* member)
 
 void ast_destroy_enum_member(ast_enum_member_t* member)
 {
-	ast_destroy_expression(member->const_value);
+	ast_destroy_expression(member->value);
 	free(member);
 }
 
@@ -154,8 +153,6 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 		break;
 	case decl_type:
 		ast_destroy_type_spec(decl->data.type);
-		break;
-	case decl_const:
 		break;
 	}
 	free(decl);
@@ -300,8 +297,8 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 		return decl->data.func.name;
 	case decl_type:
 		return ast_type_name(decl->data.type);
-	case decl_const:
-		return decl->data.const_val.name;
+	//case decl_const:
+	//	return decl->data.const_val.name;
 	}
 	return NULL;
 }
@@ -385,5 +382,10 @@ bool ast_type_is_int(ast_type_spec_t* spec)
 		return true;
 	}
 
-	return spec->kind == type_user && spec->data.user_type_spec->kind == user_type_enum;
+	return ast_type_is_enum(spec);
+}
+
+bool ast_type_is_enum(ast_type_spec_t* type)
+{
+	return type->kind == type_user && type->data.user_type_spec->kind == user_type_enum;
 }

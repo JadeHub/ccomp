@@ -58,6 +58,7 @@ int_val_t sema_eval_constant_expr(ast_expression_t* expr)
 	}
 
 	case expr_int_literal:
+		sema_process_int_literal(expr);
 		return expr->data.int_literal.val;
 	case expr_sizeof:
 		if (!process_sizeof_expr(expr))

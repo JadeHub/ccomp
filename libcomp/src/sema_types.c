@@ -18,12 +18,24 @@ ast_type_spec_t* int_val_smallest_size(int_val_t* val)
 			return int64_type_spec;
 		return NULL;
 	}
+
+	if (int_val_will_fit(val, int8_type_spec))
+		return int8_type_spec;
 	if (int_val_will_fit(val, uint8_type_spec))
 		return uint8_type_spec;
+
+	if (int_val_will_fit(val, int16_type_spec))
+		return int16_type_spec;
 	if (int_val_will_fit(val, uint16_type_spec))
 		return uint16_type_spec;
+
+	if (int_val_will_fit(val, int32_type_spec))
+		return int32_type_spec;
 	if (int_val_will_fit(val, uint32_type_spec))
 		return uint32_type_spec;
+
+	if (int_val_will_fit(val, int64_type_spec))
+		return int64_type_spec;
 	if (int_val_will_fit(val, uint64_type_spec))
 		return uint64_type_spec;
 	return NULL;

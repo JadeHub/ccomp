@@ -83,25 +83,32 @@ static bool process_expression(ast_expression_t* expr)
 /*
 Create asl_declaration_t objects for each item in the enum
 */
-static void _register_enum_constants(ast_user_type_spec_t* user_type_spec)
+static bool _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind == user_type_enum);
 	ast_enum_member_t* member = user_type_spec->data.enum_members;
+	int_val_t next_val = int_val_zero();
+	
 	while (member)
 	{
-		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-		memset(decl, 0, sizeof(ast_declaration_t));
-		decl->tokens = member->tokens;
-		decl->kind = decl_const;
-		strcpy(decl->data.const_val.name, member->name);
-		decl->data.const_val.type = uint32_type_spec;
-		decl->data.const_val.expr = member->const_value;
-		decl->data.const_val.expr->data.int_literal.type = uint32_type_spec;
+		if (member->value)
+		{
+			if (!sema_is_int_constant_expression(member->value))
+			{
+				//err
+				return false;
+			}
+			next_val = sema_eval_constant_expr(member->value);			
+		}
 
-		idm_add_id(_id_map, decl);
+		//idm_find_decl
+
+		idm_add_enum_val(_id_map, member->name, next_val);
 
 		member = member->next;
+		next_val = int_val_inc(next_val);
 	}
+	return true;
 }
 
 static bool _user_type_is_definition(ast_user_type_spec_t* type)
@@ -216,7 +223,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref)
 			}
 			exist->size = _calc_user_type_size(exist);
 			ast_destroy_type_spec(typeref);
-			return exist;
+			typeref = exist;
 		}
 		else
 		{
@@ -239,11 +246,18 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref)
 				return NULL;
 			}
 			ast_destroy_type_spec(typeref);
-			return exist;
+			typeref = exist;
 		}
-
-		_add_user_type(typeref);
+		else
+		{
+			_add_user_type(typeref);
+		}
 	}
+
+	//treat enums as int32_t
+	if (ast_type_is_enum(typeref))
+		return int32_type_spec;
+
 	return typeref;
 }
 
@@ -266,6 +280,11 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
 
 	return false;
+}
+
+void f()
+{
+
 }
 
 bool process_variable_declaration(ast_declaration_t* decl)
@@ -714,26 +733,29 @@ Multiple declarations are allowed
 Only a single definition is permitted
 Type cannot change
 */
-proc_decl_result process_global_var_decl(ast_declaration_t* decl)
+proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 {
-	const char* name = decl->data.var.name;
+	ast_var_decl_t* var = &decl->data.var;
 
-	ast_declaration_t* fn = idm_find_decl(_id_map, name, decl_func);
+	ast_declaration_t* fn = idm_find_decl(_id_map, var->name, decl_func);
 	if (fn)
 	{
 		_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 			"global var declaration of '%s' shadows function at",
-			name);
+			var->name);
 		return proc_decl_error;
 	}
 
 	if (!sema_resolve_type_ref(decl->data.var.type_ref))
 	{		
+	//	return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+	//		"var %s is of incomplete type",	var->name);
 		return proc_decl_error;
 	}
 
-	ast_type_spec_t* type = decl->data.var.type_ref->spec;
-	ast_declaration_t* exist = idm_find_decl(_id_map, name, decl_var);
+	ast_type_spec_t* type = var->type_ref->spec;
+	
+	ast_declaration_t* exist = idm_find_decl(_id_map, var->name, decl_var);
 	if (exist)
 	{		
 		//multiple declarations are allowed
@@ -742,7 +764,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 			//different types
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 				"incompatible redeclaration of global var '%s'",
-				name);
+				var->name);
 			return proc_decl_error;
 		}
 
@@ -751,7 +773,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 			//multiple definitions
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 				"redefinition of global var '%s'",
-				name);
+				var->name);
 			return proc_decl_error;
 		}
 
@@ -769,7 +791,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"global var '%s' uses incomplete type '%s'",
-			name, ast_type_ref_name(decl->data.var.type_ref));
+			var->name, ast_type_ref_name(decl->data.var.type_ref));
 		return proc_decl_error;
 	}
 
@@ -798,7 +820,7 @@ proc_decl_result process_global_var_decl(ast_declaration_t* decl)
 		else
 		{
 			return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"global var '%s' initialised with non-const expression", decl->data.var.name);
+				"global var '%s' initialised with non-const expression", var->name);
 		}
 
 		//_process_global_init_expression(decl);
@@ -859,7 +881,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 		ast_declaration_t* next = decl->next;
 		if (decl->kind == decl_var)
 		{
-			proc_decl_result result = process_global_var_decl(decl);
+			proc_decl_result result = process_global_variable_declaration(decl);
 
 			if (result == proc_decl_error)
 				return NULL;

@@ -30,6 +30,8 @@ int mul(int i, int j)
 
 int main()
 {
+	enum colour c = red;
+
 	struct Car carA = MakeCar(2, blue);
 
 	struct Car carB = MakeCar(7, green);

@@ -57,4 +57,5 @@ void tok_range_destroy(token_range_t* range);
 void tok_range_print(token_range_t* range);
 bool tok_range_equals(token_range_t* lhs, token_range_t* rhs);
 token_range_t* tok_range_create(token_t* start, token_t* end);
+token_range_t* tok_range_dup(token_range_t* range);
 bool tok_range_empty(token_range_t* range);

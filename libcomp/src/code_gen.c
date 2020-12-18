@@ -1245,27 +1245,6 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 		}
 		fn_decl = fn_decl->next;
 	}
-
-	/*ast_declaration_t* var = tl->variables;
-	while (var)
-	{
-		var_decl_global_var(_var_set, &var->data.var);
-		gen_global_var(&var->data.var);
-		var = var->next;
-	}
-
-	ast_declaration_t* fn = tl->functions;
-	while(fn)
-	{ 
-		if (fn->data.func.blocks)
-		{
-			var_enter_function(_var_set, &fn->data.func);
-			gen_function(&fn->data.func);
-			var_leave_function(_var_set);
-		}
-
-		fn = fn->next;
-	}*/
 	var_destory_set(_var_set);
 	_cur_tl = NULL;
 	_var_set = NULL;
