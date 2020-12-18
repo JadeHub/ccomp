@@ -86,12 +86,11 @@ static int_val_t _modulus(int_val_t* lhs, int_val_t* rhs)
 {
 	if (lhs->is_signed)
 	{
-		lhs->v.uint64 = lhs->v.int64 % rhs->is_signed ? rhs->v.int64 : rhs->v.uint64;
-		lhs->is_signed = false;
+		lhs->v.int64 = lhs->v.int64 % rhs->v.int64;
 	}
 	else
 	{
-		lhs->v.uint64 %= rhs->is_signed ? rhs->v.int64 : rhs->v.uint64;
+		lhs->v.uint64 = lhs->v.uint64 % rhs->v.uint64;
 	}
 	return *lhs;
 }

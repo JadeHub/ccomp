@@ -252,6 +252,98 @@ _parse_for_err:
 	return NULL;
 }
 
+//<statement> ::= "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+ast_statement_t* parse_if_statement()
+{
+	token_t* start = current();
+	next_tok();
+	if (!expect_cur(tok_l_paren))
+		return NULL;
+	next_tok();
+
+	ast_statement_t* smnt = _alloc_smnt();
+	smnt->tokens.start = start;
+	smnt->kind = smnt_if;
+	smnt->data.if_smnt.condition = parse_expression();
+	if (!smnt->data.if_smnt.condition)
+		goto _parse_if_err;
+	if (!expect_cur(tok_r_paren))
+		return NULL;
+	next_tok();
+
+	smnt->data.if_smnt.true_branch = parse_statement();
+	if (!smnt->data.if_smnt.true_branch)
+		goto _parse_if_err;
+
+	if (current_is(tok_else))
+	{
+		next_tok();
+		smnt->data.if_smnt.false_branch = parse_statement();
+		if(!smnt->data.if_smnt.false_branch)
+			goto _parse_if_err;
+	}
+	smnt->tokens.end = current();
+	return smnt;
+
+_parse_if_err:
+	ast_destroy_statement(smnt);
+	return NULL;
+}
+
+//<statement> :: = "do" <statement> "while" <exp> ";"
+ast_statement_t* parse_do_statement()
+{
+	ast_statement_t* smnt = _alloc_smnt();
+	smnt->kind = smnt_do;
+	next_tok();
+	smnt->data.while_smnt.statement = parse_statement();
+	if (!smnt->data.while_smnt.statement)
+		goto _parse_do_err;
+
+	if (!expect_cur(tok_while))
+		goto _parse_do_err;
+	next_tok();
+	smnt->data.while_smnt.condition = parse_expression();
+	if(!smnt->data.while_smnt.condition)
+		goto _parse_do_err;
+	if (!expect_cur(tok_semi_colon))
+		goto _parse_do_err;
+	next_tok();
+	return smnt;
+
+_parse_do_err:
+	ast_destroy_statement(smnt);
+	return NULL;
+}
+
+//<statement> :: = "while" "(" <exp> ")" <statement> ";"
+ast_statement_t* parse_while_statement()
+{
+	token_t* start = current();
+	next_tok();
+	if (!expect_cur(tok_l_paren))
+		return NULL;
+
+	next_tok();
+	ast_statement_t* smnt = _alloc_smnt();
+	smnt->kind = smnt_while;
+	smnt->tokens.start = start;
+	smnt->data.while_smnt.condition = parse_expression();
+	if (!smnt->data.while_smnt.condition)
+		goto _parse_while_err;
+	if (!expect_cur(tok_r_paren))
+		goto _parse_while_err;
+	next_tok();
+	smnt->data.while_smnt.statement = parse_statement();
+	if (!smnt->data.while_smnt.statement)
+		goto _parse_while_err;
+	
+	return smnt;
+
+_parse_while_err:
+	ast_destroy_statement(smnt);
+	return NULL;
+}
 
 /*
 <statement> ::= "return" <exp> ";"
@@ -271,9 +363,9 @@ ast_statement_t* parse_statement()
 {
 	token_t* start = current();
 
-	ast_statement_t* result = (ast_statement_t*)malloc(sizeof(ast_statement_t));
-	memset(result, 0, sizeof(ast_statement_t));
-	result->tokens.start = current();
+//	ast_statement_t* result = (ast_statement_t*)malloc(sizeof(ast_statement_t));
+	//memset(result, 0, sizeof(ast_statement_t));
+	//result->tokens.start = current();
 	if (current_is(tok_return))
 	{
 		return parse_return_statement();
@@ -314,49 +406,25 @@ ast_statement_t* parse_statement()
 	}
 	else if (current_is(tok_while))
 	{
-		//<statement> :: = "while" "(" <exp> ")" <statement> ";"
-		expect_next(tok_l_paren);
-		next_tok();
-		result->kind = smnt_while;
-		result->data.while_smnt.condition = parse_expression();
-		expect_cur(tok_r_paren);
-		next_tok();
-		result->data.while_smnt.statement = parse_statement();
+		return parse_while_statement();
 	}
 	else if (current_is(tok_do))
 	{
-		next_tok();
-		//<statement> :: = "do" <statement> "while" <exp> ";"
-		result->kind = smnt_do;
-		result->data.while_smnt.statement = parse_statement();
-		expect_cur(tok_while);
-		next_tok();
-		result->data.while_smnt.condition = parse_expression();
-		expect_cur(tok_semi_colon);
-		next_tok();
+		return parse_do_statement();
 	}
 	else if (current_is(tok_if))
 	{
-		//<statement> ::= "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-		expect_next(tok_l_paren);
-		next_tok();
-		result->kind = smnt_if;
-		result->data.if_smnt.condition = parse_expression();
-		expect_cur(tok_r_paren);
-		next_tok();
-		result->data.if_smnt.true_branch = parse_statement();
-
-		if (current_is(tok_else))
-		{
-			next_tok();
-			result->data.if_smnt.false_branch = parse_statement();
-		}
+		return parse_if_statement();
 	}
 	else if (current_is(tok_l_brace))
 	{
 		//<statement> ::= "{" { <block - item> } "}"
 		next_tok();
-		result->kind = smnt_compound;
+
+		ast_statement_t* smnt = _alloc_smnt();
+		smnt->tokens.start = start;
+		smnt->kind = smnt_compound;
+
 		ast_block_item_t* block;
 		ast_block_item_t* last_block = NULL;
 		while (!current_is(tok_r_brace))
@@ -366,10 +434,12 @@ ast_statement_t* parse_statement()
 			if (last_block)
 				last_block->next = block;
 			else
-				result->data.compound.blocks = block;
+				smnt->data.compound.blocks = block;
 			last_block = block;
 		}
 		next_tok();
+		smnt->tokens.end = current();
+		return smnt;
 	}
 	else if (current_is(tok_switch))
 	{
@@ -386,6 +456,7 @@ ast_statement_t* parse_statement()
 		next_tok(); //identifier
 		next_tok(); //colon
 		smnt->data.label_smnt.smnt = parse_statement();
+		smnt->tokens.end = current();
 		return smnt;
 	}
 	else if (current_is(tok_goto))
@@ -423,7 +494,8 @@ ast_statement_t* parse_statement()
 		smnt->data.expr = expr;
 		return smnt;
 	}
-	result->tokens.end = current();
-	return result;
+	//result->tokens.end = current();
+	//return result;
+	return NULL;
 
 }

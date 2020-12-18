@@ -11,6 +11,7 @@ bool sema_is_int_constant_expression(ast_expression_t* expr)
 	case expr_postfix_op:	
 	case expr_str_literal:
 	case expr_null:
+	case expr_cast:
 		return false;
 	case expr_unary_op:
 		switch (expr->data.unary_op.operation)

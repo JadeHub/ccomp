@@ -172,8 +172,6 @@ expr_result_t sema_process_int_literal(ast_expression_t* expr)
 	if (type)
 	{
 		expr->data.int_literal.val.is_signed = ast_type_is_signed_int(type);
-
-
 		result.result_type = type;
 		expr->data.int_literal.type = type;
 	}
@@ -379,6 +377,13 @@ static expr_result_t _process_null(ast_expression_t* expr)
 	return result;
 }
 
+expr_result_t _process_cast(ast_expression_t* expr)
+{
+	expr_result_t result = sema_process_expression(expr->data.cast.expr);
+	result.result_type = expr->data.cast.type;
+	return result;
+}
+
 expr_result_t sema_process_expression(ast_expression_t* expr)
 {
 	expr_result_t result;
@@ -417,6 +422,8 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		return _process_func_call(expr);
 	case expr_sizeof:
 		return _process_sizeof(expr);
+	case expr_cast:
+		return _process_cast(expr);
 	
 	}
 
