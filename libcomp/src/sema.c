@@ -72,6 +72,9 @@ static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 
 static bool process_expression(ast_expression_t* expr)
 {
+	if (!expr)
+		return true;
+
 	expr_result_t result = sema_process_expression(expr);
 
 	return !result.failure;

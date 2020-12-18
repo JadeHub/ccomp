@@ -3,6 +3,7 @@
 extern "C"
 {
 #include <libcomp/include/sema_internal.h>
+#include <libcomp/include/parse_internal.h>
 }
 
 class ConstExprEvalTest : public CompilerTest

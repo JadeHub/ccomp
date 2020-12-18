@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-comp_opt_t parse_command_line(int argc, char* argv[])
+comp_opt_t parse_command_line(int argc, const char* argv[])
 {
 	comp_opt_t result;
 	memset(&result, 0, sizeof(comp_opt_t));
@@ -14,7 +14,7 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 	{
 		if (argv[idx][0] == '-')
 		{
-			char* pos = &argv[idx][1];
+			const char* pos = &argv[idx][1];
 			while (*pos)
 			{
 				if (*pos == 'E')
@@ -29,7 +29,7 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 				{
 					if (++idx == argc)
 						goto _err_ret;
-					result.output_path = _strdup(argv[idx]);
+					result.output_path = strdup(argv[idx]);
 					break;
 				}
 				pos++;
@@ -40,7 +40,7 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 			//input file
 			if (result.input_path)
 				goto _err_ret;
-			result.input_path = _strdup(argv[idx]);
+			result.input_path = strdup(argv[idx]);
 		}
 		idx++;
 	}

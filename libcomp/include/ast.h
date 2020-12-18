@@ -111,6 +111,12 @@ typedef struct
 	const char* label;
 }ast_string_literal_t;
 
+typedef struct
+{
+	struct ast_expression* expr;
+	struct ast_type_spec* type;
+}ast_expr_cast_data_t;
+
 typedef enum
 {
 	expr_postfix_op,
@@ -123,6 +129,7 @@ typedef enum
 	expr_condition,
 	expr_func_call,
 	expr_sizeof,
+	expr_cast,
 	expr_null
 }expression_kind;
 
@@ -141,6 +148,7 @@ typedef struct ast_expression
 		ast_cond_expr_data_t condition;
 		ast_expr_func_call_t func_call;
 		ast_sizeof_call_t sizeof_call;
+		ast_expr_cast_data_t cast;
 	}data;
 	struct ast_expression* next; //func call param list
 }ast_expression_t;

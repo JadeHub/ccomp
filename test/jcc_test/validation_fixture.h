@@ -190,7 +190,7 @@ public:
 		sr.ptr = src.c_str();
 		sr.end = sr.ptr + src.length();
 
-		src_register_range(sr, _strdup(path.c_str()));
+		src_register_range(sr, strdup(path.c_str()));
 
 		tokens = lex_source(&sr);
 	}

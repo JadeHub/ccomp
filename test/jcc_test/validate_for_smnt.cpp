@@ -7,7 +7,10 @@ TEST_F(ForSmntValidationTest, foo)
 	std::string code = R"(
 	void foo()
 	{
-		int i = 0;
+		for(int i = 0; i< 10; i++)
+		{
+			s();
+		}		
 	}
 	)";
 
