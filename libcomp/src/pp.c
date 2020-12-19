@@ -284,7 +284,8 @@ static inline void _emit_token(token_t* tok)
 
 	if(_context->expansion_stack && _context->expansion_stack->macro)
 	{
-		phs_insert(_context->expansion_stack->macro->hidden_toks, (void*)tok->id);
+		size_t id = tok->id;
+		phs_insert(_context->expansion_stack->macro->hidden_toks, (void*)id);
 	}
 
 	tok->prev = tok->next = NULL;
@@ -380,9 +381,6 @@ static token_t* _is_standard_macro(token_t* tok)
 	{
 		str_buff_t* sb = sb_create(128);
 		sb_append_int(sb, _context->input_stack->line_num, 10);
-		//sb_append(sb, _context->input_stack->path);
-		//sb_append_ch(sb, '\"');
-
 		return _lex_single_tok(sb);
 	}
 	else if (strcmp(tok->data.str, "__DATE__") == 0)
@@ -574,14 +572,78 @@ static bool _process_pragma(token_t* tok)
 	return false;
 }
 
+/*
+The path in a #include <....> is lexed as a series of tokens, not as a string literal. We need to form a path from these tokens.
+eg
+#include <proj/include/header.h>
+is
+tok_lesser, tok_identifier (proj), tok_slash, tok_identifier (include)..., tok_fullstop, tok_identifier (h), tok_greater
+
+note: '\' will be included in string literals
+we are not very strict about the path format here, if it looks resonable we return it and let the file loading code report any error
+*/
+static str_buff_t* _make_system_inc_path(token_range_t* range)
+{
+	str_buff_t* path_buff = sb_create(128);
+
+	token_t* tok = range->start;
+
+	assert(tok->kind == tok_lesser);
+	tok = tok->next;
+
+	bool saw_fullstop = false;
+	while (tok != range->end)
+	{
+		if(tok->kind == tok_identifier)
+		{
+			const char* lit = tok->data.str;
+			while (*lit)
+			{
+				if(*lit == '\\')
+					sb_append_ch(path_buff, '/');
+				else
+					sb_append_ch(path_buff, *lit);
+				lit++;
+			}
+		}
+		else if (tok->kind == tok_slash)
+		{
+			sb_append_ch(path_buff, '/');
+		}
+		else if (tok->kind == tok_fullstop)
+		{
+			if (saw_fullstop && tok->kind != tok_identifier)
+			{
+				diag_err(range->start, ERR_SYNTAX, "syntax error: invalid path in #include");
+				sb_destroy(path_buff);
+				return NULL;
+			}
+			sb_append_ch(path_buff, '.');
+			saw_fullstop = true;
+		}
+		else if (tok->kind == tok_greater)
+		{
+			break;
+		}
+		tok = tok->next;
+	}
+
+	if (tok->kind != tok_greater || path_buff->len == 0)
+	{
+		diag_err(range->start, ERR_SYNTAX, "syntax error: invalid path in #include");
+		sb_destroy(path_buff);
+		return NULL;
+	}
+
+	return path_buff;
+}
+
 static bool _process_include(token_t* tok)
 {
 	tok = _pop_next();
 	token_range_t* range = tok_range_create(tok, _pop_to_eol(tok));
 	range->end = _create_end_marker(range->end);
 
-	include_kind inc_kind;
-	
 	if (tok->kind == tok_identifier)
 	{
 		//#define INC <blah.h>
@@ -600,7 +662,7 @@ static bool _process_include(token_t* tok)
 	}
 
 	str_buff_t* path_buff = sb_create(128);
-
+	include_kind inc_kind = include_local;
 	if (range->start->kind == tok_string_literal)
 	{
 		//#include "blah.h"
@@ -619,36 +681,12 @@ static bool _process_include(token_t* tok)
 	{
 		//#include <blah.h>
 		inc_kind = include_system;
-		tok = range->start->next;
-
-		if (tok->kind != tok_identifier)
-		{
-			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
-			return false;
-		}
-		sb_append(path_buff, tok->data.str);
-		tok = tok->next;
-
-		if (tok->kind == tok_fullstop)
-		{
-			sb_append_ch(path_buff, '.');
-			tok = tok->next;
-			if (tok->kind == tok_identifier)
-			{
-				sb_append(path_buff, tok->data.str);
-				tok = tok->next;
-			}			
-		}
-		
-		if (tok->kind != tok_greater)
-		{
-			diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
-			return false;
-		}
+		path_buff = _make_system_inc_path(range);
 	}
-	else
+	
+	if(path_buff->len == 0)
 	{
-		diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include");
+		diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include directive");
 		return false;
 	}
 
@@ -1008,8 +1046,8 @@ static bool _should_expand_macro(token_t* identifier, macro_t* macro)
 {
 	if (_is_macro_expanding(macro))
 		return false;
-
-	return !ht_contains(macro->hidden_toks, (void*)identifier->id);
+	size_t id = identifier->id;
+	return !ht_contains(macro->hidden_toks, (void*)id);
 }
 
 static bool _process_arg_substitution(token_t* identifier, token_range_t* param)

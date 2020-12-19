@@ -103,7 +103,8 @@ static inline bool _is_identifier_body(const char c)
 	return (
 		(c >= 'A' && c <= 'Z') ||
 		(c >= 'a' && c <= 'z') ||
-		(c == '_') ||
+		(c == '_') || 
+		(c == '\\') || //todo - hack to allow backslash in #include <....>
 		_is_digit_char(c));
 }
 

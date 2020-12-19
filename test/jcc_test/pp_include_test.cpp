@@ -55,6 +55,30 @@ TEST_F(PreProcIncludeTest, include2)
 		});
 }
 
+TEST_F(PreProcIncludeTest, include_path1)
+{
+	ExpectFileLoad("inc/test/stdio.h", stdio_code);
+
+	PreProc(R"(#include "inc/test/stdio.h")");
+	ExpectCode(stdio_code);
+}
+
+TEST_F(PreProcIncludeTest, include_path2)
+{
+	ExpectFileLoad("inc/test/stdio.h", stdio_code);
+
+	PreProc(R"(#include <inc/test/stdio.h>)");
+	ExpectCode(stdio_code);
+}
+
+TEST_F(PreProcIncludeTest, include_path3)
+{
+	ExpectFileLoad("inc/test/stdio.h", stdio_code);
+
+	PreProc(R"(#include <inc/test\stdio.h>)");
+	ExpectCode(stdio_code);
+}
+
 TEST_F(PreProcIncludeTest, include_leading_space)
 {
 	std::string src = R"(  #include <stdio.h>)";

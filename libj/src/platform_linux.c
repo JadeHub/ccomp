@@ -6,12 +6,12 @@
 #include <string.h>
 #include <libgen.h>
 
-char* path_resolve(const char* path)
+const char* path_resolve(const char* path)
 {
 	return realpath(path, NULL);
 }
 
-char* path_dirname(const char* path)
+const char* path_dirname(const char* path)
 {
 	//dirname() may modify its input so give it a copy
 	char* path_cpy = strdup(path);
@@ -26,7 +26,7 @@ char* path_dirname(const char* path)
 	return result;
 }
 
-char* path_filename(const char* path)
+const char* path_filename(const char* path)
 {
 	char* fn = basename(path);
 	char* buff = (char*)malloc(strlen(fn) + 1);

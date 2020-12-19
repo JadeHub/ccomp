@@ -1,24 +1,14 @@
 #include "platform.h"
 
-#include <stdlib.h>
-
 #ifdef PLATFORM_WIN
-
-#pragma warning (push)
-
-//warning C4668: '_WIN32_WINNT_WIN10_RS4' is not defined as a preprocessor macro, replacing with '0' for '#if/#elif'
-#pragma warning (disable : 4668)
-//warning C4255: 'EnableMouseInPointerForThread': no function prototype given: converting '()' to '(void)'
-#pragma warning (disable : 4255)
 
 #include <windows.h>
 
-#pragma warning (pop)
-
+#include <stdlib.h>
 
 #include <fileapi.h>
 
-char* path_resolve(const char* path)
+const char* path_resolve(const char* path)
 {
 	char* buff = (char*)malloc(MAX_PATH + 1);
 	if (GetFullPathNameA(path, MAX_PATH + 1, buff, NULL) == 0)
@@ -26,10 +16,10 @@ char* path_resolve(const char* path)
 		free(buff);
 		buff = NULL;
 	}
-	return buff;
+	return path_convert_slashes(buff);
 }
 
-char* path_dirname(const char* path)
+const char* path_dirname(const char* path)
 {
 	char* buff = (char*)malloc(MAX_PATH + 1);
 	char* file_part;
@@ -39,10 +29,10 @@ char* path_dirname(const char* path)
 		buff = NULL;
 	}
 	*file_part = '\0';
-	return buff;
+	return path_convert_slashes(buff);
 }
 
-char* path_filename(const char* path)
+const char* path_filename(const char* path)
 {
 	char buff[MAX_PATH + 1];
 	char* file_part;
@@ -54,13 +44,3 @@ char* path_filename(const char* path)
 }
 
 #endif
-
-
-char* path_combine(const char* dir, const char* file)
-{
-	char* buff = (char*)malloc(strlen(dir) + strlen(file) + 2);
-	strcpy(buff, dir);
-	strcat(buff, "/");
-	strcat(buff, file);
-	return buff;
-}

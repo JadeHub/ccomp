@@ -15,7 +15,7 @@ typedef struct
 	source_range_t range;
 	const char** lines;
 	uint32_t line_count;
-	char* path;
+	const char* path;
 }source_file_t;
 
 /*
@@ -24,7 +24,7 @@ Map of path to source_file_t* for each open file
 We can find the file associated with a char pointer by looking at the source ranges of each file
 */
 static hash_table_t* _files;
-static char* _src_dir = NULL;
+static const char* _src_dir = NULL;
 static src_load_cb _load_cb;
 static void* _load_data;
 
@@ -226,12 +226,12 @@ void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
 
 void src_deinit()
 {
-	free(_src_dir);
+	free((void*)_src_dir);
 	sht_iterator_t it = sht_begin(_files);
 	while (!sht_end(_files, &it))
 	{
 		source_file_t* sf = (source_file_t*)it.val;
-		free(sf->path);
+		free((void*)sf->path);
 		free(sf);
 		sht_next(_files, &it);
 	}

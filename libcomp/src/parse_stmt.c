@@ -473,29 +473,24 @@ ast_statement_t* parse_statement()
 		smnt->tokens.end = current();
 		return smnt;
 	}
-	else
+
+	//expression statement
+	//<statement ::= <exp-option> ";"
+	ast_expression_t* expr = parse_optional_expression(tok_semi_colon);
+	if (!expr)
 	{
-		//<statement ::= <exp-option> ";"
-		ast_expression_t* expr = parse_optional_expression(tok_semi_colon);
-		if (!expr)
-		{
-			report_err(ERR_SYNTAX, "Failed to parse expression");
-			return NULL;
-		}
-
-		if (!expect_cur(tok_semi_colon))
-			return NULL;
-		next_tok();
-
-		ast_statement_t* smnt = _alloc_smnt();
-		smnt->tokens.start = start;
-		smnt->tokens.end = current();
-		smnt->kind = smnt_expr;
-		smnt->data.expr = expr;
-		return smnt;
+		report_err(ERR_SYNTAX, "Failed to parse expression");
+		return NULL;
 	}
-	//result->tokens.end = current();
-	//return result;
-	return NULL;
 
+	if (!expect_cur(tok_semi_colon))
+		return NULL;
+	next_tok();
+
+	ast_statement_t* smnt = _alloc_smnt();
+	smnt->tokens.start = start;
+	smnt->tokens.end = current();
+	smnt->kind = smnt_expr;
+	smnt->data.expr = expr;
+	return smnt;
 }

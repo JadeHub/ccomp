@@ -2,13 +2,18 @@
 
 class PreProcDefineBuiltInTest : public LexPreProcTest {};
 
-/*TEST_F(PreProcDefineBuiltInTest, __file__)
+TEST_F(PreProcDefineBuiltInTest, __file__)
 {
-	std::string src = R"(__FILE__)";
+	std::string path = "test/stdio.h";
+	std::string inc_code = "__FILE__";
+	ExpectFileLoad(path, inc_code);
+
+	std::string src = R"(#include <test/stdio.h>)";
 
 	PreProc(src);
-	PrintTokens();
-}*/
+	ExpectTokTypes({ tok_string_literal, tok_eof });
+	EXPECT_THAT(GetToken(0)->data.str, EndsWith("/test/stdio.h"));
+}
 
 TEST_F(PreProcDefineBuiltInTest, __line__)
 {
