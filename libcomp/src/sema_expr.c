@@ -338,7 +338,7 @@ static expr_result_t _process_sizeof(ast_expression_t* expr)
 
 	if (expr->data.sizeof_call.kind == sizeof_type)
 	{
-		type = sema_resolve_type(expr->data.sizeof_call.data.type);
+		type = sema_resolve_type(expr->data.sizeof_call.data.type_ref->spec);
 	}
 	else
 	{
@@ -380,7 +380,7 @@ static expr_result_t _process_null(ast_expression_t* expr)
 expr_result_t _process_cast(ast_expression_t* expr)
 {
 	expr_result_t result = sema_process_expression(expr->data.cast.expr);
-	result.result_type = expr->data.cast.type;
+	result.result_type = expr->data.cast.type_ref->spec;
 	return result;
 }
 

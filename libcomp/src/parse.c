@@ -154,51 +154,6 @@ static bool tok_in_set(tok_kind kind, tok_kind* set)
 	return false;
 }
 
-static bool _is_type_qualifier(token_t* tok)
-{
-	switch (tok->kind)
-	{
-	case tok_const:
-	case tok_volatile:
-		return true;
-	}
-	return false;
-}
-
-static bool _is_type_specifier(token_t* tok)
-{
-	switch(tok->kind)
-	{ 
-	case tok_void: 
-	case tok_char:
-	case tok_short:
-	case tok_int:
-	case tok_long:
-	case tok_signed:
-	case tok_unsigned:
-	case tok_float:
-	case tok_double:
-	case tok_struct:
-	case tok_union:
-	case tok_enum:
-		return true;
-	};
-	return false;
-}
-
-static bool _is_storage_class_specifier(token_t* tok)
-{
-	switch (tok->kind)
-	{
-	case tok_typedef:
-	case tok_extern:
-	case tok_static:
-	case tok_auto:
-	case tok_register:
-		return true;
-	};
-	return false;
-}
 
 static bool _is_postfix_unary_op(token_t* tok)
 {
@@ -316,15 +271,6 @@ static ast_expression_t* _alloc_expr()
 	return result;
 }
 
-static ast_type_ref_t* _make_type_ref(ast_type_spec_t* spec, token_t* start)
-{
-	ast_type_ref_t* result = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
-	memset(result, 0, sizeof(ast_type_ref_t));
-	result->spec = spec;
-	result->tokens.start = start;
-	result->tokens.end = current();
-	return result;
-}
 
 typedef ast_expression_t* (*bin_parse_fn)();
 
@@ -368,429 +314,8 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 	return expr;
 }
 
-/*
-<struct_decl> :: = <declaration_specifiers>[<id>][":" <int> ] ";"
-*/
-ast_struct_member_t* parse_struct_member()
-{
-	ast_struct_member_t* result = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
-	memset(result, 0, sizeof(ast_struct_member_t));
-	result->tokens.start = current();
-
-	ast_type_spec_t* type = try_parse_pointer_decl_spec();
-	if (!type)
-	{
-		report_err(ERR_SYNTAX, "expected declaration specification");
-		return NULL;
-	}
-	
-	while (current_is(tok_star))
-	{
-		next_tok();
-		//pointer
-		type = ast_make_ptr_type(type);
-	}
-
-	result->type_ref = _make_type_ref(type, result->tokens.start);
-
-	if (current_is(tok_identifier))
-	{
-		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
-		next_tok();
-	}
-
-	if (current_is(tok_colon))
-	{
-		next_tok();
-		expect_cur(tok_num_literal);
-		result->bit_size = int_val_as_uint32(&current()->data.int_val);
-		next_tok();
-	}
-
-	expect_cur(tok_semi_colon);
-	next_tok();
-	result->tokens.end = current();
-	return result;
-}
-
-/*
-<enum_specifier> :: = "enum" [<id>] ["{" { <id> [= <const_expr>] } "}"]
-*/
-ast_user_type_spec_t* parse_enum_spec()
-{
-	ast_user_type_spec_t* result = (ast_user_type_spec_t*)malloc(sizeof(ast_user_type_spec_t));
-	memset(result, 0, sizeof(ast_user_type_spec_t));
-	result->tokens.start = current();
-	result->kind = user_type_enum;
-
-	if (current_is(tok_identifier))
-	{
-		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
-		next_tok();
-	}
-
-	if (current_is(tok_l_brace))
-	{
-		next_tok();
-
-		ast_enum_member_t* last_member = NULL;
-		
-		while (true)
-		{
-			if(!expect_cur(tok_identifier))
-				goto _enum_parse_err;
-
-			ast_enum_member_t* member = (ast_enum_member_t*)malloc(sizeof(ast_enum_member_t));
-			memset(member, 0, sizeof(ast_enum_member_t));
-			member->tokens.start = current();
-			tok_spelling_cpy(current(), member->name, MAX_LITERAL_NAME);
-			next_tok();
-
-			if (current_is(tok_equal))
-			{
-				next_tok();
-				member->value = parse_constant_expression();
-				if (!member->value)
-				{
-					report_err(ERR_SYNTAX, "error parsing enum initialisation expression");
-					goto _enum_parse_err;
-				}
-			}
-
-			if (!last_member)
-			{
-				result->data.enum_members = member;
-				last_member = member;
-			}
-			else
-			{
-				last_member->next = member;
-			}
-			last_member = member;
-			//member->next = result->data.enum_members;
-			//result->data.enum_members = member;
-
-			member->tokens.end = current();
-
-			if (!current_is(tok_comma))
-				break;
-			next_tok();
-		}
-		if(!expect_cur(tok_r_brace))
-			goto _enum_parse_err;
-		next_tok();
-	}
-	result->tokens.end = current();
-	return result;
-_enum_parse_err:
-	free(result);
-	return NULL;
-}
 
 
-/*
-<user_type_specifier> :: = ("struct" | "union") [<id>] ["{" < struct_decl_list > "}"]
-*/
-ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
-{
-	ast_user_type_spec_t* result = (ast_user_type_spec_t*)malloc(sizeof(ast_user_type_spec_t));
-	memset(result, 0, sizeof(ast_user_type_spec_t));
-	result->tokens.start = current();
-	result->kind = kind;
-
-	if (current_is(tok_identifier))
-	{
-		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
-		next_tok();
-	}
-
-	if (current_is(tok_l_brace))
-	{
-		next_tok();
-		uint32_t offset = 0;
-		while (!current_is(tok_r_brace))
-		{
-			ast_struct_member_t* member = parse_struct_member();
-			if (!member)
-				return NULL;
-			member->offset = offset;
-			member->next = result->data.struct_members;
-			result->data.struct_members = member;
-			offset += member->type_ref->spec->size;
-		}
-		next_tok();
-	}
-	result->tokens.end = current();
-	return result;
-}
-
-//type-specifiers
-#define DECL_SPEC_VOID			(1 << 1)
-#define DECL_SPEC_CHAR			(1 << 2)
-#define DECL_SPEC_SHORT			(1 << 3)
-#define DECL_SPEC_INT			(1 << 4)
-#define DECL_SPEC_LONG			(1 << 5)
-#define DECL_SPEC_LONG_LONG		(1 << 6)
-#define DECL_SPEC_SIGNED		(1 << 7)
-#define DECL_SPEC_UNSIGNED		(1 << 8)
-#define DECL_SPEC_FLOAT			(1 << 9)
-#define DECL_SPEC_DOUBLE		(1 << 10)
-#define DECL_SPEC_STRUCT		(1 << 11)
-#define DECL_SPEC_UNION			(1 << 12)
-#define DECL_SPEC_ENUM			(1 << 13)
-
-#define DECL_SPEC_TYPE_FLAGS	0x3FFF
-
-//storage class specifiers
-#define DECL_SPEC_EXTERN		(1 << 20)
-#define DECL_SPEC_STATIC		(1 << 21)
-#define DECL_SPEC_AUTO			(1 << 22)
-#define DECL_SPEC_REGISTER		(1 << 23)
-
-//type-qualifiers
-#define DECL_SPEC_CONST			(1 << 25)
-#define DECL_SPEC_VOLATILE		(1 << 26)
-
-uint32_t _get_decl_spec_flag(token_t* tok)
-{
-	switch (tok->kind)
-	{
-	case tok_void:
-		return DECL_SPEC_VOID;
-	case tok_char:
-		return DECL_SPEC_CHAR;
-	case tok_short:
-		return DECL_SPEC_SHORT;
-	case tok_int:
-		return DECL_SPEC_INT;
-	case tok_long:
-		return DECL_SPEC_LONG;
-	case tok_signed:
-		return DECL_SPEC_SIGNED;
-	case tok_unsigned:
-		return DECL_SPEC_UNSIGNED;
-	case tok_float:
-		return DECL_SPEC_FLOAT;
-	case tok_double:
-		return DECL_SPEC_DOUBLE;
-	case tok_struct:
-		return DECL_SPEC_STRUCT;
-	case tok_union:
-		return DECL_SPEC_UNION;
-	case tok_enum:
-		return DECL_SPEC_ENUM;
-	case tok_extern:
-		return DECL_SPEC_EXTERN;
-	case tok_static:
-		return DECL_SPEC_STATIC;
-	case tok_auto:
-		return DECL_SPEC_AUTO;
-	case tok_register:
-		return DECL_SPEC_REGISTER;
-	case tok_const:
-		return DECL_SPEC_CONST;
-	case tok_volatile:
-		return DECL_SPEC_VOLATILE;
-	}
-	return 0;
-}
-
-static bool _is_type_spec(uint32_t flags, uint32_t type_flags)
-{
-	return ((flags & DECL_SPEC_TYPE_FLAGS) == type_flags);
-}
-
-static inline ast_type_spec_t* _make_type_spec()
-{
-	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
-	memset(result, 0, sizeof(ast_type_spec_t));
-	return result;
-}
-
-ast_type_spec_t* _make_decl_spec(token_t* start, token_t* end)
-{
-	uint32_t spec_flags = 0;
-
-	token_t* tok = start;
-	while (tok != end)
-	{
-		uint32_t flag = _get_decl_spec_flag(tok);
-
-		//special case for long long
-		if (flag == DECL_SPEC_LONG && (spec_flags & DECL_SPEC_LONG))
-			flag = DECL_SPEC_LONG_LONG;
-
-		if (spec_flags & flag)
-			return NULL; //duplicate
-
-		spec_flags |= flag;
-		tok = tok->next;
-	}
-
-	//void
-	if (_is_type_spec(spec_flags, DECL_SPEC_VOID))
-	{
-		return void_type_spec;
-	}
-
-	//struct and union
-	if (_is_type_spec(spec_flags, DECL_SPEC_STRUCT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNION))
-	{
-		ast_type_spec_t* result = _make_type_spec();
-		result->kind = type_user;
-		result->data.user_type_spec = parse_struct_spec(spec_flags & DECL_SPEC_STRUCT ? user_type_struct : user_type_union);
-		result->data.user_type_spec->tokens.start = start;
-		result->size = ast_struct_size(result->data.user_type_spec);
-		return result;
-	}
-
-	//enum
-	if (_is_type_spec(spec_flags, DECL_SPEC_ENUM))
-	{
-		ast_type_spec_t* result = _make_type_spec();
-		result->kind = type_user;
-		result->data.user_type_spec = parse_enum_spec();
-		result->data.user_type_spec->tokens.start = start;
-		result->size = 4;
-		return result;
-	}
-
-	//check for integer type
-
-	//default to signed
-	if (!(spec_flags & DECL_SPEC_UNSIGNED))
-		spec_flags |= DECL_SPEC_SIGNED;
-
-	/*
-	8bit integer
-	signed char
-	unsigned char
-	*/
-	if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_CHAR) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_CHAR))
-	{
-		return (spec_flags & DECL_SPEC_UNSIGNED) ? uint8_type_spec : int8_type_spec;
-	}
-	/*
-	16bit integer
-	signed short
-	unsigned short
-	signed short int
-	unsigned short int
-	*/
-	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_SHORT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_SHORT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_SHORT | DECL_SPEC_INT))
-	{
-		return (spec_flags & DECL_SPEC_UNSIGNED) ? uint16_type_spec : int16_type_spec;
-	}
-	/*
-	32bit integer
-	signed int
-	unsinged int
-	signed
-	unsigned
-	signed long
-	unsigned long
-	signed long int
-	unsigned long int
-	*/
-	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_INT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_INT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_SIGNED) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED) ||
-		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG) ||
-		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_INT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_INT))
-	{
-		return (spec_flags & DECL_SPEC_UNSIGNED) ? uint32_type_spec : int32_type_spec;
-	}
-	/*
-	64bit integer
-	signed long long
-	unsigned long long
-	signed long long int
-	unsigned long long int
-	*/
-	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG) ||
-		_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG | DECL_SPEC_INT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_LONG | DECL_SPEC_LONG_LONG | DECL_SPEC_INT))
-	{
-		return NULL;
-	}
-	/*
-	float
-	signed float
-	unsigned float
-	*/
-	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_FLOAT) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_FLOAT))
-	{
-		return NULL;
-	}
-	/*
-	double
-	signed double
-	unsigned double
-	*/
-	else if (_is_type_spec(spec_flags, DECL_SPEC_SIGNED | DECL_SPEC_DOUBLE) ||
-		_is_type_spec(spec_flags, DECL_SPEC_UNSIGNED | DECL_SPEC_DOUBLE))
-	{
-		return NULL;
-	}
-	return NULL;
-}
-
-/*
-<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifier> ) }
-*/
-ast_type_spec_t* try_parse_decl_spec()
-{
-	token_t* start = current();
-
-	//consume all type_specifier, type_qualifier, storage_class_specifier
-	while (_is_type_specifier(current()) || 
-		_is_type_qualifier(current()) || 
-		_is_storage_class_specifier(current()))
-	{
-		next_tok();
-	}
-
-	if (start != current())
-	{
-		ast_type_spec_t* result = _make_decl_spec(start, current());
-		if (!result)
-		{
-			report_err(ERR_SYNTAX, "invalid combination of type specifiers");
-			return NULL;
-		}
-		return result;
-	}
-	return NULL;
-}
-
-/*
-<ptr_decl_spec> ::= <declaration_specifiers> { "*" }
-*/
-ast_type_spec_t* try_parse_pointer_decl_spec()
-{
-	ast_type_spec_t* type_spec = try_parse_decl_spec();
-	if (!type_spec)
-		return NULL;
-
-	while (current_is(tok_star))
-	{
-		//pointer
-		next_tok();
-		ast_type_spec_t* ptr_type = ast_make_ptr_type(type_spec);
-		type_spec = ptr_type;
-	}
-	return type_spec;
-}
 
 /*
 <array_decl> ::= "[" [ <constant-exp> ] "]"
@@ -828,15 +353,16 @@ ast_expression_t* opt_parse_array_spec()
 void parse_function_parameters(ast_function_decl_t* func)
 {
 	token_t* start = current();
-	ast_type_spec_t* type = try_parse_pointer_decl_spec();
-	while (type)
+	
+	ast_type_ref_t* type_ref = try_parse_type_ref();
+	while (type_ref)
 	{
 		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(decl, 0, sizeof(ast_declaration_t));
 		decl->tokens.start = start;
 		
 		decl->kind = decl_var;
-		decl->data.var.type_ref = _make_type_ref(type, start);
+		decl->data.var.type_ref = type_ref;
 		
 		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
 		memset(param, 0, sizeof(ast_func_param_decl_t));
@@ -870,7 +396,7 @@ void parse_function_parameters(ast_function_decl_t* func)
 		next_tok();
 
 		start = current();
-		type = try_parse_pointer_decl_spec();
+		type_ref = try_parse_type_ref();
 	}
 
 	// if single void param remove it
@@ -900,8 +426,8 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 	result->tokens.start = start;
 	result->tokens.end = current();
 	
-	ast_type_spec_t* type = try_parse_pointer_decl_spec();
-	if (!type)
+	ast_type_ref_t* type_ref = try_parse_type_ref();
+	if (!type_ref)
 		return NULL;
 
 	if (current_is(tok_identifier))
@@ -910,7 +436,7 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 		{
 			//function			
 			result->kind = decl_func;
-			result->data.func.return_type_ref = _make_type_ref(type, start);
+			result->data.func.return_type_ref = type_ref;
 			tok_spelling_cpy(current(), result->data.func.name, MAX_LITERAL_NAME);
 			next_tok();
 			/*(*/
@@ -919,7 +445,7 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 			parse_function_parameters(&result->data.func);
 			/*)*/
 			expect_cur(tok_r_paren);
-			next_tok();			
+			next_tok();
 		}
 		else
 		{
@@ -928,13 +454,24 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 			tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
 			next_tok();
 						
-			result->data.var.type_ref = _make_type_ref(type, start);
+			result->data.var.type_ref = type_ref;
 
 			// '[...]'
 			result->data.var.array_sz = opt_parse_array_spec();
+
+			//typedef ?
+			if (type_ref->flags & TF_SC_TYPEDEF)
+				parse_register_alias_name(result->data.var.name);
 						
 			if (current_is(tok_equal))
 			{
+				if (type_ref->flags & TF_SC_TYPEDEF)
+				{
+					report_err(ERR_SYNTAX, "typedef cannot be initialised");
+					ast_destroy_declaration(result);
+					return NULL;
+				}
+
 				next_tok();
 				result->data.var.expr = parse_expression();
 			}
@@ -944,7 +481,7 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 	{
 		//type-spec
 		result->kind = decl_type;
-		result->data.type = type;
+		result->data.type_ref = type_ref;
 	}
 
 	if (found_semi)
@@ -1185,7 +722,7 @@ ast_expression_t* try_parse_cast_expr()
 	if (current_is(tok_l_paren))
 	{
 		next_tok();
-		ast_type_spec_t* type = try_parse_pointer_decl_spec();
+		ast_type_ref_t* type = try_parse_type_ref();
 
 		if (type)
 		{
@@ -1196,7 +733,7 @@ ast_expression_t* try_parse_cast_expr()
 			expr->tokens.start = start;
 			expr->tokens.end = current();
 			expr->kind = expr_cast;
-			expr->data.cast.type = type;
+			expr->data.cast.type_ref = type;
 			expr->data.cast.expr = try_parse_cast_expr();
 			if (!expr->data.cast.expr)
 			{
@@ -1223,12 +760,12 @@ ast_expression_t* parse_sizeof_expr()
 	{
 		next_tok();
 		//Could be a typespec, or an expression in parentheses
-		ast_type_spec_t* type = try_parse_decl_spec();
+		ast_type_ref_t* type = try_parse_type_ref();
 		
 		if (type)
 		{
 			expr->data.sizeof_call.kind = sizeof_type;
-			expr->data.sizeof_call.data.type = type;
+			expr->data.sizeof_call.data.type_ref = type;
 		}
 		else
 		{
@@ -1529,9 +1066,38 @@ ast_declaration_t* parse_top_level_decl(bool* found_semi)
 void parse_init(token_t* tok)
 {
 	types_init();
+	parse_type_init();
 	_cur_tok = tok;
 	_parse_err = false;
 	
+}
+
+ast_block_item_t* parse_block_list()
+{
+	ast_block_item_t* last = NULL;
+	ast_block_item_t* result = NULL;
+
+	parse_on_enter_block();
+
+	while (!current_is(tok_r_brace))
+	{
+		ast_block_item_t* blk = parse_block_item();
+
+		if (_parse_err)
+			return NULL; //todo destroy
+
+		if (last)
+			last->next = blk;
+		else
+			result = blk;
+		last = blk;
+		last->next = NULL;
+	}
+	next_tok();
+
+	parse_on_leave_block();
+
+	return result;
 }
 
 //<translation_unit> :: = { <function> | <declaration> }
@@ -1552,10 +1118,12 @@ ast_trans_unit_t* parse_translation_unit()
 		{
 			expect_cur(tok_l_brace);
 			next_tok();
+
 			//function definition
 			ast_function_decl_t* func = &decl->data.func;
+			func->blocks = parse_block_list();
 
-			ast_block_item_t* last_blk = NULL;
+			/*ast_block_item_t* last_blk = NULL;
 			while (!current_is(tok_r_brace))
 			{
 				ast_block_item_t* blk = parse_block_item();
@@ -1570,7 +1138,7 @@ ast_trans_unit_t* parse_translation_unit()
 				last_blk = blk;
 				last_blk->next = NULL;
 			}
-			next_tok();
+			next_tok();*/
 			decl->tokens.end = current();
 		}
 		else if(!found_semi)

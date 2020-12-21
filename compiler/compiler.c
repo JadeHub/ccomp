@@ -33,7 +33,7 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 source_range_t _file_loader(const char* dir, const char* file, void* data)
 {
     data;
-    char* path = path_combine(dir, file);
+    const char* path = path_combine(dir, file);
 
  //   printf("opening %s dir %s file %s\n", path, dir, file);
 
@@ -53,7 +53,7 @@ source_range_t _file_loader(const char* dir, const char* file, void* data)
         }
         fclose(f);
     }
-    free(path);
+    free((void*)path);
     return result;
 }
 

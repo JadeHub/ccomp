@@ -25,8 +25,7 @@ TEST_F(DeclSpecValidationTest, err_void_int)
 }
 
 TEST_F(DeclSpecValidationTest, err_void_short)
-{
-	std::string code = R"(
+{	std::string code = R"(
 	void short foo()
 	{	
 	}

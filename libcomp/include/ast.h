@@ -88,7 +88,7 @@ typedef struct
 	union
 	{
 		struct ast_expression* expr;
-		struct ast_type_spec* type;
+		struct ast_type_ref* type_ref;
 	}data;
 }ast_sizeof_call_t;
 
@@ -114,7 +114,7 @@ typedef struct
 typedef struct
 {
 	struct ast_expression* expr;
-	struct ast_type_spec* type;
+	struct ast_type_ref* type_ref;
 }ast_expr_cast_data_t;
 
 typedef enum
@@ -170,7 +170,9 @@ typedef enum
 	/*type_float,
 	type_double,*/
 	type_user,
-	type_ptr
+	type_ptr,
+
+	type_alias //typedef
 }type_kind;
 
 typedef struct ast_struct_member
@@ -231,6 +233,7 @@ typedef struct ast_type_spec
 	{
 		ast_user_type_spec_t* user_type_spec;
 
+		const char* alias;
 		/*
 		type pointed to if kind is type_ptr or type_array
 		*/
@@ -239,10 +242,19 @@ typedef struct ast_type_spec
 
 }ast_type_spec_t;
 
+//Storage class flags
+#define TF_SC_EXTERN		1
+#define TF_SC_STATIC		2
+#define TF_SC_TYPEDEF		4
+
+//Type qualifier flags
+#define TF_Q_CONST			8
+
 typedef struct ast_type_ref
 {
 	token_range_t tokens;
 	ast_type_spec_t* spec;
+	uint32_t flags;
 }ast_type_ref_t;
 
 /* Declaration */
@@ -295,7 +307,7 @@ typedef struct ast_declaration
 	{
 		ast_var_decl_t var;
 		ast_function_decl_t func;
-		ast_type_spec_t* type;
+		ast_type_ref_t* type_ref;
 	}data;
 
 	struct ast_declaration* next;
@@ -431,8 +443,7 @@ const char* ast_declaration_name(ast_declaration_t* decl);
 const char* ast_type_name(ast_type_spec_t* type);
 const char* ast_type_ref_name(ast_type_ref_t* ref);
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
-uint32_t ast_struct_size(ast_user_type_spec_t*);
-uint32_t ast_struct_member_size(ast_struct_member_t* member);
+uint32_t ast_user_type_size(ast_user_type_spec_t*);
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
 bool ast_type_is_signed_int(ast_type_spec_t* type);
 bool ast_type_is_int(ast_type_spec_t* type);

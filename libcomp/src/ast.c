@@ -152,7 +152,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 		//ast_destroy_expression(decl->data.func.params);
 		break;
 	case decl_type:
-		ast_destroy_type_spec(decl->data.type);
+		ast_destroy_type_ref(decl->data.type_ref);
 		break;
 	}
 	free(decl);
@@ -296,7 +296,7 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 	case decl_func:
 		return decl->data.func.name;
 	case decl_type:
-		return ast_type_name(decl->data.type);
+		return ast_type_name(decl->data.type_ref->spec);
 	//case decl_const:
 	//	return decl->data.const_val.name;
 	}
@@ -326,9 +326,10 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member)
 	return member->type_ref->spec->size;
 }
 
-uint32_t ast_struct_size(ast_user_type_spec_t* spec)
+uint32_t ast_user_type_size(ast_user_type_spec_t* spec)
 {
-	assert(spec->kind != user_type_enum);
+	if (spec->kind == user_type_enum)
+		return 4;
 	uint32_t total = 0;
 	uint32_t max_member = 0;
 

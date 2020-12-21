@@ -270,7 +270,7 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 		return true;
 
 	//integer promotion
-	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size > type->size)
+	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size >= type->size)
 	{
 		return true;
 	}
@@ -282,14 +282,22 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	return false;
 }
 
-void f()
+proc_decl_result process_typedef_declaration(ast_declaration_t* decl)
 {
+	if(!sema_resolve_type_ref(decl->data.var.type_ref))
+		return proc_decl_error;
 
+
+
+	return proc_decl_new_def;
 }
 
 bool process_variable_declaration(ast_declaration_t* decl)
 {
 	ast_var_decl_t* var = &decl->data.var;
+
+	if (var->type_ref->flags & TF_SC_TYPEDEF)
+		return process_typedef_declaration(decl) == proc_decl_new_def;
 
 	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name, decl_var);
 	if (existing)
@@ -340,7 +348,7 @@ bool process_declaration(ast_declaration_t* decl)
 	case decl_func:
 		return process_function_decl(decl) != proc_decl_error;
 	case decl_type:
-		return sema_resolve_type(decl->data.type);		
+		return sema_resolve_type(decl->data.type_ref->spec);
 	}
 	return true;
 }
@@ -380,6 +388,11 @@ bool process_block_list(ast_block_item_t* blocks)
 
 bool process_for_statement(ast_statement_t* smnt)
 {
+	/* todo
+	* The declaration part of a for statement shall only declare identifiers for objects having
+storage class auto or register
+	*/
+
 	if (!process_declaration(smnt->data.for_smnt.init_decl))
 		return false;
 	if (!process_expression(smnt->data.for_smnt.init))
@@ -737,6 +750,9 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 {
 	ast_var_decl_t* var = &decl->data.var;
 
+	if (var->type_ref->flags & TF_SC_TYPEDEF)
+		return process_typedef_declaration(decl);
+
 	ast_declaration_t* fn = idm_find_decl(_id_map, var->name, decl_func);
 	if (fn)
 	{
@@ -911,7 +927,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 		}
 		else if (decl->kind == decl_type)
 		{
-			ast_type_spec_t* type = sema_resolve_type(decl->data.type);
+			ast_type_spec_t* type = sema_resolve_type(decl->data.type_ref->spec);
 
 			if (!ht_contains(types, type))
 			{
@@ -934,4 +950,6 @@ void tl_destroy(valid_trans_unit_t* tl)
 	
 	ast_destory_translation_unit(tl->ast);
 	free(tl);
+
+	
 }

@@ -193,6 +193,8 @@ ast_statement_t* parse_for_statement()
 		goto _parse_for_err;
 	next_tok();
 	
+	parse_on_enter_block();
+
 	//initialisation
 	
 	data->init_decl = try_parse_declaration();
@@ -244,7 +246,9 @@ ast_statement_t* parse_for_statement()
 	{
 		report_err(ERR_SYNTAX, "Failed to parse body of for loop");
 		goto _parse_for_err;
-	}	
+	}
+
+	parse_on_leave_block();
 
 	return result;
 _parse_for_err:
@@ -424,20 +428,7 @@ ast_statement_t* parse_statement()
 		ast_statement_t* smnt = _alloc_smnt();
 		smnt->tokens.start = start;
 		smnt->kind = smnt_compound;
-
-		ast_block_item_t* block;
-		ast_block_item_t* last_block = NULL;
-		while (!current_is(tok_r_brace))
-		{
-			block = parse_block_item();
-
-			if (last_block)
-				last_block->next = block;
-			else
-				smnt->data.compound.blocks = block;
-			last_block = block;
-		}
-		next_tok();
+		smnt->data.compound.blocks = parse_block_list();
 		smnt->tokens.end = current();
 		return smnt;
 	}

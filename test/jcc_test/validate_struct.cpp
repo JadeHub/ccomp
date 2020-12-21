@@ -267,3 +267,14 @@ TEST_F(StructValidationTest, inline_decl)
 
 	ExpectNoError(code);
 }
+
+TEST_F(StructValidationTest, typedef_struct)
+{
+	std::string code = R"(
+	typedef struct {int i;} A;
+	A a;
+	
+	)";
+
+	ExpectNoError(code);
+}

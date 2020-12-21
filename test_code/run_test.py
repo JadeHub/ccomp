@@ -24,7 +24,7 @@ def run_test(path):
     print(test_name.ljust(50-4, '.'), end = '')
 
     #build with gcc
-    if run_command('gcc ' + path + ' -o ~/temp/test.app') != 0:
+    if run_command('gcc -m32 ' + path + ' -o ~/temp/test.app') != 0:
         print(f'{bcolors.FAIL}GCC FAIL')
         return False
 
