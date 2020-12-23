@@ -44,7 +44,6 @@ eg x = 5
 typedef struct
 {
 	//todo - remove name?
-	//char name[MAX_LITERAL_NAME];
 	struct ast_expression* target;
 	struct ast_expression* expr;
 }ast_expr_assign_t;
@@ -124,7 +123,6 @@ typedef enum
 	expr_binary_op,
 	expr_int_literal,
 	expr_str_literal,
-	expr_assign,
 	expr_identifier,
 	expr_condition,
 	expr_func_call,
@@ -143,7 +141,6 @@ typedef struct ast_expression
 		ast_expr_binary_op_t binary_op;
 		ast_int_literal_t int_literal;
 		ast_string_literal_t str_literal;
-		ast_expr_assign_t assignment;
 		ast_expr_identifier_t var_reference;
 		ast_cond_expr_data_t condition;
 		ast_expr_func_call_t func_call;
@@ -238,6 +235,7 @@ typedef struct ast_type_spec
 		type pointed to if kind is type_ptr or type_array
 		*/
 		struct ast_type_spec* ptr_type;
+		//struct ast_type_ref* ptr_ref;
 	}data;
 
 }ast_type_spec_t;
@@ -291,6 +289,19 @@ typedef struct ast_func_decl
 
 }ast_function_decl_t;
 
+/*
+Type declaration
+eg 
+struct A {...};
+or
+typedef struct A alias;
+*/
+typedef struct ast_type_decl
+{
+	char alias[MAX_LITERAL_NAME];
+	ast_type_ref_t* type_ref;
+}ast_type_decl_t;
+
 typedef enum
 {
 	decl_var,
@@ -307,7 +318,7 @@ typedef struct ast_declaration
 	{
 		ast_var_decl_t var;
 		ast_function_decl_t func;
-		ast_type_ref_t* type_ref;
+		ast_type_decl_t type;
 	}data;
 
 	struct ast_declaration* next;
@@ -438,8 +449,10 @@ typedef struct
 
 void ast_print(ast_trans_unit_t* tl);
 
+bool ast_is_assignment_op(op_kind op);
 const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
+const char* ast_declaration_type_name(ast_decl_type decl_type);
 const char* ast_type_name(ast_type_spec_t* type);
 const char* ast_type_ref_name(ast_type_ref_t* ref);
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);

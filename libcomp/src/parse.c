@@ -154,6 +154,56 @@ static bool tok_in_set(tok_kind kind, tok_kind* set)
 	return false;
 }
 
+static bool _is_assignment_op(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_equal:	
+	case tok_starequal:
+	case tok_slashequal:
+	case tok_percentequal:
+	case tok_plusequal:
+	case tok_minusequal:
+	case tok_lesserlesserequal:
+	case tok_greatergreaterequal:
+	case tok_ampequal:
+	case tok_carotequal:
+	case tok_pipeequal:
+		return true;
+	}
+	return false;
+}
+
+static op_kind _get_assignment_operator(token_t* tok)
+{
+	switch (tok->kind)
+	{
+	case tok_equal:
+		return op_assign;
+	case tok_starequal:
+		return op_mul_assign;
+	case tok_slashequal:
+		return op_div_assign;
+	case tok_percentequal:
+		return op_mod_assign;
+	case tok_plusequal:
+		return op_add_assign;
+	case tok_minusequal:
+		return op_sub_assign;
+	case tok_lesserlesserequal:
+		return op_left_shift_assign;
+	case tok_greatergreaterequal:
+		return op_right_shift_assign;
+	case tok_ampequal:
+		return op_and_assign;
+	case tok_carotequal:
+		return op_xor_assign;
+	case tok_pipeequal:
+		return op_or_assign;
+	}
+	report_err(ERR_SYNTAX, "Unknown assignment op %s", diag_tok_desc(tok));
+	return op_unknown;
+}
 
 static bool _is_postfix_unary_op(token_t* tok)
 {
@@ -222,6 +272,11 @@ static op_kind _get_binary_operator(token_t* tok)
 {
 	switch (tok->kind)
 	{
+	case tok_equal:
+		return op_assign;
+	case tok_plusequal:
+		return op_add_assign;
+
 	case tok_minus:
 		return op_sub;
 	case tok_plus:
@@ -449,39 +504,51 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 		}
 		else
 		{
-			//variable 
-			result->kind = decl_var;
-			tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
-			next_tok();
-						
-			result->data.var.type_ref = type_ref;
-
-			// '[...]'
-			result->data.var.array_sz = opt_parse_array_spec();
-
-			//typedef ?
 			if (type_ref->flags & TF_SC_TYPEDEF)
-				parse_register_alias_name(result->data.var.name);
-						
-			if (current_is(tok_equal))
 			{
-				if (type_ref->flags & TF_SC_TYPEDEF)
+				//todo - parse_array_spec
+				//typedef
+				result->kind = decl_type;
+				result->data.type.type_ref = type_ref;
+				tok_spelling_cpy(current(), result->data.type.alias, MAX_LITERAL_NAME);
+				parse_register_alias_name(result->data.type.alias);
+				next_tok();
+
+				if (current_is(tok_equal))
 				{
 					report_err(ERR_SYNTAX, "typedef cannot be initialised");
 					ast_destroy_declaration(result);
 					return NULL;
 				}
-
+			}
+			else
+			{
+				//variable 
+				result->kind = decl_var;
+				tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
 				next_tok();
-				result->data.var.expr = parse_expression();
+
+				result->data.var.type_ref = type_ref;
+
+				// '[...]'
+				result->data.var.array_sz = opt_parse_array_spec();
+
+				if (current_is(tok_equal))
+				{
+					next_tok();
+					result->data.var.expr = parse_expression();
+				}
 			}
 		}
 	}
 	else
 	{
 		//type-spec
+		//eg
+		//struct A {...};
 		result->kind = decl_type;
-		result->data.type_ref = type_ref;
+		result->data.type.type_ref = type_ref;
+		result->data.type.alias[0] = '\0';
 	}
 
 	if (found_semi)
@@ -970,14 +1037,16 @@ ast_expression_t* parse_assignment_expression()
 
 	expr = try_parse_unary_expr();
 
-	if (expr && current_is(tok_equal))
+	if (expr && _is_assignment_op(current()))
 	{
+		op_kind op = _get_assignment_operator(current());
 		next_tok();
 		ast_expression_t* assignment = _alloc_expr();
 		assignment->tokens = expr->tokens;
-		assignment->kind = expr_assign;
-		assignment->data.assignment.target = expr;		
-		assignment->data.assignment.expr = parse_assignment_expression();
+		assignment->kind = expr_binary_op;
+		assignment->data.binary_op.operation = op;
+		assignment->data.binary_op.lhs = expr;
+		assignment->data.binary_op.rhs = parse_assignment_expression();
 		assignment->tokens.end = current();
 		return assignment;
 	}

@@ -66,8 +66,8 @@ void idm_add_tag(identfier_map_t* map, ast_type_spec_t* typeref);
 void idm_add_enum_val(identfier_map_t* map, const char* name, int_val_t val);
 
 ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl);
-ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
-ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, ast_decl_type kind);
+ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name);
+ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name);
 int_val_t* idm_find_enum_val(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name);

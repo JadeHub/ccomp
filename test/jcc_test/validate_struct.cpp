@@ -273,7 +273,12 @@ TEST_F(StructValidationTest, typedef_struct)
 	std::string code = R"(
 	typedef struct {int i;} A;
 	A a;
-	
+
+	void fn() 
+	{
+		a.i = 7;
+	}
+
 	)";
 
 	ExpectNoError(code);

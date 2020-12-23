@@ -11,8 +11,9 @@ ast_expression_t* try_parse_expression();
 ast_block_item_t* parse_block_list();
 ast_expression_t* parse_constant_expression();
 
-ast_type_ref_t* try_parse_type();
 
+void parse_type_init();
+//ast_type_ref_t* try_parse_type();
 ast_type_ref_t* try_parse_type_ref();
 ast_expression_t* try_parse_literal();
 ast_expression_t* parse_optional_expression(tok_kind term_tok);

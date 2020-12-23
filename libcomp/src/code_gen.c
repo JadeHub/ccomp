@@ -86,6 +86,7 @@ static bool _is_unsigned_int_type(ast_type_spec_t* type)
 
 static const char* _sized_mov(ast_type_spec_t* type)
 {
+	
 	if (type->size == 4)
 		return "movl";
 
@@ -202,6 +203,41 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 static inline bool _is_binary_op(ast_expression_t* expr, op_kind op)
 {
 	return expr->kind == expr_binary_op && expr->data.binary_op.operation == op;
+}
+
+static inline bool _is_binary_assignment_op(ast_expression_t* expr)
+{
+	return expr->kind == expr_binary_op && 
+		ast_is_assignment_op(expr->data.binary_op.operation);
+}
+
+static inline op_kind _get_non_assign_op(op_kind assign_op)
+{
+	switch (assign_op)
+	{
+	case op_mul_assign:
+		return op_mul;
+	case op_div_assign:
+		return op_div;
+	case op_mod_assign:
+		return op_mod;
+	case op_add_assign:
+		return op_add;
+	case op_sub_assign:
+		return op_sub;
+	case op_left_shift_assign:
+		return op_shiftleft;
+	case op_right_shift_assign:
+		return op_shiftright;
+	case op_and_assign:
+		return op_bitwise_and;
+	case op_xor_assign:
+		return op_bitwise_xor;
+	case op_or_assign:
+		return op_bitwise_or;
+	}
+	assert(false);
+	return op_unknown;
 }
 
 static inline bool _is_unary_op(ast_expression_t* expr, op_kind op)
@@ -396,7 +432,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		}
 
 	}
-	else if (expr->kind == expr_assign)
+	else if(_is_binary_assignment_op(expr))
 	{
 		gen_assignment_expression(expr, result);
 	}
@@ -591,35 +627,137 @@ void gen_copy_eax_to_lval(expr_result* target)
 	}
 }
 
+void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
+{
+	gen_expression1(expr->data.binary_op.rhs);
+	_gen_asm("push %%eax");
+
+	gen_expression(expr->data.binary_op.lhs, result);
+
+	//pop rhs into ecx
+	_gen_asm("pop %%ecx");
+
+	//if our target is an address we will dereference it into eax in ensure_lval_in_reg()
+	//we will need to store the result at this address so we push it here and will restore it in edx before calling gen_copy_eax_to_lval
+	if (result->lval.kind == lval_address)
+		_gen_asm("pushl %%eax");
+
+	ensure_lval_in_reg(&result->lval);
+
+	switch (_get_non_assign_op(expr->data.binary_op.operation))
+	{
+	case op_add:
+		_gen_asm("addl %%ecx, %%eax");
+		break;
+	case op_sub:
+		_gen_asm("subl %%ecx, %%eax");
+		break;
+	case op_mul:
+		_gen_asm("imul %%ecx, %%eax");
+		break;
+	case op_div:
+		//clear edx
+		_gen_asm("xor %%edx, %%edx");
+		//sign extend eax into edx:eax
+		_gen_asm("cdq");
+		_gen_asm("idivl %%ecx");
+		break;
+	case op_shiftleft:
+		_gen_asm("sall %%cl, %%eax");
+		break;
+	case op_shiftright:
+		_gen_asm("sarl %%cl, %%eax");
+		break;
+	case op_eq:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("sete %%al"); //test flags of comparison
+		break;
+	case op_neq:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("setne %%al"); //test flags of comparison
+		break;
+	case op_greaterthanequal:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("setge %%al"); //test flags of comparison
+		break;
+	case op_greaterthan:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("setg %%al"); //test flags of comparison
+		break;
+	case op_lessthanequal:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("setle %%al"); //test flags of comparison
+		break;
+	case op_lessthan:
+		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		_gen_asm("movl $0, %%eax"); //set eax to 0
+		_gen_asm("setl %%al"); //test flags of comparison
+		break;
+	case op_bitwise_and:
+		_gen_asm("andl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_bitwise_or:
+		_gen_asm("orl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_bitwise_xor:
+		_gen_asm("xorl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_mod:
+		_gen_asm("xor %%edx, %%edx");
+		_gen_asm("cdq");
+		_gen_asm("idivl %%ecx");
+		_gen_asm("movl %%edx, %%eax");
+		break;
+	}
+
+	if (result->lval.kind == lval_address)
+		_gen_asm("popl %%edx");
+
+	//if (expr->data.binary_op.operation == op_div_assign)
+	{
+	//	expr->data.binary_op.operation = _get_non_assign_op(expr->data.binary_op.operation);
+		//gen_arithmetic_binary_expression(expr, result);
+
+		//if (result->lval.kind == lval_address)
+		//	_gen_asm("movl %%eax, %%edx");
+
+		//clear edx
+		/*_gen_asm("xor %%edx, %%edx");
+		//sign extend eax into edx:eax
+		_gen_asm("cdq");
+		_gen_asm("idivl %%ecx");*/
+		
+	}
+	gen_copy_eax_to_lval(result);
+}
+
 void gen_assignment_expression(ast_expression_t* expr, expr_result* result)
 {
+	if (_is_binary_assignment_op(expr) && expr->data.binary_op.operation != op_assign)
+	{
+		gen_op_assign_expression(expr, result);
+		return;
+	}
+
 	/*
 	1) Process the target expression generating code to calculate the assignment target which can be one of:
 		A) types of 4 bytes or less to be written to a stack location or address (all int and pointer types)
 		B) types greater than 4 bytes in length are copied to a stack location or to an address stored in a stack location
 	*/
 	
- 	gen_expression(expr->data.assignment.target, result);
-
-	switch (result->lval.kind)
-	{
-	case lval_stack:
-		_gen_asm("# assignment lhs type %s size %d target: stack offset: %d + %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.data.stack_offset, result->lval.offset);
-		break;
-	case lval_label:
-		_gen_asm("# assignment lhs type %s size %d target: label: %s + %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.data.label, result->lval.offset);
-		break;
-	case lval_address:
-		_gen_asm("# assignment lhs type %s size %d target: reg: offset %d", ast_type_name(result->lval.type), result->lval.type->size, result->lval.offset);
-		break;
-	}
-		
+ 	gen_expression(expr->data.binary_op.lhs, result);
+	
 	assert(result->lval.kind != lval_none);
 
 	if(result->lval.kind == lval_address)
 		_gen_asm("pushl %%eax");
 
-	gen_expression1(expr->data.assignment.expr);
+	gen_expression1(expr->data.binary_op.rhs);
 	
 	if (result->lval.kind == lval_address)
 		_gen_asm("popl %%edx");
@@ -706,7 +844,12 @@ void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* resul
 	result;
 	gen_expression1(expr->data.binary_op.rhs);
 	_gen_asm("push %%eax");
-	gen_expression1(expr->data.binary_op.lhs);
+
+	result->lval.kind = lval_none;
+	gen_expression(expr->data.binary_op.lhs, result);
+	if (result->lval.type)
+		ensure_lval_in_reg(&result->lval);
+	result->lval.kind = lval_none;
 	_gen_asm("pop %%ecx");
 
 	switch (expr->data.binary_op.operation)
@@ -721,7 +864,9 @@ void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* resul
 		_gen_asm("imul %%ecx, %%eax");
 		break;
 	case op_div:
+		//clear edx
 		_gen_asm("xor %%edx, %%edx");
+		//sign extend eax into edx:eax
 		_gen_asm("cdq");
 		_gen_asm("idivl %%ecx");
 		break;

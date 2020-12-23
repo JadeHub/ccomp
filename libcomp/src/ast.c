@@ -24,9 +24,6 @@ void ast_destroy_expression_data(ast_expression_t* expr)
 		break;
 	case expr_int_literal:
 		break;
-	case expr_assign:
-		ast_destroy_expression(expr->data.assignment.expr);
-		break;
 	case expr_identifier:
 		break;
 	case expr_condition:
@@ -59,9 +56,9 @@ void ast_destroy_expression(ast_expression_t* expr)
 		break;
 	case expr_int_literal:
 		break;
-	case expr_assign:
-		ast_destroy_expression(expr->data.assignment.expr);
-		break;
+	//case expr_assign:
+//		ast_destroy_expression(expr->data.assignment.expr);
+	//	break;
 	case expr_identifier:
 		break;	
 	case expr_condition:
@@ -152,7 +149,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 		//ast_destroy_expression(decl->data.func.params);
 		break;
 	case decl_type:
-		ast_destroy_type_ref(decl->data.type_ref);
+		ast_destroy_type_ref(decl->data.type.type_ref);
 		break;
 	}
 	free(decl);
@@ -287,6 +284,20 @@ const char* ast_type_name(ast_type_spec_t* type)
 	return "unknown type";
 }
 
+const char* ast_declaration_type_name(ast_decl_type dt)
+{
+	switch (dt)
+	{
+	case decl_var:
+		return "variable";
+	case decl_func:
+		return "function";
+	case decl_type:
+		return "type";
+	}
+	return "unknown";
+}
+
 const char* ast_declaration_name(ast_declaration_t* decl)
 {
 	switch (decl->kind)
@@ -296,7 +307,11 @@ const char* ast_declaration_name(ast_declaration_t* decl)
 	case decl_func:
 		return decl->data.func.name;
 	case decl_type:
-		return ast_type_name(decl->data.type_ref->spec);
+	{
+		if (strlen(decl->data.type.alias))
+			return decl->data.type.alias;
+		return ast_type_name(decl->data.type.type_ref->spec);
+	}
 	//case decl_const:
 	//	return decl->data.const_val.name;
 	}

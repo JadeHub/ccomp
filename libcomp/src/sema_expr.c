@@ -102,22 +102,60 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 	return result;
 }
 
+static expr_result_t _process_assignment(ast_expression_t* expr)
+{
+	ast_expression_t* target = expr->data.binary_op.lhs;
+	ast_expression_t* source = expr->data.binary_op.rhs;
+
+	expr_result_t target_result = sema_process_expression(target);
+	if (target_result.failure)
+		return target_result;
+
+	expr_result_t result = sema_process_expression(source);
+	if (result.failure)
+		return result;
+
+	if (source->kind == expr_int_literal && target_result.result_type->kind != type_ptr)
+	{
+
+		if (!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
+		{
+			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(target_result.result_type));
+		}
+	}
+	else if (target_result.result_type->kind != type_ptr)
+	{
+		if (!sema_can_convert_type(target_result.result_type, result.result_type))
+		{
+			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(target_result.result_type));
+		}
+	}
+
+	return target_result;
+}
+
 static expr_result_t _process_binary_op(ast_expression_t* expr)
 {
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	switch (expr->data.binary_op.operation)
+	if (ast_is_assignment_op(expr->data.binary_op.operation))
 	{
-	case op_member_access:
-		//fallthrough
-	case op_ptr_member_access:
-		return _process_member_access_binary_op(expr);
-	case op_array_subscript:
-		return _process_array_subscript_binary_op(expr);
-	default:
-		break;
+		return _process_assignment(expr);
 	}
+	else if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
+	{
+		return _process_member_access_binary_op(expr);
+	}
+	else if (expr->data.binary_op.operation == op_array_subscript)
+	{
+		return _process_array_subscript_binary_op(expr);
+	}
+
 
 	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
 	if (lhs_result.failure)
@@ -144,7 +182,7 @@ static expr_result_t _process_unary_op(ast_expression_t* expr)
 	case op_address_of:
 	{
 		ast_type_spec_t* ptr_type = ast_make_ptr_type(result.result_type);
-		result.result_type = sema_resolve_type(ptr_type);
+		result.result_type = ptr_type;// sema_resolve_type(ptr_type);
 		break;
 	}
 	case op_dereference:
@@ -194,45 +232,13 @@ static expr_result_t _process_str_literal(ast_expression_t* expr)
 	return result;
 }
 
-static expr_result_t _process_assignment(ast_expression_t* expr)
-{
-	expr_result_t target_result = sema_process_expression(expr->data.assignment.target);
-	if (target_result.failure)
-		return target_result;
-
-	expr_result_t result = sema_process_expression(expr->data.assignment.expr);
-	if (result.failure)
-		return result;
-
-	if (expr->data.assignment.expr->kind == expr_int_literal)
-	{
-		if (!int_val_will_fit(&expr->data.assignment.expr->data.int_literal.val, target_result.result_type))
-		{
-			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_result.result_type));
-		}
-	}
-	else
-	{
-		if (!sema_can_convert_type(target_result.result_type, result.result_type))
-		{
-			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_result.result_type));
-		}
-	}
-
-	return target_result;
-}
-
 static expr_result_t _process_variable_reference(ast_expression_t* expr)
 {
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name, decl_var);
-	if (decl)
+	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name);
+	if (decl && decl->kind == decl_var)
 	{
 		if (decl->data.var.type_ref->spec->size == 0)
 		{
@@ -287,9 +293,9 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name, decl_func);
+	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name);
 
-	if (!decl)
+	if (!decl || decl->kind != decl_func)
 	{
 		return _report_err(expr, ERR_UNKNOWN_FUNC,
 			"function '%s' not defined",
@@ -338,7 +344,8 @@ static expr_result_t _process_sizeof(ast_expression_t* expr)
 
 	if (expr->data.sizeof_call.kind == sizeof_type)
 	{
-		type = sema_resolve_type(expr->data.sizeof_call.data.type_ref->spec);
+		sema_resolve_type_ref(expr->data.sizeof_call.data.type_ref);
+		type = expr->data.sizeof_call.data.type_ref->spec;
 	}
 	else
 	{
@@ -412,8 +419,8 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		return sema_process_int_literal(expr);
 	case expr_str_literal:
 		return _process_str_literal(expr);
-	case expr_assign:
-		return _process_assignment(expr);
+	//case expr_assign:
+		//return _process_assignment(expr);
 	case expr_identifier:
 		return _process_variable_reference(expr);
 	case expr_condition:

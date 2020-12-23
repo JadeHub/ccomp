@@ -20,7 +20,7 @@ typedef struct
 	tl_decl_t* var_decls;
 	
 	//used by ast_view
-	tl_decl_t* type_decls;
+	//tl_decl_t* type_decls;
 
 	hash_table_t* string_literals;
 	

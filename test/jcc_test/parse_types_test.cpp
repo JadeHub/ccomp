@@ -15,7 +15,7 @@ public:
 
 		parse_init(mTokens);
 		
-		type_ref = try_parse_type();
+		type_ref = try_parse_type_ref();
 		return type_ref;
 	}
 

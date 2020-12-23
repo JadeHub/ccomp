@@ -459,7 +459,7 @@ ast_type_spec_t* _interpret_numeric_type_flags(uint32_t spec_flags)
 	return NULL;
 }
 
-ast_type_ref_t* try_parse_type()
+ast_type_ref_t* try_parse_type_ref()
 {
 	token_t* start = current();
 	uint32_t flags = 0;
@@ -612,14 +612,6 @@ ast_type_ref_t* try_parse_type()
 	result->tokens.end = current();
 
 	return result;
-}
-
-/*
-
-*/
-ast_type_ref_t* try_parse_type_ref()
-{
-	return try_parse_type();
 }
 
 void parse_type_init()

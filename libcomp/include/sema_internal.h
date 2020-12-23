@@ -25,7 +25,7 @@ expr_result_t sema_process_expression(ast_expression_t* expr);
 expr_result_t sema_process_int_literal(ast_expression_t* expr);
 
 identfier_map_t* sema_id_map();
-ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref);
+bool sema_resolve_type_ref(ast_type_ref_t* ref);
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type);
 
 

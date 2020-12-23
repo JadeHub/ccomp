@@ -5,10 +5,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static inline bool _id_is_decl(identifier_t* id, const char* name, ast_decl_type kind)
+static inline bool _id_is_decl(identifier_t* id, const char* name)
 {
 	return (id->kind == id_decl &&
-		id->data.decl->kind == kind &&
 		strcmp(name, ast_declaration_name(id->data.decl)) == 0);
 }
 
@@ -136,7 +135,7 @@ ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl
 
 	while (id)
 	{
-		if(_id_is_decl(id, ast_declaration_name(decl), decl->kind))
+		if(_id_is_decl(id, ast_declaration_name(decl)) && id->kind == decl->kind)
 		{
 			id->data.decl = decl;
 			return id->data.decl;
@@ -146,13 +145,13 @@ ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl
 	return NULL;
 }
 
-ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_decl_type kind)
+ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name)
 {
 	identifier_t* id = map->identifiers;
 
 	while (id)
 	{
-		if (_id_is_decl(id, name, kind))
+		if (_id_is_decl(id, name))
 		{
 			return id->data.decl;
 		}
@@ -161,7 +160,7 @@ ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name, ast_dec
 	return NULL;
 }
 
-ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, ast_decl_type kind)
+ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name)
 {
 	identifier_t* id = map->identifiers;
 
@@ -170,7 +169,7 @@ ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name, a
 		if (id->kind == id_marker)
 			break;
 
-		if (_id_is_decl(id, name, kind))
+		if (_id_is_decl(id, name))
 		{
 			return id->data.decl;
 		}

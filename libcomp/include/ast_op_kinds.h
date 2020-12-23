@@ -14,6 +14,20 @@ typedef enum
 	op_postfix_inc,
 	op_postfix_dec,
 	//binary operators
+
+	//assignment
+	op_assign,
+	op_mul_assign,
+	op_div_assign,
+	op_mod_assign,
+	op_add_assign,
+	op_sub_assign,
+	op_left_shift_assign,
+	op_right_shift_assign,
+	op_and_assign,
+	op_xor_assign,
+	op_or_assign,
+
 	op_add,
 	op_sub,
 	op_mul,

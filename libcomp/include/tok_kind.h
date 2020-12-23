@@ -18,7 +18,7 @@ typedef enum
 	tok_exclaim,            // !
 	tok_plus,               // +
 	tok_plusplus,           // ++
-	tok_plusequal,          // +=
+	
 	tok_star,               // *
 	tok_slash,              // /
 	tok_hash,               // #
@@ -30,6 +30,20 @@ typedef enum
 	tok_equal,              // =
 	tok_equalequal,         // ==
 	tok_exclaimequal,       // !=
+	
+	
+	tok_starequal,          // *=
+	tok_slashequal,         // /=
+	tok_percentequal,		// %=
+	tok_plusequal,          // +=
+	tok_minusequal,         // -=
+	tok_lesserlesserequal,  // <<=
+	tok_greatergreaterequal,// >>=
+	tok_ampequal,			// &=
+	tok_carotequal,			// ^=
+	tok_pipeequal,			// |=
+
+
 	tok_lesser,             // <
 	tok_lesserlesser,       // <<
 	tok_lesserequal,        // <=

@@ -577,6 +577,11 @@ lex_next_tok:
 			result->kind = tok_minusgreater;
 			_adv_pos(src, &pos);
 		}
+		else if (*pos == '=')
+		{
+			result->kind = tok_minusequal;
+			_adv_pos(src, &pos);
+		}
 		else
 		{
 			result->kind = tok_minus;
@@ -617,7 +622,15 @@ lex_next_tok:
 		break;
 	case '*':
 		_adv_pos(src, &pos);
-		result->kind = tok_star;
+		if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_starequal;
+		}
+		else
+		{
+			result->kind = tok_star;
+		}
 		break;
 	case '/':
 		_adv_pos(src, &pos);
@@ -631,6 +644,11 @@ lex_next_tok:
 			_adv_pos(src, &pos);
 			slashstar = true;
 		}
+		else if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_slashequal;
+		}
 		else
 		{
 			result->kind = tok_slash;
@@ -638,11 +656,27 @@ lex_next_tok:
 		break;
 	case '%':
 		_adv_pos(src, &pos);
-		result->kind = tok_percent;
+		if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_percentequal;
+		}
+		else
+		{
+			result->kind = tok_percent;
+		}
 		break;
 	case '^':
 		_adv_pos(src, &pos);
-		result->kind = tok_caret;
+		if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_carotequal;
+		}
+		else
+		{
+			result->kind = tok_caret;
+		}
 		break;
 	case ':':
 		_adv_pos(src, &pos);
@@ -667,6 +701,11 @@ lex_next_tok:
 			_adv_pos(src, &pos);
 			result->kind = tok_ampamp;
 		}
+		else if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_ampequal;
+		}
 		else
 		{
 			result->kind = tok_amp;
@@ -678,6 +717,11 @@ lex_next_tok:
 		{
 			_adv_pos(src, &pos);
 			result->kind = tok_pipepipe;
+		}
+		else if (*pos == '=')
+		{
+			_adv_pos(src, &pos);
+			result->kind = tok_pipeequal;
 		}
 		else
 		{
@@ -702,6 +746,13 @@ lex_next_tok:
 		{
 			_adv_pos(src, &pos);
 			result->kind = tok_lesserlesser;
+
+			if (*pos == '=')
+			{
+				_adv_pos(src, &pos);
+				result->kind = tok_lesserlesserequal;
+			}
+
 		}
 		else if (*pos == '=')
 		{
@@ -719,6 +770,11 @@ lex_next_tok:
 		{
 			_adv_pos(src, &pos);
 			result->kind = tok_greatergreater;
+			if (*pos == '=')
+			{
+				_adv_pos(src, &pos);
+				result->kind = tok_greatergreaterequal;
+			}
 		}
 		else if (*pos == '=')
 		{

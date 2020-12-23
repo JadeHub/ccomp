@@ -44,7 +44,6 @@ typedef enum
 
 proc_decl_result process_function_decl(ast_declaration_t* decl);
 bool process_statement(ast_statement_t* smnt);
-static bool sema_resolve_type_ref(ast_type_ref_t* ref);
 
 static bool _report_err(token_t* tok, int err, const char* format, ...)
 {
@@ -143,26 +142,33 @@ static void _add_user_type(ast_type_spec_t* typeref)
 	idm_add_tag(_id_map, typeref);
 }
 
-static bool sema_resolve_type_ref(ast_type_ref_t* ref)
+ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref, token_t* start)
 {
-	assert(ref->spec);
-	ast_type_spec_t* spec = sema_resolve_type(ref->spec);
-	if (spec)
+	if (typeref->kind == type_alias)
 	{
-		ref->spec = spec;
-		return true;
-	}
-	return false;
-}
+		ast_declaration_t* decl = idm_find_decl(_id_map, typeref->data.alias);
+		if (!decl)
+		{
+			_report_err(start, ERR_UNKNOWN_TYPE, "type alias %s unknown", typeref->data.alias);
+			return NULL;
+		}
+		if (decl->kind != decl_type)
+		{
+			_report_err(start, ERR_INCOMPATIBLE_TYPE, "%s does not name a type alias", typeref->data.alias);
+			return NULL;
+		}
 
-ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref)
-{
+		typeref = decl->data.type.type_ref->spec;
+
+		//return decl->data.type.type_ref->spec;
+	}
+
 	if (typeref->kind == type_ptr)
 	{
-		typeref->data.ptr_type = sema_resolve_type(typeref->data.ptr_type);
+		typeref->data.ptr_type = sema_resolve_type(typeref->data.ptr_type, start);
 		return typeref;
 	}
-	
+
 	if (typeref->kind != type_user)
 		return typeref;
 
@@ -261,6 +267,19 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref)
 	return typeref;
 }
 
+bool sema_resolve_type_ref(ast_type_ref_t* ref)
+{
+	assert(ref->spec);
+
+	ast_type_spec_t* spec = sema_resolve_type(ref->spec, ref->tokens.start);
+	if (spec)
+	{
+		ref->spec = spec;
+		return true;
+	}
+	return false;
+}
+
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
 	if (!type)
@@ -282,28 +301,15 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	return false;
 }
 
-proc_decl_result process_typedef_declaration(ast_declaration_t* decl)
-{
-	if(!sema_resolve_type_ref(decl->data.var.type_ref))
-		return proc_decl_error;
-
-
-
-	return proc_decl_new_def;
-}
-
 bool process_variable_declaration(ast_declaration_t* decl)
 {
 	ast_var_decl_t* var = &decl->data.var;
 
-	if (var->type_ref->flags & TF_SC_TYPEDEF)
-		return process_typedef_declaration(decl) == proc_decl_new_def;
-
-	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name, decl_var);
-	if (existing)
+	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name);
+	if (existing && existing->kind == decl_var)
 	{
 		return _report_err(decl->tokens.start, ERR_DUP_VAR,
-			"var %s already declared at",
+			"variable %s already declared at",
 			ast_declaration_name(decl));
 	}
 
@@ -337,6 +343,26 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	return true;
 }
 
+bool process_type_decl(ast_declaration_t* decl)
+{
+	if (!sema_resolve_type_ref(decl->data.type.type_ref))
+		return false;
+	
+	if (strlen(decl->data.type.alias))
+	{
+		ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->data.type.alias);
+		if (existing)
+		{
+			return _report_err(decl->tokens.start, ERR_DUP_TYPE_DEF,
+				"typedef forces redefinition of %s", decl->data.type.alias);
+		}
+
+		idm_add_id(_id_map, decl);
+	}
+
+	return true;
+}
+
 bool process_declaration(ast_declaration_t* decl)
 {
 	if (!decl)
@@ -348,7 +374,7 @@ bool process_declaration(ast_declaration_t* decl)
 	case decl_func:
 		return process_function_decl(decl) != proc_decl_error;
 	case decl_type:
-		return sema_resolve_type(decl->data.type_ref->spec);
+		return process_type_decl(decl);
 	}
 	return true;
 }
@@ -657,7 +683,8 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 	int p_count = 1;
 	while (p_exist && p_func)
 	{
-		if (p_exist->decl->data.var.type_ref->spec != sema_resolve_type(p_func->decl->data.var.type_ref->spec))
+		sema_resolve_type_ref(p_func->decl->data.var.type_ref);
+		if (p_exist->decl->data.var.type_ref->spec != p_func->decl->data.var.type_ref->spec)
 		{
 			return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
@@ -676,8 +703,8 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 {
 	const char* name = decl->data.func.name;
 
-	ast_declaration_t* var = idm_find_decl(_id_map, name, decl_var);
-	if (var)
+	ast_declaration_t* exist = idm_find_decl(_id_map, name);
+	if (exist && exist->kind == decl_var)
 	{
 		_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 			"declaration of function '%s' shadows variable at",
@@ -688,7 +715,6 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 	if (!resolve_function_decl_types(decl))
 		return proc_decl_error;
 
-	ast_declaration_t* exist = idm_find_decl(_id_map, name, decl_func);
 	if (exist)
 	{
 		if (_is_fn_definition(exist) && _is_fn_definition(decl))
@@ -750,11 +776,8 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 {
 	ast_var_decl_t* var = &decl->data.var;
 
-	if (var->type_ref->flags & TF_SC_TYPEDEF)
-		return process_typedef_declaration(decl);
-
-	ast_declaration_t* fn = idm_find_decl(_id_map, var->name, decl_func);
-	if (fn)
+	ast_declaration_t* exist = idm_find_decl(_id_map, var->name);
+	if (exist && exist->kind == decl_func)
 	{
 		_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 			"global var declaration of '%s' shadows function at",
@@ -771,8 +794,7 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 
 	ast_type_spec_t* type = var->type_ref->spec;
 	
-	ast_declaration_t* exist = idm_find_decl(_id_map, var->name, decl_var);
-	if (exist)
+	if (exist && exist->kind == decl_var)
 	{		
 		//multiple declarations are allowed
 		if (!type || exist->data.var.type_ref->spec != type)
@@ -868,15 +890,6 @@ static void _add_var_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
 	tl->var_decls = tl_decl;
 }
 
-static void _add_type_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
-{
-	tl_decl_t* tl_decl = (tl_decl_t*)malloc(sizeof(tl_decl_t));
-	memset(tl_decl, 0, sizeof(tl_decl_t));
-	tl_decl->decl = fn;
-	tl_decl->next = tl->type_decls;
-	tl->type_decls = tl_decl;
-}
-
 valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 {
 	types_init();
@@ -884,8 +897,6 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 
 	_cur_func_ctx.decl = NULL;
 	_cur_func_ctx.labels = NULL;
-
-	hash_table_t* types = phs_create(128);
 
 	valid_trans_unit_t* tl = (valid_trans_unit_t*)malloc(sizeof(valid_trans_unit_t));
 	memset(tl, 0, sizeof(valid_trans_unit_t));
@@ -927,17 +938,10 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 		}
 		else if (decl->kind == decl_type)
 		{
-			ast_type_spec_t* type = sema_resolve_type(decl->data.type_ref->spec);
-
-			if (!ht_contains(types, type))
-			{
-				phs_insert(types, type);
-				_add_type_decl(tl, decl);
-			}
+			process_type_decl(decl);
 		}
 		decl = next;
 	}
-	ht_destroy(types);
 	idm_destroy(_id_map);
 	_id_map = NULL;	
 	return tl;

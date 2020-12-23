@@ -169,6 +169,27 @@ const char* tok_kind_spelling(tok_kind k)
 		return "##";
 	case  tok_hash:
 		return "#";
+
+	case tok_starequal:
+		return "*=";
+	case tok_slashequal:
+		return "/=";
+	case tok_percentequal:
+		return "%=";
+	case tok_plusequal:
+		return "+=";
+	case tok_minusequal:
+		return "-=";
+	case tok_lesserlesserequal:
+		return "<<=";
+	case tok_greatergreaterequal:
+		return ">>=";
+	case tok_ampequal:
+		return "&=";
+	case tok_carotequal:
+		return "^=";
+	case tok_pipeequal:
+		return "&=";
 	}
 	return "invalid";
 }
