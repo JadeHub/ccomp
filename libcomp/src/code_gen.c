@@ -718,21 +718,6 @@ void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
 	if (result->lval.kind == lval_address)
 		_gen_asm("popl %%edx");
 
-	//if (expr->data.binary_op.operation == op_div_assign)
-	{
-	//	expr->data.binary_op.operation = _get_non_assign_op(expr->data.binary_op.operation);
-		//gen_arithmetic_binary_expression(expr, result);
-
-		//if (result->lval.kind == lval_address)
-		//	_gen_asm("movl %%eax, %%edx");
-
-		//clear edx
-		/*_gen_asm("xor %%edx, %%edx");
-		//sign extend eax into edx:eax
-		_gen_asm("cdq");
-		_gen_asm("idivl %%ecx");*/
-		
-	}
 	gen_copy_eax_to_lval(result);
 }
 
