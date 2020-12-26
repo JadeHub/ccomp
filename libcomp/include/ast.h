@@ -68,6 +68,15 @@ typedef struct
 	struct ast_expression* false_branch;
 }ast_cond_expr_data_t;
 
+typedef struct ast_func_call_param
+{
+	struct ast_expression* expr;
+
+	struct ast_type_spec* expr_type; //set during analysis
+
+	struct ast_func_call_param* next, * prev;
+}ast_func_call_param_t;
+
 /*
 function call expression data
 */
@@ -75,7 +84,10 @@ typedef struct
 {
 	char name[MAX_LITERAL_NAME];
 	struct ast_expression* target; //todo - unused
-	struct ast_expression* params;
+
+	ast_func_call_param_t* first_param;
+	ast_func_call_param_t* last_param;
+
 	uint32_t param_count;
 
 	struct ast_declaration* func_decl; //set during validation
@@ -147,7 +159,6 @@ typedef struct ast_expression
 		ast_sizeof_call_t sizeof_call;
 		ast_expr_cast_data_t cast;
 	}data;
-	struct ast_expression* next; //func call param list
 }ast_expression_t;
 
 /* Type */
@@ -279,6 +290,7 @@ typedef struct ast_func_decl
 	ast_func_param_decl_t* first_param;
 	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
+	bool ellipse_param;
 	
 	ast_type_ref_t* return_type_ref;
 

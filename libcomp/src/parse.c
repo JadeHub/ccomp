@@ -461,7 +461,14 @@ void parse_function_parameters(ast_function_decl_t* func)
 		func->first_param = func->last_param = NULL;
 		func->param_count = 0;
 	}
+
+	if (current_is(tok_ellipse))
+	{
+		next_tok();
+		func->ellipse_param = true;
+	}
 }
+
 
 /*
 <declaration> :: = <var_declaration> ";"
@@ -716,14 +723,29 @@ ast_expression_t* try_parse_postfix_expr()
 
 			while (!current_is(tok_r_paren))
 			{
-				if (expr->data.func_call.params)
+				if (expr->data.func_call.first_param)
 				{
 					expect_cur(tok_comma);
 					next_tok();
 				}
-				ast_expression_t* param_expr = parse_expression();
-				param_expr->next = expr->data.func_call.params;
-				expr->data.func_call.params = param_expr;
+				//ast_expression_t* param_expr = parse_expression();
+				ast_func_call_param_t* param = (ast_func_call_param_t*)malloc(sizeof(ast_func_call_param_t));
+				memset(param, 0, sizeof(ast_func_call_param_t));
+				param->expr = parse_expression();
+
+				if (!expr->data.func_call.first_param)
+				{
+					expr->data.func_call.first_param = expr->data.func_call.last_param = param;
+				}
+				else
+				{
+					param->prev = expr->data.func_call.last_param;
+					expr->data.func_call.last_param->next = param;
+					expr->data.func_call.last_param = param;
+				}
+
+				//param_expr->next = expr->data.func_call.params;
+				//expr->data.func_call.params = param_expr;
 				expr->data.func_call.param_count++;
 			}
 			next_tok();

@@ -5,6 +5,7 @@ typedef enum
 	tok_eof,
 	tok_invalid,
 	//punctuation
+	tok_ellipse,			// ...
 	tok_l_brace,            // {
 	tok_r_brace,            // }
 	tok_l_paren,            // (
@@ -30,8 +31,6 @@ typedef enum
 	tok_equal,              // =
 	tok_equalequal,         // ==
 	tok_exclaimequal,       // !=
-	
-	
 	tok_starequal,          // *=
 	tok_slashequal,         // /=
 	tok_percentequal,		// %=
@@ -42,8 +41,6 @@ typedef enum
 	tok_ampequal,			// &=
 	tok_carotequal,			// ^=
 	tok_pipeequal,			// |=
-
-
 	tok_lesser,             // <
 	tok_lesserlesser,       // <<
 	tok_lesserequal,        // <=

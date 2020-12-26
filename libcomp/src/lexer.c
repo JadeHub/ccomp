@@ -692,7 +692,17 @@ lex_next_tok:
 		break;
 	case '.':
 		_adv_pos(src, &pos);
-		result->kind = tok_fullstop;
+
+		if (*pos == '.' && *(pos + 1) == '.')
+		{
+			_adv_pos(src, &pos);
+			_adv_pos(src, &pos);
+			result->kind = tok_ellipse;
+		}
+		else
+		{
+			result->kind = tok_fullstop;
+		}
 		break;
 	case '&':
 		_adv_pos(src, &pos);

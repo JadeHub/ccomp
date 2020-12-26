@@ -756,8 +756,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	if (!decl)
 		return;
 
-	ast_expression_t* param = expr->data.func_call.params;
-	ast_func_param_decl_t* param_decl = decl->data.func.last_param;
+	ast_func_call_param_t* param = expr->data.func_call.last_param;
 	uint32_t pushed = 0;
 
 	if (decl->data.func.return_type_ref->spec->size > 4)
@@ -770,21 +769,22 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 
 	while (param)
 	{
-		gen_expression1(param);
+		gen_expression1(param->expr);
+		ast_type_spec_t* param_type = param->expr_type;
 
-		if (param_decl->decl->data.var.type_ref->spec->size == 1)
+		if (param_type->size == 1)
 		{
-			_gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type_ref->spec));
+			_gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_type));
 			_gen_asm("pushl %%edx");
 			pushed += 4;
 		}
-		else if (param_decl->decl->data.var.type_ref->spec->size == 2)
+		else if (param_type->size == 2)
 		{
-			_gen_asm("%s %%ax, %%edx", _promoting_mov_instr(param_decl->decl->data.var.type_ref->spec));
+			_gen_asm("%s %%ax, %%edx", _promoting_mov_instr(param_type));
 			_gen_asm("pushl %%edx");
 			pushed += 4;
 		}
-		else if (param_decl->decl->data.var.type_ref->spec->size == 4)
+		else if (param_type->size == 4)
 		{
 			_gen_asm("pushl %%eax");
 			pushed += 4;
@@ -793,19 +793,18 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		{
 			//address is in eax
 
-			uint32_t offset = param_decl->decl->data.var.type_ref->spec->size - 4;
-			size_t sz = param_decl->decl->data.var.type_ref->spec->size;
+			uint32_t offset = param_type->size - 4;
+			size_t sz = param_type->size;
 			while (sz > 0)
 			{
 				_gen_asm("pushl %d(%%eax)", offset);
 				offset -= 4;
 				sz -= 4;
 			}
-			pushed += param_decl->decl->data.var.type_ref->spec->size;
+			pushed += param_type->size;
 		}
 
-		param = param->next;
-		param_decl = param_decl->prev;
+		param = param->prev;
 	}
 
 	if (decl->data.func.return_type_ref->spec->size > 4)

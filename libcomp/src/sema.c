@@ -670,7 +670,8 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 			ast_declaration_name(func), ast_type_ref_name(exist->data.func.return_type_ref));
 	}
 
-	if (exist->data.func.param_count != func->data.func.param_count)
+	if (exist->data.func.param_count != func->data.func.param_count || 
+		exist->data.func.ellipse_param != func->data.func.ellipse_param)
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"incorrect number of params in declaration of function '%s'. Expected %d",
@@ -712,6 +713,14 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 		return proc_decl_error;
 	}
 
+	if (decl->data.func.ellipse_param && decl->data.func.param_count == 0)
+	{
+		_report_err(decl->tokens.start, ERR_SYNTAX,
+			"use of ellipse parameter requires at least one other parameter",
+			name);
+		return proc_decl_error;
+	}
+
 	if (!resolve_function_decl_types(decl))
 		return proc_decl_error;
 
@@ -743,30 +752,6 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 	return _is_fn_definition(decl) ? proc_decl_new_def : proc_decl_ignore;
 }
 
-static bool _process_global_init_expression(ast_declaration_t* decl)
-{
-	process_expression(decl->data.var.expr);
-	if (!sema_is_int_constant_expression(decl->data.var.expr))
-	{
-		return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
-			"global var '%s' initialised with non-const expression", decl->data.var.name);
-	}
-
-	if (decl->data.var.expr->kind != expr_int_literal)
-	{
-		int_val_t val = sema_eval_constant_expr(decl->data.var.expr);
-
-		ast_expression_t* expr = (ast_expression_t*)malloc(sizeof(ast_expression_t));
-		memset(expr, 0, sizeof(ast_expression_t));
-		expr->kind = expr_int_literal;
-		expr->data.int_literal.val = val;
-		process_expression(expr);
-		ast_destroy_expression(decl->data.var.expr);
-		decl->data.var.expr = expr;
-	}
-	return true;
-}
-
 /*
 Multiple declarations are allowed
 Only a single definition is permitted
@@ -787,8 +772,6 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 
 	if (!sema_resolve_type_ref(decl->data.var.type_ref))
 	{		
-	//	return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-	//		"var %s is of incomplete type",	var->name);
 		return proc_decl_error;
 	}
 
@@ -851,21 +834,11 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 				return proc_decl_error;
 			}
 		}
-		else if (decl->data.var.expr->kind == expr_str_literal)
-		{
-
-		}
-		else
+		else if (decl->data.var.expr->kind != expr_str_literal)
 		{
 			return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
 				"global var '%s' initialised with non-const expression", var->name);
 		}
-
-		//_process_global_init_expression(decl);
-
-		
-
-		
 	}
 
 	idm_add_id(_id_map, decl);

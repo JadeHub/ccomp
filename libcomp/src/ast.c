@@ -32,7 +32,7 @@ void ast_destroy_expression_data(ast_expression_t* expr)
 		ast_destroy_expression(expr->data.condition.false_branch);
 		break;
 	case expr_func_call:
-		ast_destroy_expression(expr->data.func_call.params);
+		//ast_destroy_expression(expr->data.func_call.);
 		break;
 	}
 
@@ -67,11 +67,19 @@ void ast_destroy_expression(ast_expression_t* expr)
 		ast_destroy_expression(expr->data.condition.false_branch);
 		break;
 	case expr_func_call:
-		ast_destroy_expression(expr->data.func_call.params);
+	{
+		ast_func_call_param_t* param = expr->data.func_call.first_param;
+		while (param)
+		{
+			ast_func_call_param_t* next = param->next;
+			ast_destroy_expression(param->expr);
+			free(param);
+			param = next;
+		}
+	}
 		break;
 	}
-
-	ast_destroy_expression(expr->next);
+		
 	free(expr);
 }
 
