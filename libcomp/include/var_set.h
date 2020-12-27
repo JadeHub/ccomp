@@ -17,11 +17,13 @@ typedef struct var_data
 		var_block_mark
 	}kind;
 
-	union
-	{
-		ast_var_decl_t* decl;
+	ast_declaration_t* var_decl;
+
+	//union
+	//{
+		//ast_var_decl_t* decl;
 		
-	}data;
+	//}data;
 
 	struct var_data* next;
 }var_data_t;
@@ -43,7 +45,7 @@ typedef struct
 var_set_t* var_init_set();
 void var_destory_set(var_set_t*);
 
-void var_enter_function(var_set_t* vars, ast_function_decl_t*);
+void var_enter_function(var_set_t* vars, ast_declaration_t*);
 void var_leave_function(var_set_t* vars);
 
 /* enter a scope block */
@@ -52,8 +54,8 @@ void var_enter_block(var_set_t*);
 void var_leave_block(var_set_t*);
 
 /* declare a new stack variable*/
-var_data_t* var_decl_stack_var(var_set_t*, ast_var_decl_t*);
-var_data_t* var_decl_global_var(var_set_t*, ast_var_decl_t*);
+var_data_t* var_decl_stack_var(var_set_t*, ast_declaration_t*);
+var_data_t* var_decl_global_var(var_set_t*, ast_declaration_t*);
 
 /* search from the current block outwards looking for a variable */
 var_data_t* var_find(var_set_t*, const char* name);

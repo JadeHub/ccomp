@@ -52,7 +52,7 @@ static void* _asm_cb_data;
 
 static var_set_t* _var_set;
 static bool _returned = false;
-static ast_function_decl_t* _cur_fun = NULL;
+static ast_declaration_t* _cur_fun = NULL;
 static valid_trans_unit_t* _cur_tl = NULL;
 
 static const char* _cur_break_label = NULL;
@@ -267,7 +267,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			return ;
 		}
 
-		result->lval.type = var->data.decl->type_ref->spec;
+		result->lval.type = var->var_decl->type_ref->spec;
 
 		if (var->kind == var_global)
 		{
@@ -759,11 +759,11 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	ast_func_call_param_t* param = expr->data.func_call.last_param;
 	uint32_t pushed = 0;
 
-	if (decl->data.func.return_type_ref->spec->size > 4)
+	if (decl->type_ref->spec->size > 4)
 	{
 		//allocate space for return value on the stack
 
-		_gen_asm("subl $%d, %%esp", decl->data.func.return_type_ref->spec->size);
+		_gen_asm("subl $%d, %%esp", decl->type_ref->spec->size);
 		_gen_asm("movl %%esp, %%ebx"); //store the return ptr
 	}
 
@@ -807,7 +807,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		param = param->prev;
 	}
 
-	if (decl->data.func.return_type_ref->spec->size > 4)
+	if (decl->type_ref->spec->size > 4)
 	{
 		_gen_asm("push %%ebx");
 		result->lval.kind = lval_address;
@@ -818,7 +818,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("addl $%d, %%esp", pushed);
 	}
-	result->lval.type = decl->data.func.return_type_ref->spec;
+	result->lval.type = decl->type_ref->spec;
 	if(result->lval.type->kind == type_ptr)
 		result->lval.kind = lval_address;
 }
@@ -908,24 +908,24 @@ void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* resul
 	}
 }
 
-void gen_var_decl(ast_var_decl_t* var_decl)
+void gen_var_decl(ast_declaration_t* decl)
 {
-	var_data_t* var = var_decl_stack_var(_var_set, var_decl);
+	var_data_t* var = var_decl_stack_var(_var_set, decl);
 	assert(var);
-	if (var_decl->expr)
+	if (decl->data.var.init_expr)
 	{
 		expr_result result;
 		memset(&result, 0, sizeof(expr_result));
-		result.lval.type = var_decl->type_ref->spec;
+		result.lval.type = decl->type_ref->spec;
 		result.lval.kind = lval_stack;
 		result.lval.data.stack_offset = var->bsp_offset;
 		
-		gen_expression1(var_decl->expr);
+		gen_expression1(decl->data.var.init_expr);
 		gen_copy_eax_to_lval(&result);
 	}
 	else
 	{
-		for (uint32_t i = 0; i < var_decl->type_ref->spec->size / 4; i++)
+		for (uint32_t i = 0; i < decl->type_ref->spec->size / 4; i++)
 		{
 			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}
@@ -1015,7 +1015,7 @@ void gen_switch_statement(ast_statement_t* smnt)
 
 void gen_return_statement(ast_statement_t* smnt)
 {
-	if (_cur_fun->return_type_ref->spec->size > 4)
+	if (_cur_fun->type_ref->spec->size > 4)
 	{
 		gen_expression1(smnt->data.expr);
 
@@ -1027,7 +1027,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		
 		//source address is in eax, dest in edx
 		uint32_t offset = 0;
-		while (offset < _cur_fun->return_type_ref->spec->size)
+		while (offset < _cur_fun->type_ref->spec->size)
 		{
 			if (offset)
 			{
@@ -1048,7 +1048,7 @@ void gen_return_statement(ast_statement_t* smnt)
 	}
 
 	//function epilogue
-	if (_cur_fun->return_type_ref->spec->size > 4)
+	if (_cur_fun->type_ref->spec->size > 4)
 	{
 		_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
  		_gen_asm("leave");
@@ -1194,7 +1194,7 @@ void gen_statement(ast_statement_t* smnt)
 		gen_scope_block_enter();
 
 		if (f_data->init_decl)
-			gen_var_decl(&f_data->init_decl->data.var);
+			gen_var_decl(f_data->init_decl);
 
 		_cur_break_label = label_end;
 		_cur_cont_label = label_cont;
@@ -1246,11 +1246,11 @@ void gen_block_item(ast_block_item_t* bi)
 	else if (bi->kind == blk_decl)
 	{
 		if(bi->data.decl->kind == decl_var)
-			gen_var_decl(&bi->data.decl->data.var);
+			gen_var_decl(bi->data.decl);
 	}
 }
 
-void gen_function(ast_function_decl_t* fn)
+void gen_function(ast_declaration_t* fn)
 {	
 	_returned = false;
 	_cur_fun = fn;
@@ -1262,14 +1262,14 @@ void gen_function(ast_function_decl_t* fn)
 	_gen_asm("push %%ebp");
 	_gen_asm("movl %%esp, %%ebp");
 
-	if (fn->required_stack_size > 0)
+	if (fn->data.func.required_stack_size > 0)
 	{
 		//align stack on 4 byte boundry
-		uint32_t sz = (fn->required_stack_size + 0x03) & ~0x03;
+		uint32_t sz = (fn->data.func.required_stack_size + 0x03) & ~0x03;
 		_gen_asm("subl $%d, %%esp", sz);
 	}
 
-	ast_block_item_t* blk = fn->blocks;
+	ast_block_item_t* blk = fn->data.func.blocks;
 
 	while (blk)
 	{
@@ -1291,23 +1291,25 @@ void gen_function(ast_function_decl_t* fn)
 	_cur_fun = NULL;
 }
 
-void gen_global_var(ast_var_decl_t* var)
+void gen_global_var(ast_declaration_t* decl)
 {	
-	_gen_asm(".globl _var_%s", var->name); //export symbol
+	_gen_asm(".globl _var_%s", decl->name); //export symbol
 
-	if (var->expr && var->expr->kind == expr_int_literal && int_val_as_uint32(&var->expr->data.int_literal.val) != 0)
+	ast_expression_t* var_expr = decl->data.var.init_expr;
+
+	if (var_expr && var_expr->kind == expr_int_literal && int_val_as_uint32(&var_expr->data.int_literal.val) != 0)
 	{
 		//initialised var goes in .data section
 		_gen_asm(".data"); //data section
 		_gen_asm(".align 4");
-		_gen_asm("_var_%s:", var->name); //label
+		_gen_asm("_var_%s:", decl->name); //label
 		
-		if (int_val_required_width(&var->expr->data.int_literal.val) <= 32)
+		if (int_val_required_width(&var_expr->data.int_literal.val) <= 32)
 		{
-			if (var->expr->data.int_literal.val.is_signed)
-				_gen_asm(".long %d", int_val_as_int32(&var->expr->data.int_literal.val)); //data and init value
+			if (var_expr->data.int_literal.val.is_signed)
+				_gen_asm(".long %d", int_val_as_int32(&var_expr->data.int_literal.val)); //data and init value
 			else
-				_gen_asm(".long %d", int_val_as_uint32(&var->expr->data.int_literal.val)); //data and init value
+				_gen_asm(".long %d", int_val_as_uint32(&var_expr->data.int_literal.val)); //data and init value
 		}
 		else
 			assert(false);
@@ -1315,11 +1317,11 @@ void gen_global_var(ast_var_decl_t* var)
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
 	}
-	else if (var->expr && var->expr->kind == expr_str_literal)
+	else if (var_expr && var_expr->kind == expr_str_literal)
 	{
 		_gen_asm(".data"); //data section
-		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".long .%s", var->expr->data.str_literal.label); //label
+		_gen_asm("_var_%s:", decl->name); //label
+		_gen_asm(".long .%s", var_expr->data.str_literal.label); //label
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
 	}
@@ -1328,8 +1330,8 @@ void gen_global_var(ast_var_decl_t* var)
 		//0 or uninitialised var goes in .BSS section
 		_gen_asm(".bss"); //bss section
 		_gen_asm(".align 4");
-		_gen_asm("_var_%s:", var->name); //label
-		_gen_asm(".zero %d", var->type_ref->spec->size); //data length		
+		_gen_asm("_var_%s:", decl->name); //label
+		_gen_asm(".zero %d", decl->type_ref->spec->size); //data length		
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
 	}	
@@ -1351,8 +1353,8 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 	tl_decl_t* var_decl = tl->var_decls;
 	while (var_decl)
 	{
-		var_decl_global_var(_var_set, &var_decl->decl->data.var);
-		gen_global_var(&var_decl->decl->data.var);
+		var_decl_global_var(_var_set, var_decl->decl);
+		gen_global_var(var_decl->decl);
 		var_decl = var_decl->next;
 	}
 
@@ -1368,8 +1370,8 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
 	{
 		if (fn_decl->decl->data.func.blocks)
 		{
-			var_enter_function(_var_set, &fn_decl->decl->data.func);
-			gen_function(&fn_decl->decl->data.func);
+			var_enter_function(_var_set, fn_decl->decl);
+			gen_function(fn_decl->decl);
 			var_leave_function(_var_set);
 		}
 		fn_decl = fn_decl->next;

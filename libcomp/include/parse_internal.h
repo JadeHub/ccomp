@@ -4,16 +4,13 @@
 #include "ast.h"
 
 ast_declaration_t* try_parse_declaration();
+ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi);
 ast_statement_t* parse_statement();
 ast_expression_t* parse_expression();
 ast_expression_t* try_parse_expression();
-//ast_block_item_t* parse_block_item();
 ast_block_item_t* parse_block_list();
 ast_expression_t* parse_constant_expression();
-
-
 void parse_type_init();
-//ast_type_ref_t* try_parse_type();
 ast_type_ref_t* try_parse_type_ref();
 ast_expression_t* try_parse_literal();
 ast_expression_t* parse_optional_expression(tok_kind term_tok);

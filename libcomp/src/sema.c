@@ -24,7 +24,7 @@ identfier_map_t* sema_id_map()
 
 typedef struct
 {
-	ast_function_decl_t* decl;
+	ast_declaration_t* decl;
 
 	//set of goto statements found in the function
 	hash_table_t* goto_smnts;
@@ -158,9 +158,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref, token_t* start)
 			return NULL;
 		}
 
-		typeref = decl->data.type.type_ref->spec;
-
-		//return decl->data.type.type_ref->spec;
+		typeref = decl->type_ref->spec;
 	}
 
 	if (typeref->kind == type_ptr)
@@ -303,9 +301,7 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 
 bool process_variable_declaration(ast_declaration_t* decl)
 {
-	ast_var_decl_t* var = &decl->data.var;
-
-	ast_declaration_t* existing = idm_find_block_decl(_id_map, var->name);
+	ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->name);
 	if (existing && existing->kind == decl_var)
 	{
 		return _report_err(decl->tokens.start, ERR_DUP_VAR,
@@ -313,48 +309,48 @@ bool process_variable_declaration(ast_declaration_t* decl)
 			ast_declaration_name(decl));
 	}
 
-	if(!sema_resolve_type_ref(var->type_ref) || var->type_ref->spec->size == 0)
+	if(!sema_resolve_type_ref(decl->type_ref) || decl->type_ref->spec->size == 0)
 	{
 		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"var %s is of incomplete type",
 			ast_declaration_name(decl));
 	}
 
-	if (decl->data.var.expr)
+	if (decl->data.var.init_expr)
 	{
-		expr_result_t result = sema_process_expression(decl->data.var.expr);
+		expr_result_t result = sema_process_expression(decl->data.var.init_expr);
 		if (result.failure)
 			return false;
 
 		ast_type_spec_t* init_type = result.result_type;
 
-		if (!sema_can_convert_type(var->type_ref->spec, init_type))
+		if (!sema_can_convert_type(decl->type_ref->spec, init_type))
 		{
-			return _report_err(decl->data.var.expr->tokens.start,
+			return _report_err(decl->data.var.init_expr->tokens.start,
 				ERR_INCOMPATIBLE_TYPE,
 				"assignment to incompatible type. expected %s",
-				ast_type_name(var->type_ref->spec));
+				ast_type_name(decl->type_ref->spec));
 		}
 	}
 
 	idm_add_id(_id_map, decl);
-	_cur_func_ctx.decl->required_stack_size += var->type_ref->spec->size;
+	_cur_func_ctx.decl->data.func.required_stack_size += decl->type_ref->spec->size;
 
 	return true;
 }
 
 bool process_type_decl(ast_declaration_t* decl)
 {
-	if (!sema_resolve_type_ref(decl->data.type.type_ref))
+	if (!sema_resolve_type_ref(decl->type_ref))
 		return false;
 	
-	if (strlen(decl->data.type.alias))
+	if (strlen(decl->name))
 	{
-		ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->data.type.alias);
+		ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->name);
 		if (existing)
 		{
 			return _report_err(decl->tokens.start, ERR_DUP_TYPE_DEF,
-				"typedef forces redefinition of %s", decl->data.type.alias);
+				"typedef forces redefinition of %s", decl->name);
 		}
 
 		idm_add_id(_id_map, decl);
@@ -502,13 +498,13 @@ bool process_return_statement(ast_statement_t* smnt)
 	
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!sema_can_convert_type(_cur_func_ctx.decl->return_type_ref->spec, result.result_type))
+		if (!sema_can_convert_type(_cur_func_ctx.decl->type_ref->spec, result.result_type))
 		{
 			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
 		}
 	}
-	else if (_cur_func_ctx.decl->return_type_ref->spec->kind != type_void)
+	else if (_cur_func_ctx.decl->type_ref->spec->kind != type_void)
 	{
 		return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 			"function must return a value");
@@ -570,15 +566,15 @@ bool process_statement(ast_statement_t* smnt)
 	return true;
 }
 
-bool process_function_definition(ast_function_decl_t* decl)
+bool process_function_definition(ast_declaration_t* decl)
 {
 	//set up function data
-	idm_enter_function(_id_map, decl);
+	idm_enter_function(_id_map, &decl->data.func);
 	_cur_func_ctx.decl = decl;
 	_cur_func_ctx.labels = sht_create(64);
 	_cur_func_ctx.goto_smnts = phs_create(64);
 	
-	bool ret = process_block_list(decl->blocks);
+	bool ret = process_block_list(decl->data.func.blocks);
 
 	//check that any goto statements reference valid labels
 	phs_iterator_t it = phs_begin(_cur_func_ctx.goto_smnts);
@@ -617,10 +613,10 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	ast_function_decl_t* func = &decl->data.func;
 
 	//return type
-	if (!sema_resolve_type_ref(func->return_type_ref))
+	if (!sema_resolve_type_ref(decl->type_ref))
 		return false;
 	
-	ast_type_spec_t* ret_type = func->return_type_ref->spec;
+	ast_type_spec_t* ret_type = decl->type_ref->spec;
 
 	if (_is_fn_definition(decl) && 
 		ret_type->kind != type_void && 
@@ -628,24 +624,24 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 	{
 		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"function '%s' returns incomplete type '%s'",
-			func->name, ret_type->data.user_type_spec->name);
+			decl->name, ret_type->data.user_type_spec->name);
 	}
 	
 	//parameter types
 	ast_func_param_decl_t* param = func->first_param;
 	while (param)
 	{
-		if (param->decl->data.var.type_ref->spec->kind == type_void)
+		if (param->decl->type_ref->spec->kind == type_void)
 		{
 			return _report_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
 				"function param '%s' of void type",
-				param->decl->data.var.name);
+				param->decl->name);
 		}
 
-		if (!sema_resolve_type_ref(param->decl->data.var.type_ref))
+		if (!sema_resolve_type_ref(param->decl->type_ref))
 			return false;
 
-		ast_type_spec_t* param_type = param->decl->data.var.type_ref->spec;
+		ast_type_spec_t* param_type = param->decl->type_ref->spec;
 		
 		if (_is_fn_definition(decl) && 
 			param_type->kind != type_void &&
@@ -653,7 +649,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		{
 			return _report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
 				"function param '%s' returns incomplete type '%s'",
-				param->decl->data.var.name, param_type->data.user_type_spec->name);
+				param->decl->name, param_type->data.user_type_spec->name);
 		}
 		
 		param = param->next;
@@ -663,11 +659,11 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
 {
-	if (exist->data.func.return_type_ref->spec != func->data.func.return_type_ref->spec)
+	if (exist->type_ref->spec != func->type_ref->spec)
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"differing return type in declaration of function '%s'. Expected '%s'",
-			ast_declaration_name(func), ast_type_ref_name(exist->data.func.return_type_ref));
+			ast_declaration_name(func), ast_type_ref_name(exist->type_ref));
 	}
 
 	if (exist->data.func.param_count != func->data.func.param_count || 
@@ -684,12 +680,12 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 	int p_count = 1;
 	while (p_exist && p_func)
 	{
-		sema_resolve_type_ref(p_func->decl->data.var.type_ref);
-		if (p_exist->decl->data.var.type_ref->spec != p_func->decl->data.var.type_ref->spec)
+		sema_resolve_type_ref(p_func->decl->type_ref);
+		if (p_exist->decl->type_ref->spec != p_func->decl->type_ref->spec)
 		{
 			return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(func), ast_type_ref_name(p_exist->decl->data.var.type_ref));
+				p_count, ast_declaration_name(func), ast_type_ref_name(p_exist->decl->type_ref));
 		}
 
 		p_exist = p_exist->next;
@@ -702,7 +698,7 @@ static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* fun
 
 proc_decl_result process_function_decl(ast_declaration_t* decl)
 {
-	const char* name = decl->data.func.name;
+	const char* name = decl->name;
 
 	ast_declaration_t* exist = idm_find_decl(_id_map, name);
 	if (exist && exist->kind == decl_var)
@@ -759,51 +755,49 @@ Type cannot change
 */
 proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 {
-	ast_var_decl_t* var = &decl->data.var;
-
-	ast_declaration_t* exist = idm_find_decl(_id_map, var->name);
+	ast_declaration_t* exist = idm_find_decl(_id_map, decl->name);
 	if (exist && exist->kind == decl_func)
 	{
 		_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 			"global var declaration of '%s' shadows function at",
-			var->name);
+			decl->name);
 		return proc_decl_error;
 	}
 
-	if (!sema_resolve_type_ref(decl->data.var.type_ref))
+	if (!sema_resolve_type_ref(decl->type_ref))
 	{		
 		return proc_decl_error;
 	}
 
-	ast_type_spec_t* type = var->type_ref->spec;
+	ast_type_spec_t* type = decl->type_ref->spec;
 	
 	if (exist && exist->kind == decl_var)
 	{		
 		//multiple declarations are allowed
-		if (!type || exist->data.var.type_ref->spec != type)
+		if (!type || exist->type_ref->spec != type)
 		{
 			//different types
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 				"incompatible redeclaration of global var '%s'",
-				var->name);
+				decl->name);
 			return proc_decl_error;
 		}
 
-		if (exist->data.var.expr && decl->data.var.expr)
+		if (exist->data.var.init_expr && decl->data.var.init_expr)
 		{
 			//multiple definitions
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,
 				"redefinition of global var '%s'",
-				var->name);
+				decl->name);
 			return proc_decl_error;
 		}
 
-		if (!exist->data.var.expr && decl->data.var.expr)
+		if (!exist->data.var.init_expr && decl->data.var.init_expr)
 		{
 			//update definition
-			exist->data.var.expr = decl->data.var.expr;
-			decl->data.var.expr = NULL;
-			process_expression(exist->data.var.expr);
+			exist->data.var.init_expr = decl->data.var.init_expr;
+			decl->data.var.init_expr = NULL;
+			process_expression(exist->data.var.init_expr);
 		}
 		return proc_decl_ignore;
 	}
@@ -812,32 +806,32 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"global var '%s' uses incomplete type '%s'",
-			var->name, ast_type_ref_name(decl->data.var.type_ref));
+			decl->name, ast_type_ref_name(decl->type_ref));
 		return proc_decl_error;
 	}
 
-	if (decl->data.var.expr)
+	if (decl->data.var.init_expr)
 	{
-		if (!process_expression(decl->data.var.expr))
+		if (!process_expression(decl->data.var.init_expr))
 			return false;
 
-		ast_type_spec_t* var_type = decl->data.var.type_ref->spec;
+		ast_type_spec_t* var_type = decl->type_ref->spec;
 
-		if (decl->data.var.expr->kind == expr_int_literal)
+		if (decl->data.var.init_expr->kind == expr_int_literal)
 		{
-			if (!int_val_will_fit(&decl->data.var.expr->data.int_literal.val, var_type))
+			if (!int_val_will_fit(&decl->data.var.init_expr->data.int_literal.val, var_type))
 			{
-				_report_err(decl->data.var.expr->tokens.start,
+				_report_err(decl->data.var.init_expr->tokens.start,
 					ERR_INCOMPATIBLE_TYPE,
 					"assignment to incompatible type. expected %s",
 					ast_type_name(var_type));
 				return proc_decl_error;
 			}
 		}
-		else if (decl->data.var.expr->kind != expr_str_literal)
+		else if (decl->data.var.init_expr->kind != expr_str_literal)
 		{
 			return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"global var '%s' initialised with non-const expression", var->name);
+				"global var '%s' initialised with non-const expression", decl->name);
 		}
 	}
 
@@ -901,7 +895,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 
 				if (decl->data.func.blocks)
 				{
-					if (!process_function_definition(&decl->data.func))
+					if (!process_function_definition(decl))
 					{
 						return NULL;
 					}

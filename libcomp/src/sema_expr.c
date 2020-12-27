@@ -241,13 +241,13 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name);
 	if (decl && decl->kind == decl_var)
 	{
-		if (decl->data.var.type_ref->spec->size == 0)
+		if (decl->type_ref->spec->size == 0)
 		{
 			return _report_err(expr, ERR_TYPE_INCOMPLETE,
 				"var %s is of incomplete type",
 				ast_declaration_name(decl));
 		}
-		result.result_type = decl->data.var.type_ref->spec;
+		result.result_type = decl->type_ref->spec;
 		return result;
 	}
 
@@ -326,11 +326,11 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 		if (param_result.failure)
 			return param_result;
 
-		if (!sema_can_convert_type(param_decl->decl->data.var.type_ref->spec, param_result.result_type))
+		if (!sema_can_convert_type(param_decl->decl->type_ref->spec, param_result.result_type))
 		{
 			return _report_err(call_param->expr, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(param_decl->decl->data.var.type_ref->spec));
+				p_count, ast_declaration_name(decl), ast_type_name(param_decl->decl->type_ref->spec));
 		}
 
 		call_param->expr_type = param_result.result_type;
@@ -356,30 +356,8 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 			p_count++;
 		}
 	}
-
-/*	ast_expression_t* call_param = expr->data.func_call.params;
-	ast_func_param_decl_t* func_param = decl->data.func.last_param;
-
-	int p_count = 1;
-	while (call_param && func_param)
-	{
-		expr_result_t param_result = sema_process_expression(call_param);
-		if (param_result.failure)
-			return param_result;
-
-		if (!sema_can_convert_type(func_param->decl->data.var.type_ref->spec, param_result.result_type))
-		{
-			return _report_err(expr, ERR_INVALID_PARAMS,
-				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(func_param->decl->data.var.type_ref->spec));
-		}
-
-		call_param = call_param->next;
-		func_param = func_param->prev;
-		p_count++;
-	}*/
 	expr->data.func_call.func_decl = decl;
-	result.result_type = decl->data.func.return_type_ref->spec;
+	result.result_type = decl->type_ref->spec;
 	return result;
 }
 

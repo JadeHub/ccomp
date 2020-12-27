@@ -56,28 +56,28 @@ var_set_t* var_init_set()
 	return set;
 }
 
-void var_enter_function(var_set_t* vars, ast_function_decl_t* fn)
+void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 {
 	/* add the function parameters */
-	if (fn->first_param)
+	if (fn->data.func.first_param)
 	{
-		ast_func_param_decl_t* param = fn->first_param;
+		ast_func_param_decl_t* param = fn->data.func.first_param;
 
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
 
-		if (fn->return_type_ref->spec->size > 4)
+		if (fn->type_ref->spec->size > 4)
 			offset += 4; //add 4 bytes for the return value pointer
 
 		while (param)
 		{			
-			var_data_t* var = _make_stack_var(offset, param->decl->data.var.name);
+			var_data_t* var = _make_stack_var(offset, param->decl->name);
 			var->kind = var_param;
-			var->data.decl = &param->decl->data.var;
+			var->var_decl = param->decl;
 			var->next = vars->vars;
 			vars->vars = var;
 
-			offset += param->decl->data.var.type_ref->spec->size < 4 ? 4 : param->decl->data.var.type_ref->spec->size;
+			offset += param->decl->type_ref->spec->size < 4 ? 4 : param->decl->type_ref->spec->size;
 			param = param->next;
 		}
 	}
@@ -135,20 +135,19 @@ void var_leave_block(var_set_t* vars)
 	assert(false);
 }
 
-var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
+var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 {
-	var_data_t* var = var_cur_block_find(vars, var_decl->name);
+	var_data_t* var = var_cur_block_find(vars, decl->name);
 	if (var)
 	{
 		return NULL;
 	}
 	
-	var = _make_stack_var(vars->bsp_offset - var_decl->type_ref->spec->size, var_decl->name);
+	var = _make_stack_var(vars->bsp_offset - decl->type_ref->spec->size, decl->name);
 	var->kind = var_stack;
-	var->data.decl = var_decl;
-
-	
-	vars->bsp_offset -= (var_decl->type_ref->spec->size + 0x01) & ~0x01;
+	var->var_decl = decl;
+		
+	vars->bsp_offset -= (decl->type_ref->spec->size + 0x01) & ~0x01;
 	
 	
 	// add to start of list
@@ -158,11 +157,11 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_var_decl_t* var_decl)
 	return var;
 }
 
-var_data_t* var_decl_global_var(var_set_t* vars, ast_var_decl_t* decl)
+var_data_t* var_decl_global_var(var_set_t* vars, ast_declaration_t* decl)
 {
 	var_data_t* var = _make_stack_var(vars->bsp_offset, decl->name);
 	var->kind = var_global;
-	var->data.decl = decl;
+	var->var_decl = decl;
 
 	sprintf(var->global_name, "_var_%s", var->name);
 

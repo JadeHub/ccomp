@@ -386,14 +386,15 @@ ast_expression_t* opt_parse_array_spec()
 	{
 		next_tok();
 
-		if (!current_is(tok_r_square_paren))
-		{
-			result = parse_constant_expression();
-		}
-		else
+		if (current_is(tok_r_square_paren))
 		{
 			result = _alloc_expr();
 			result->kind = expr_null;
+		}
+		else
+		{
+			result = parse_constant_expression();
+			
 		}
 		expect_cur(tok_r_square_paren);
 		next_tok();
@@ -407,11 +408,39 @@ ast_expression_t* opt_parse_array_spec()
 */
 void parse_function_parameters(ast_function_decl_t* func)
 {
-	token_t* start = current();
-	
-	ast_type_ref_t* type_ref = try_parse_type_ref();
-	while (type_ref)
+	while (1)
 	{
+		bool found_semi;
+
+		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
+
+		if (!decl)
+			break;
+
+		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
+		memset(param, 0, sizeof(ast_func_param_decl_t));
+		param->decl = decl;
+
+		if (!func->first_param)
+		{
+			func->first_param = func->last_param = param;
+		}
+		else
+		{
+			param->prev = func->last_param;
+			func->last_param->next = param;
+			func->last_param = param;
+		}
+		func->param_count++;
+
+		if (!current_is(tok_comma))
+			break;
+		next_tok();
+	}
+
+/*	ast_type_ref_t* type_ref = try_parse_type_ref();
+	while (type_ref)
+	{		
 		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 		memset(decl, 0, sizeof(ast_declaration_t));
 		decl->tokens.start = start;
@@ -452,10 +481,10 @@ void parse_function_parameters(ast_function_decl_t* func)
 
 		start = current();
 		type_ref = try_parse_type_ref();
-	}
+	}*/
 
 	// if single void param remove it
-	if (func->param_count == 1 && func->first_param->decl->data.var.type_ref->spec->kind == type_void)
+	if (func->param_count == 1 && func->first_param->decl->type_ref->spec->kind == type_void)
 	{
 		free(func->first_param);
 		func->first_param = func->last_param = NULL;
@@ -483,26 +512,26 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 {
 	token_t* start = current();
 
-	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-	memset(result, 0, sizeof(ast_declaration_t));
-	result->tokens.start = start;
-	result->tokens.end = current();
-	
 	ast_type_ref_t* type_ref = try_parse_type_ref();
 	if (!type_ref)
 		return NULL;
 
+	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
+	memset(result, 0, sizeof(ast_declaration_t));
+	result->tokens.start = start;
+	result->tokens.end = current();
+	result->type_ref = type_ref;
+
+
 	if (current_is(tok_identifier))
 	{
-		if (next_is(tok_l_paren))
+		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
+		next_tok();
+		if (current_is(tok_l_paren))
 		{
 			//function			
 			result->kind = decl_func;
-			result->data.func.return_type_ref = type_ref;
-			tok_spelling_cpy(current(), result->data.func.name, MAX_LITERAL_NAME);
-			next_tok();
 			/*(*/
-			expect_cur(tok_l_paren);
 			next_tok();
 			parse_function_parameters(&result->data.func);
 			/*)*/
@@ -516,10 +545,9 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 				//todo - parse_array_spec
 				//typedef
 				result->kind = decl_type;
-				result->data.type.type_ref = type_ref;
-				tok_spelling_cpy(current(), result->data.type.alias, MAX_LITERAL_NAME);
-				parse_register_alias_name(result->data.type.alias);
-				next_tok();
+//				result->data.type.type_ref = type_ref;
+				//tok_spelling_cpy(current(), result->data.type.alias, MAX_LITERAL_NAME);
+				parse_register_alias_name(result->name);
 
 				if (current_is(tok_equal))
 				{
@@ -532,21 +560,30 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 			{
 				//variable 
 				result->kind = decl_var;
-				tok_spelling_cpy(current(), result->data.var.name, MAX_LITERAL_NAME);
-				next_tok();
-
-				result->data.var.type_ref = type_ref;
 
 				// '[...]'
-				result->data.var.array_sz = opt_parse_array_spec();
+				result->array_sz = opt_parse_array_spec();
 
 				if (current_is(tok_equal))
 				{
 					next_tok();
-					result->data.var.expr = parse_expression();
+					result->data.var.init_expr = parse_expression();
 				}
 			}
 		}
+	}
+	else if (current_is(tok_l_paren))
+	{
+		//function pointer
+		//eg int (* pfn) (int);
+		next_tok();
+		expect_cur(tok_star);
+		next_tok();
+		expect_cur(tok_identifier);
+
+
+		next_tok();
+
 	}
 	else
 	{
@@ -554,8 +591,8 @@ ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
 		//eg
 		//struct A {...};
 		result->kind = decl_type;
-		result->data.type.type_ref = type_ref;
-		result->data.type.alias[0] = '\0';
+		//result->data.type.type_ref = type_ref;
+		//result->data.type.alias[0] = '\0';
 	}
 
 	if (found_semi)

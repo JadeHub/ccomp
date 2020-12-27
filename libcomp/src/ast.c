@@ -147,17 +147,15 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 {
 	if (!decl) return;
 
+	ast_destroy_type_ref(decl->type_ref);
+	ast_destroy_expression(decl->array_sz);
 	switch (decl->kind)
 	{
 	case decl_var:
-		ast_destroy_type_ref(decl->data.var.type_ref);
-		ast_destroy_expression(decl->data.var.expr);
+		ast_destroy_expression(decl->data.var.init_expr);
 		break;
 	case decl_func:
 		//ast_destroy_expression(decl->data.func.params);
-		break;
-	case decl_type:
-		ast_destroy_type_ref(decl->data.type.type_ref);
 		break;
 	}
 	free(decl);
@@ -308,22 +306,7 @@ const char* ast_declaration_type_name(ast_decl_type dt)
 
 const char* ast_declaration_name(ast_declaration_t* decl)
 {
-	switch (decl->kind)
-	{
-	case decl_var:
-		return decl->data.var.name;
-	case decl_func:
-		return decl->data.func.name;
-	case decl_type:
-	{
-		if (strlen(decl->data.type.alias))
-			return decl->data.type.alias;
-		return ast_type_name(decl->data.type.type_ref->spec);
-	}
-	//case decl_const:
-	//	return decl->data.const_val.name;
-	}
-	return NULL;
+	return decl->name;
 }
 
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec, const char* name)

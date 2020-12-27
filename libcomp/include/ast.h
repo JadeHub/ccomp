@@ -246,7 +246,6 @@ typedef struct ast_type_spec
 		type pointed to if kind is type_ptr or type_array
 		*/
 		struct ast_type_spec* ptr_type;
-		//struct ast_type_ref* ptr_ref;
 	}data;
 
 }ast_type_spec_t;
@@ -270,10 +269,8 @@ typedef struct ast_type_ref
 
 typedef struct ast_var_decl
 {
-	ast_type_ref_t* type_ref;
-	char name[MAX_LITERAL_NAME];
-	ast_expression_t* expr;
-	ast_expression_t* array_sz;
+	ast_expression_t* init_expr;
+	
 }ast_var_decl_t;
 
 typedef struct ast_func_param_decl
@@ -285,14 +282,14 @@ typedef struct ast_func_param_decl
 
 typedef struct ast_func_decl
 {
-	char name[MAX_LITERAL_NAME];
+	//char name[MAX_LITERAL_NAME];
 
 	ast_func_param_decl_t* first_param;
 	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
 	bool ellipse_param;
 	
-	ast_type_ref_t* return_type_ref;
+	//ast_type_ref_t* return_type_ref;
 
 	uint32_t required_stack_size;
 
@@ -300,19 +297,6 @@ typedef struct ast_func_decl
 	struct ast_block_item* blocks;
 
 }ast_function_decl_t;
-
-/*
-Type declaration
-eg 
-struct A {...};
-or
-typedef struct A alias;
-*/
-typedef struct ast_type_decl
-{
-	char alias[MAX_LITERAL_NAME];
-	ast_type_ref_t* type_ref;
-}ast_type_decl_t;
 
 typedef enum
 {
@@ -326,11 +310,19 @@ typedef struct ast_declaration
 	token_range_t tokens;
 	ast_decl_type kind;
 
+	//optional name
+	char name[MAX_LITERAL_NAME];
+
+	//variable or function return type
+	ast_type_ref_t* type_ref;
+
+	//optional array size expression ie [....]
+	ast_expression_t* array_sz;
+
 	union
 	{
 		ast_var_decl_t var;
 		ast_function_decl_t func;
-		ast_type_decl_t type;
 	}data;
 
 	struct ast_declaration* next;
