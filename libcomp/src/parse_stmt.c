@@ -64,7 +64,7 @@ ast_switch_case_data_t* parse_switch_case()
 		expr = parse_constant_expression();
 		if (!expr)
 		{
-			report_err(ERR_SYNTAX, "Failed to parse switch case expression");
+			parse_err(ERR_SYNTAX, "Failed to parse switch case expression");
 			return NULL;
 		}
 	}
@@ -119,7 +119,7 @@ ast_statement_t* parse_switch_statement()
 			{
 				if (data->default_case)
 				{
-					report_err(ERR_SYNTAX, "Multiple default cases in switch statement");
+					parse_err(ERR_SYNTAX, "Multiple default cases in switch statement");
 					goto _parse_switch_err;
 				}
 				data->default_case = case_data;
@@ -163,7 +163,7 @@ ast_statement_t* parse_return_statement()
 	ast_expression_t* expr = parse_optional_expression(tok_semi_colon);
 	if (!expr)
 	{
-		report_err(ERR_SYNTAX, "Failed to parse expression return statement");
+		parse_err(ERR_SYNTAX, "Failed to parse expression return statement");
 		return NULL;
 	}
 
@@ -204,7 +204,7 @@ ast_statement_t* parse_for_statement()
 		data->init = parse_optional_expression(tok_semi_colon);
 		if (!data->init)
 		{
-			report_err(ERR_SYNTAX, "Failed to parse init expression in for loop");
+			parse_err(ERR_SYNTAX, "Failed to parse init expression in for loop");
 			goto _parse_for_err;
 		}
 		if (!expect_cur(tok_semi_colon))
@@ -216,7 +216,7 @@ ast_statement_t* parse_for_statement()
 	data->condition = parse_optional_expression(tok_semi_colon);
 	if (!data->condition)
 	{
-		report_err(ERR_SYNTAX, "Failed to parse condition expression in for loop");
+		parse_err(ERR_SYNTAX, "Failed to parse condition expression in for loop");
 		goto _parse_for_err;
 	}
 	if (!expect_cur(tok_semi_colon))
@@ -234,7 +234,7 @@ ast_statement_t* parse_for_statement()
 	data->post = parse_optional_expression(tok_r_paren);
 	if (!data->post)
 	{
-		report_err(ERR_SYNTAX, "Failed to parse post expression in for loop");
+		parse_err(ERR_SYNTAX, "Failed to parse post expression in for loop");
 		goto _parse_for_err;
 	}
 	if (!expect_cur(tok_r_paren))
@@ -244,7 +244,7 @@ ast_statement_t* parse_for_statement()
 	data->statement = parse_statement();
 	if (!data->statement)
 	{
-		report_err(ERR_SYNTAX, "Failed to parse body of for loop");
+		parse_err(ERR_SYNTAX, "Failed to parse body of for loop");
 		goto _parse_for_err;
 	}
 
@@ -470,7 +470,7 @@ ast_statement_t* parse_statement()
 	ast_expression_t* expr = parse_optional_expression(tok_semi_colon);
 	if (!expr)
 	{
-		report_err(ERR_SYNTAX, "Failed to parse expression");
+		parse_err(ERR_SYNTAX, "Failed to parse expression");
 		return NULL;
 	}
 

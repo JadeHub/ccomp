@@ -199,7 +199,7 @@ ast_struct_member_t* parse_struct_member()
 	ast_type_ref_t* type = try_parse_type_ref();
 	if (!type)
 	{
-		report_err(ERR_SYNTAX, "expected declaration specification");
+		parse_err(ERR_SYNTAX, "expected declaration specification");
 		return NULL;
 	}
 
@@ -264,7 +264,7 @@ ast_user_type_spec_t* parse_enum_spec()
 				member->value = parse_constant_expression();
 				if (!member->value)
 				{
-					report_err(ERR_SYNTAX, "error parsing enum initialisation expression");
+					parse_err(ERR_SYNTAX, "error parsing enum initialisation expression");
 					goto _enum_parse_err;
 				}
 			}
@@ -315,7 +315,7 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 	else if(!current_is(tok_l_brace))
 	{
 		//if there is no name there should be a definition
-		report_err(ERR_SYNTAX, "expected definition or tag name after %s",
+		parse_err(ERR_SYNTAX, "expected definition or tag name after %s",
 			kind == user_type_struct ? "struct" : "union");
 		free(result);
 		return NULL;
@@ -459,15 +459,14 @@ ast_type_spec_t* _interpret_numeric_type_flags(uint32_t spec_flags)
 	return NULL;
 }
 
-ast_type_ref_t* try_parse_type_ref()
+ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 {
-	token_t* start = current();
 	uint32_t flags = 0;
 	ast_user_type_spec_t* user_type = NULL;
 	const char* alias = NULL;
 	bool storage_class_specs = false;
 	bool type_qualifiers = false;
-	enum {tt_none, tt_user, tt_alias, tt_void, tt_int} type_type = tt_none;
+	enum { tt_none, tt_user, tt_alias, tt_void, tt_int } type_type = tt_none;
 	uint32_t num_spec_flags = 0;
 
 	token_t* tok;
@@ -479,8 +478,8 @@ ast_type_ref_t* try_parse_type_ref()
 		if (_is_user_type_specifier(current()))
 		{
 			//structs, untions, enums
-			if(type_type != tt_none)
-				return report_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
+			if (type_type != tt_none)
+				return parse_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
 			user_type = parse_user_type();
 			if (!user_type)
 				return NULL;
@@ -499,7 +498,7 @@ ast_type_ref_t* try_parse_type_ref()
 		{
 			//void
 			if (type_type != tt_none)
-				return report_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
+				return parse_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
 			type_type = tt_void;
 			next_tok();
 		}
@@ -507,7 +506,7 @@ ast_type_ref_t* try_parse_type_ref()
 		{
 			//we can consume multiple numeric type specifiers, eg unsigned long long int
 			if (!(type_type == tt_none || type_type == tt_int))
-				return report_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
+				return parse_err(ERR_SYNTAX, "multiple type specifiers are not permitted");
 
 			uint32_t flag = _get_decl_spec_flag(current());
 			//special case for long long
@@ -515,7 +514,7 @@ ast_type_ref_t* try_parse_type_ref()
 				flag = DECL_SPEC_LONG_LONG;
 
 			if (num_spec_flags & flag)
-				return report_err(ERR_SYNTAX, "duplicate %s specifier in numeric type", tok_kind_spelling(current()->kind));
+				return parse_err(ERR_SYNTAX, "duplicate %s specifier in numeric type", tok_kind_spelling(current()->kind));
 
 			num_spec_flags |= flag;
 			type_type = tt_int;
@@ -526,7 +525,7 @@ ast_type_ref_t* try_parse_type_ref()
 		{
 			//allow one of, extern, static, typedef, auto , register (auto and register are ignored)
 			if (storage_class_specs)
-				return report_err(ERR_SYNTAX, "multiple storage class specifiers are not permitted");
+				return parse_err(ERR_SYNTAX, "multiple storage class specifiers are not permitted");
 			storage_class_specs = true;
 
 			if (current_is(tok_extern))
@@ -543,7 +542,7 @@ ast_type_ref_t* try_parse_type_ref()
 			type_qualifiers = true;
 			//allow type qualifier const once only
 			if (flags & TF_Q_CONST)
-				return report_err(ERR_SYNTAX, "multiple const specifiers are not permitted");
+				return parse_err(ERR_SYNTAX, "multiple const specifiers are not permitted");
 			flags |= TF_Q_CONST;
 			next_tok();
 		}
@@ -556,16 +555,16 @@ ast_type_ref_t* try_parse_type_ref()
 	if (type_type == tt_none)
 	{
 		if (type_qualifiers || storage_class_specs)
-			return report_err(ERR_SYNTAX, "incomplete type spec");
+			return parse_err(ERR_SYNTAX, "incomplete type spec");
 		return NULL;
 	}
-	ast_type_spec_t* type_spec;// = _alloc_type_spec();
+	ast_type_spec_t* type_spec = NULL;
 
 	if (type_type == tt_int)
 	{
 		type_spec = _interpret_numeric_type_flags(num_spec_flags);
 		if (!type_spec)
-			return report_err(ERR_SYNTAX, "failed to parse numeric type specification");
+			return parse_err(ERR_SYNTAX, "failed to parse numeric type specification");
 	}
 	else if (type_type == tt_void)
 	{
@@ -589,8 +588,47 @@ ast_type_ref_t* try_parse_type_ref()
 	{
 		assert(false);
 	}
+	*flag_result = flags;
+	return type_spec;
+}
+
+ast_type_ref_t* parse_type_ref(ast_type_spec_t* type_spec, uint32_t flags)
+{
+	ast_type_ref_t* result = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
+	memset(result, 0, sizeof(ast_type_ref_t));
+	result->flags = flags;
+	result->spec = type_spec;
+	result->tokens.start = current();
 
 	while (current_is(tok_star))
+	{
+		//pointer
+		next_tok();
+		ast_type_spec_t* ptr_type = ast_make_ptr_type(result->spec);
+
+		if (current_is(tok_const))
+		{
+			next_tok();
+			//?
+		}
+		result->spec = ptr_type;
+	}
+	
+	result->tokens.end = current();
+	return result;
+}
+
+ast_type_ref_t* try_parse_type_ref()
+{
+	uint32_t flags = 0;
+
+	ast_type_spec_t* type_spec = try_parse_type_spec(&flags);
+	if (!type_spec)
+		return NULL;
+
+	return parse_type_ref(type_spec, flags);
+	
+	/*while (current_is(tok_star))
 	{
 		//pointer
 		next_tok();
@@ -611,7 +649,7 @@ ast_type_ref_t* try_parse_type_ref()
 	result->tokens.start = start;
 	result->tokens.end = current();
 
-	return result;
+	return result;*/
 }
 
 void parse_type_init()

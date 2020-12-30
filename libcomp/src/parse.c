@@ -112,7 +112,7 @@ Note <declaration_specifiers> is incorrect for cast and size of - need to handle
 token_t* _cur_tok = NULL;
 static bool _parse_err = false;
 
-void* report_err(int err, const char* format, ...)
+void* parse_err(int err, const char* format, ...)
 {
 	char buff[512];
 
@@ -130,7 +130,7 @@ bool expect_cur(tok_kind k)
 {
 	if (!current_is(k))
 	{
-		report_err(ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
+		parse_err(ERR_SYNTAX, "syntax error: expected '%s' before '%s'",
 			tok_kind_spelling(k), tok_kind_spelling(current()->kind));
 		return false;
 	}
@@ -201,7 +201,7 @@ static op_kind _get_assignment_operator(token_t* tok)
 	case tok_pipeequal:
 		return op_or_assign;
 	}
-	report_err(ERR_SYNTAX, "Unknown assignment op %s", diag_tok_desc(tok));
+	parse_err(ERR_SYNTAX, "Unknown assignment op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -241,7 +241,7 @@ static op_kind _get_postfix_operator(token_t* tok)
 	case tok_plusplus:
 		return op_postfix_inc;
 	}
-	report_err(ERR_SYNTAX, "Unknown postfix op %s", diag_tok_desc(tok));
+	parse_err(ERR_SYNTAX, "Unknown postfix op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -264,7 +264,7 @@ static op_kind _get_unary_operator(token_t* tok)
 	case tok_star:
 		return op_dereference;
 	}
-	report_err(ERR_SYNTAX, "Unknown unary op %s", diag_tok_desc(tok));
+	parse_err(ERR_SYNTAX, "Unknown unary op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
@@ -314,18 +314,17 @@ static op_kind _get_binary_operator(token_t* tok)
 	case tok_percent:
 		return op_mod;
 	}
-	report_err(ERR_SYNTAX, "Unknown binary op %s", diag_tok_desc(tok));
+	parse_err(ERR_SYNTAX, "Unknown binary op %s", diag_tok_desc(tok));
 	return op_unknown;
 }
 
-static ast_expression_t* _alloc_expr()
+ast_expression_t* parse_alloc_expr()
 {
 	ast_expression_t* result = (ast_expression_t*)malloc(sizeof(ast_expression_t));
 	memset(result, 0, sizeof(ast_expression_t));
 	result->tokens.start = result->tokens.end = current();
 	return result;
 }
-
 
 typedef ast_expression_t* (*bin_parse_fn)();
 
@@ -353,7 +352,7 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 		//our two sides are now expr and rhs_expr
 		//build a new binary op expression for expr
 		ast_expression_t* cur_expr = expr;
-		expr = _alloc_expr();
+		expr = parse_alloc_expr();
 		expr->tokens.start = start;
 		expr->kind = expr_binary_op;
 		expr->data.binary_op.operation = op;
@@ -369,266 +368,6 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 	return expr;
 }
 
-
-
-
-/*
-<array_decl> ::= "[" [ <constant-exp> ] "]"
-
-returns NULL if no array spec found
-returns an expression of kind expr_null if empty array spec found '[]'
-otherwise returns an expression representing the array size
-*/
-ast_expression_t* opt_parse_array_spec()
-{
-	ast_expression_t* result = NULL;
-	if (current_is(tok_l_square_paren))
-	{
-		next_tok();
-
-		if (current_is(tok_r_square_paren))
-		{
-			result = _alloc_expr();
-			result->kind = expr_null;
-		}
-		else
-		{
-			result = parse_constant_expression();
-			
-		}
-		expect_cur(tok_r_square_paren);
-		next_tok();
-	}
-	return result;
-}
-
-/*
-<function_param_list> ::= <function_param_decl> { "," <function_param_decl> }
-<function_param_decl> ::= <declaration_specifiers> { "*" } <id> [ <array_decl> ]
-*/
-void parse_function_parameters(ast_function_decl_t* func)
-{
-	while (1)
-	{
-		bool found_semi;
-
-		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
-
-		if (!decl)
-			break;
-
-		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
-		memset(param, 0, sizeof(ast_func_param_decl_t));
-		param->decl = decl;
-
-		if (!func->first_param)
-		{
-			func->first_param = func->last_param = param;
-		}
-		else
-		{
-			param->prev = func->last_param;
-			func->last_param->next = param;
-			func->last_param = param;
-		}
-		func->param_count++;
-
-		if (!current_is(tok_comma))
-			break;
-		next_tok();
-	}
-
-/*	ast_type_ref_t* type_ref = try_parse_type_ref();
-	while (type_ref)
-	{		
-		ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-		memset(decl, 0, sizeof(ast_declaration_t));
-		decl->tokens.start = start;
-		
-		decl->kind = decl_var;
-		decl->data.var.type_ref = type_ref;
-		
-		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
-		memset(param, 0, sizeof(ast_func_param_decl_t));
-		param->decl = decl;		
-
-		if (current_is(tok_identifier))
-		{
-			tok_spelling_cpy(current(), decl->data.var.name, MAX_LITERAL_NAME);
-			next_tok();
-		}
-
-		// '[...]'
-		decl->data.var.array_sz = opt_parse_array_spec();
-
-		decl->tokens.end = current();
-
-		if (!func->first_param)
-		{
-			func->first_param = func->last_param = param;
-		}
-		else
-		{
-			param->prev = func->last_param;
-			func->last_param->next = param;
-			func->last_param = param;
-		}
-		func->param_count++;
-
-		if (!current_is(tok_comma))
-			break;
-		next_tok();
-
-		start = current();
-		type_ref = try_parse_type_ref();
-	}*/
-
-	// if single void param remove it
-	if (func->param_count == 1 && func->first_param->decl->type_ref->spec->kind == type_void)
-	{
-		free(func->first_param);
-		func->first_param = func->last_param = NULL;
-		func->param_count = 0;
-	}
-
-	if (current_is(tok_ellipse))
-	{
-		next_tok();
-		func->ellipse_param = true;
-	}
-}
-
-
-/*
-<declaration> :: = <var_declaration> ";"
-				| <declaration_specifiers> ";"
-				| <function_declaration> ";"
-
-<var_declaration> ::= <declaration_specifiers> <id> [= <exp>]
-<function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_params ] ")"
-<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifiers> ) }
-*/
-ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
-{
-	token_t* start = current();
-
-	ast_type_ref_t* type_ref = try_parse_type_ref();
-	if (!type_ref)
-		return NULL;
-
-	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
-	memset(result, 0, sizeof(ast_declaration_t));
-	result->tokens.start = start;
-	result->tokens.end = current();
-	result->type_ref = type_ref;
-
-
-	if (current_is(tok_identifier))
-	{
-		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
-		next_tok();
-		if (current_is(tok_l_paren))
-		{
-			//function			
-			result->kind = decl_func;
-			/*(*/
-			next_tok();
-			parse_function_parameters(&result->data.func);
-			/*)*/
-			expect_cur(tok_r_paren);
-			next_tok();
-		}
-		else
-		{
-			if (type_ref->flags & TF_SC_TYPEDEF)
-			{
-				//todo - parse_array_spec
-				//typedef
-				result->kind = decl_type;
-//				result->data.type.type_ref = type_ref;
-				//tok_spelling_cpy(current(), result->data.type.alias, MAX_LITERAL_NAME);
-				parse_register_alias_name(result->name);
-
-				if (current_is(tok_equal))
-				{
-					report_err(ERR_SYNTAX, "typedef cannot be initialised");
-					ast_destroy_declaration(result);
-					return NULL;
-				}
-			}
-			else
-			{
-				//variable 
-				result->kind = decl_var;
-
-				// '[...]'
-				result->array_sz = opt_parse_array_spec();
-
-				if (current_is(tok_equal))
-				{
-					next_tok();
-					result->data.var.init_expr = parse_expression();
-				}
-			}
-		}
-	}
-	else if (current_is(tok_l_paren))
-	{
-		//function pointer
-		//eg int (* pfn) (int);
-		next_tok();
-		expect_cur(tok_star);
-		next_tok();
-		expect_cur(tok_identifier);
-
-
-		next_tok();
-
-	}
-	else
-	{
-		//type-spec
-		//eg
-		//struct A {...};
-		result->kind = decl_type;
-		//result->data.type.type_ref = type_ref;
-		//result->data.type.alias[0] = '\0';
-	}
-
-	if (found_semi)
-		*found_semi = current_is(tok_semi_colon);
-	if (current_is(tok_semi_colon))
-		next_tok();
-	
-	result->tokens.end = current();
-	return result;
-}
-
-ast_declaration_t* try_parse_declaration()
-{
-	bool found_semi;
-	ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
-
-	if (decl && !found_semi)
-	{
-		report_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
-	}
-	return decl;
-}
-
-/*
-<declaration> :: = <var_declaration> | <function_declaration> | <type-specifier> ";"
-*/
-ast_declaration_t* parse_declaration()
-{
-	ast_declaration_t* result = try_parse_declaration();
-	if (!result)
-	{
-		report_err(ERR_SYNTAX, "expected identifier");
-	}
-	return result;
-}
-
 /*
 <identifier> ::= <id>
 */
@@ -638,7 +377,7 @@ ast_expression_t* parse_identifier()
 	if (_parse_err)
 		return NULL;
 	//<factor> ::= <id>
-	ast_expression_t* expr = _alloc_expr();
+	ast_expression_t* expr = parse_alloc_expr();
 	expr->kind = expr_identifier;
 	tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
 	next_tok();
@@ -651,7 +390,7 @@ ast_expression_t* try_parse_literal()
 	if (current_is(tok_num_literal))
 	{
 		//<factor> ::= <int>
-		ast_expression_t* expr = _alloc_expr();
+		ast_expression_t* expr = parse_alloc_expr();
 		expr->kind = expr_int_literal;
 		expr->data.int_literal.val = current()->data.int_val;
 		expr->data.int_literal.type = NULL;
@@ -660,7 +399,7 @@ ast_expression_t* try_parse_literal()
 	}
 	else if (current_is(tok_string_literal))
 	{
-		ast_expression_t* expr = _alloc_expr();
+		ast_expression_t* expr = parse_alloc_expr();
 		expr->kind = expr_str_literal;
 		expr->data.str_literal.value = current()->data.str;
 		next_tok();
@@ -740,13 +479,13 @@ ast_expression_t* try_parse_postfix_expr()
 
 	while (tok_in_set(current()->kind, postfix_ops))
 	{
-		ast_expression_t* expr = _alloc_expr();
+		ast_expression_t* expr = parse_alloc_expr();
 		expr->tokens = primary->tokens;
 		if (current_is(tok_l_paren))
 		{
 			if (primary->kind != expr_identifier)
 			{
-				report_err(ERR_SYNTAX, "identifier must proceed function call");
+				parse_err(ERR_SYNTAX, "identifier must proceed function call");
 				ast_destroy_expression(primary);
 				return NULL;
 			}
@@ -855,7 +594,7 @@ ast_expression_t* try_parse_cast_expr()
 			expect_cur(tok_r_paren);
 			next_tok();
 
-			ast_expression_t* expr = _alloc_expr();
+			ast_expression_t* expr = parse_alloc_expr();
 			expr->tokens.start = start;
 			expr->tokens.end = current();
 			expr->kind = expr_cast;
@@ -863,7 +602,7 @@ ast_expression_t* try_parse_cast_expr()
 			expr->data.cast.expr = try_parse_cast_expr();
 			if (!expr->data.cast.expr)
 			{
-				report_err(ERR_SYNTAX, "Expected expression after cast");
+				parse_err(ERR_SYNTAX, "Expected expression after cast");
 				ast_destroy_expression(expr);
 				return NULL;
 			}
@@ -877,7 +616,7 @@ ast_expression_t* try_parse_cast_expr()
 
 ast_expression_t* parse_sizeof_expr()
 {
-	ast_expression_t* expr = _alloc_expr();
+	ast_expression_t* expr = parse_alloc_expr();
 	expr->kind = expr_sizeof;
 	
 	next_tok();
@@ -915,7 +654,7 @@ ast_expression_t* parse_sizeof_expr()
 
 	if (expr->data.sizeof_call.kind == sizeof_expr && !expr->data.sizeof_call.data.expr)
 	{
-		report_err(ERR_SYNTAX, "failed to parse expression in sizeof()");
+		parse_err(ERR_SYNTAX, "failed to parse expression in sizeof()");
 		//todo - return NULL?
 	}	
 	return expr;
@@ -931,7 +670,7 @@ ast_expression_t* try_parse_unary_expr()
 {
 	if (_is_unary_op(current()))
 	{
-		ast_expression_t* expr = _alloc_expr();
+		ast_expression_t* expr = parse_alloc_expr();
 		expr->kind = expr_unary_op;
 		expr->data.unary_op.operation = _get_unary_operator(current());
 		next_tok();
@@ -939,7 +678,7 @@ ast_expression_t* try_parse_unary_expr()
 
 		if (!expr->data.unary_op.expression)
 		{
-			report_err(ERR_SYNTAX, "Expected expression after %s", ast_op_name(expr->data.unary_op.operation));
+			parse_err(ERR_SYNTAX, "Expected expression after %s", ast_op_name(expr->data.unary_op.operation));
 			ast_destroy_expression(expr);
 			return NULL;
 		}
@@ -1058,7 +797,7 @@ ast_expression_t* parse_conditional_expression()
 		next_tok();
 		ast_expression_t* condition = expr;
 		
-		expr = _alloc_expr();
+		expr = parse_alloc_expr();
 		expr->tokens.start = start;
 		expr->kind = expr_condition;
 		expr->data.condition.cond = condition;
@@ -1100,7 +839,7 @@ ast_expression_t* parse_assignment_expression()
 	{
 		op_kind op = _get_assignment_operator(current());
 		next_tok();
-		ast_expression_t* assignment = _alloc_expr();
+		ast_expression_t* assignment = parse_alloc_expr();
 		assignment->tokens = expr->tokens;
 		assignment->kind = expr_binary_op;
 		assignment->data.binary_op.operation = op;
@@ -1134,7 +873,7 @@ ast_expression_t* parse_expression()
 	ast_expression_t* expr = parse_assignment_expression();
 	if (!expr)
 	{
-		report_err(ERR_SYNTAX, "failed to parse expression");
+		parse_err(ERR_SYNTAX, "failed to parse expression");
 	}
 	return expr;
 }
@@ -1187,7 +926,7 @@ ast_declaration_t* parse_top_level_decl(bool* found_semi)
 {
 	ast_declaration_t* result = try_parse_declaration_opt_semi(found_semi);
 	if (!result && !_parse_err)
-		report_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
+		parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
 	return result;
 }
 
@@ -1250,28 +989,11 @@ ast_trans_unit_t* parse_translation_unit()
 			//function definition
 			ast_function_decl_t* func = &decl->data.func;
 			func->blocks = parse_block_list();
-
-			/*ast_block_item_t* last_blk = NULL;
-			while (!current_is(tok_r_brace))
-			{
-				ast_block_item_t* blk = parse_block_item();
-
-				if (_parse_err)
-					goto parse_failure;
-				
-				if (last_blk)
-					last_blk->next = blk;
-				else
-					func->blocks = blk;
-				last_blk = blk;
-				last_blk->next = NULL;
-			}
-			next_tok();*/
 			decl->tokens.end = current();
 		}
 		else if(!found_semi)
 		{
-			report_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
+			parse_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
 		}
 		if (_parse_err)
 			goto parse_failure;

@@ -266,11 +266,10 @@ typedef struct ast_type_ref
 }ast_type_ref_t;
 
 /* Declaration */
-
 typedef struct ast_var_decl
 {
 	ast_expression_t* init_expr;
-	
+
 }ast_var_decl_t;
 
 typedef struct ast_func_param_decl
@@ -282,15 +281,11 @@ typedef struct ast_func_param_decl
 
 typedef struct ast_func_decl
 {
-	//char name[MAX_LITERAL_NAME];
-
 	ast_func_param_decl_t* first_param;
 	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
 	bool ellipse_param;
 	
-	//ast_type_ref_t* return_type_ref;
-
 	uint32_t required_stack_size;
 
 	//Definitions will have a list of blocks
@@ -424,7 +419,6 @@ typedef struct ast_statement
 }ast_statement_t;
 
 /* Block item */
-
 typedef enum
 {
 	blk_smnt,
