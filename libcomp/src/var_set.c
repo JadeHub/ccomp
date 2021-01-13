@@ -59,10 +59,10 @@ var_set_t* var_init_set()
 void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 {
 	/* add the function parameters */
-	if (fn->data.func.first_param)
+	//ast_func_param_decl_t* param = fn->data.func.params.first_param;
+	ast_func_param_decl_t* param = fn->type_ref->spec->data.func_sig_spec->params->first_param;
+	if (param)
 	{
-		ast_func_param_decl_t* param = fn->data.func.first_param;
-
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
 

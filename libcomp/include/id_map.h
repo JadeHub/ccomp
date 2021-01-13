@@ -72,7 +72,7 @@ int_val_t* idm_find_enum_val(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_tag(identfier_map_t* map, const char* name);
 ast_type_spec_t* idm_find_block_tag(identfier_map_t* map, const char* name);
 
-void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn);
+void idm_enter_function(identfier_map_t* map, ast_func_params_t* fn);
 void idm_leave_function(identfier_map_t* map);
 
 void idm_enter_block(identfier_map_t* map);

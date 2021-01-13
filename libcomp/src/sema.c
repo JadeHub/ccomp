@@ -388,7 +388,14 @@ bool process_block_item(ast_block_item_t* block)
 	}
 	else if (block->kind == blk_decl)
 	{
-		return process_declaration(block->data.decl);
+		ast_declaration_t* decl = block->data.decls.first;
+		while (decl)
+		{
+			if (!process_declaration(decl))
+				return false;
+			decl = decl->next;
+		}
+		return true;
 	}	
 	return false;
 }
@@ -415,8 +422,14 @@ bool process_for_statement(ast_statement_t* smnt)
 storage class auto or register
 	*/
 
-	if (!process_declaration(smnt->data.for_smnt.init_decl))
-		return false;
+	ast_declaration_t* decl = smnt->data.for_smnt.decls.first;
+	while (decl)
+	{
+		if (!process_declaration(decl))
+			return false;
+		decl = decl->next;
+	}
+
 	if (!process_expression(smnt->data.for_smnt.init))
 		return false;
 	if (!process_expression(smnt->data.for_smnt.condition))
@@ -498,7 +511,7 @@ bool process_return_statement(ast_statement_t* smnt)
 	
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!sema_can_convert_type(_cur_func_ctx.decl->type_ref->spec, result.result_type))
+		if (!sema_can_convert_type(_cur_func_ctx.decl->type_ref->spec->data.func_sig_spec->ret_type, result.result_type))
 		{
 			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
@@ -569,7 +582,8 @@ bool process_statement(ast_statement_t* smnt)
 bool process_function_definition(ast_declaration_t* decl)
 {
 	//set up function data
-	idm_enter_function(_id_map, &decl->data.func);
+	idm_enter_function(_id_map, decl->type_ref->spec->data.func_sig_spec->params);
+
 	_cur_func_ctx.decl = decl;
 	_cur_func_ctx.labels = sht_create(64);
 	_cur_func_ctx.goto_smnts = phs_create(64);
@@ -610,25 +624,24 @@ static bool _is_fn_definition(ast_declaration_t* decl)
 
 bool resolve_function_decl_types(ast_declaration_t* decl)
 {
-	ast_function_decl_t* func = &decl->data.func;
+	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
 
 	//return type
-	if (!sema_resolve_type_ref(decl->type_ref))
+	fsig->ret_type = sema_resolve_type(fsig->ret_type, decl->tokens.start);
+	if (!fsig->ret_type)
 		return false;
 	
-	ast_type_spec_t* ret_type = decl->type_ref->spec;
-
 	if (_is_fn_definition(decl) && 
-		ret_type->kind != type_void && 
-		ret_type->size == 0)
+		fsig->ret_type->kind != type_void &&
+		fsig->ret_type->size == 0)
 	{
 		return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"function '%s' returns incomplete type '%s'",
-			decl->name, ret_type->data.user_type_spec->name);
+			decl->name, ast_type_name(fsig->ret_type));
 	}
 	
 	//parameter types
-	ast_func_param_decl_t* param = func->first_param;
+	ast_func_param_decl_t* param = fsig->params->first_param;
 	while (param)
 	{
 		if (param->decl->type_ref->spec->kind == type_void)
@@ -659,23 +672,26 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
 {
-	if (exist->type_ref->spec != func->type_ref->spec)
+	ast_func_sig_type_spec_t* esig = exist->type_ref->spec->data.func_sig_spec;
+	ast_func_sig_type_spec_t* fsig = func->type_ref->spec->data.func_sig_spec;
+
+	if (esig->ret_type != fsig->ret_type)
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"differing return type in declaration of function '%s'. Expected '%s'",
-			ast_declaration_name(func), ast_type_ref_name(exist->type_ref));
+			ast_declaration_name(func), ast_type_name(fsig->ret_type));
 	}
 
-	if (exist->data.func.param_count != func->data.func.param_count || 
-		exist->data.func.ellipse_param != func->data.func.ellipse_param)
+	if (esig->params->param_count != fsig->params->param_count ||
+		esig->params->ellipse_param != fsig->params->ellipse_param)
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"incorrect number of params in declaration of function '%s'. Expected %d",
-			ast_declaration_name(func), exist->data.func.param_count);
+			ast_declaration_name(func), esig->params->param_count);
 	}
 
-	ast_func_param_decl_t* p_exist = exist->data.func.first_param;
-	ast_func_param_decl_t* p_func = func->data.func.first_param;
+	ast_func_param_decl_t* p_exist = esig->params->first_param;
+	ast_func_param_decl_t* p_func = fsig->params->first_param;
 
 	int p_count = 1;
 	while (p_exist && p_func)
@@ -709,7 +725,11 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 		return proc_decl_error;
 	}
 
-	if (decl->data.func.ellipse_param && decl->data.func.param_count == 0)
+	assert(decl->type_ref->spec->kind == type_func_sig);
+
+	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
+
+	if(fsig->params->ellipse_param && fsig->params->param_count == 0)
 	{
 		_report_err(decl->tokens.start, ERR_SYNTAX,
 			"use of ellipse parameter requires at least one other parameter",
@@ -869,7 +889,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 	memset(tl, 0, sizeof(valid_trans_unit_t));
 	tl->ast = ast;
 	tl->string_literals = _id_map->string_literals;
-	ast_declaration_t* decl = ast->decls;
+	ast_declaration_t* decl = ast->decls.first;
 	while (decl)
 	{
 		ast_declaration_t* next = decl->next;

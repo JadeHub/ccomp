@@ -196,9 +196,13 @@ ast_statement_t* parse_for_statement()
 	parse_on_enter_block();
 
 	//initialisation
-	
-	data->init_decl = try_parse_declaration();
-	if (!data->init_decl)
+	data->decls = try_parse_decl_list();
+	if (data->decls.first)
+	{
+		expect_cur(tok_semi_colon);
+		next_tok();
+	}
+	else
 	{
 		result->kind = smnt_for;
 		data->init = parse_optional_expression(tok_semi_colon);
@@ -423,7 +427,6 @@ ast_statement_t* parse_statement()
 	else if (current_is(tok_l_brace))
 	{
 		//<statement> ::= "{" { <block - item> } "}"
-		next_tok();
 
 		ast_statement_t* smnt = _alloc_smnt();
 		smnt->tokens.start = start;

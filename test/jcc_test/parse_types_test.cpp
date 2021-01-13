@@ -153,7 +153,7 @@ TEST_F(ParstTypeTest, UInt64)
 	ExpectType(type_uint64);
 
 	ParseType("unsigned long const long static int");
-	ExpectType(type_uint64, TF_Q_CONST | TF_SC_STATIC);
+	ExpectType(type_uint64, TF_QUAL_CONST | TF_SC_STATIC);
 }
 
 TEST_F(ParstTypeTest, user_struct)
@@ -163,7 +163,7 @@ TEST_F(ParstTypeTest, user_struct)
 	ExpectUserTypeName("Abc");
 
 	ParseType("struct {int i;} const");
-	ExpectType(type_user, TF_Q_CONST);
+	ExpectType(type_user, TF_QUAL_CONST);
 
 	//ParseType("struct const {int i;}");
 	//ExpectType(type_user, TF_Q_CONST);

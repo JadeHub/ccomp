@@ -115,6 +115,12 @@ static const char* _promoting_mov_instr(ast_type_spec_t* type)
 	return "";
 }
 
+ast_type_spec_t* _get_func_sig_ret_type(ast_type_ref_t* func_sig)
+{
+	assert(func_sig->spec->kind == type_func_sig);
+	return func_sig->spec->data.func_sig_spec->ret_type;
+}
+
 void ensure_lval_in_reg(lval_t* lval)
 {
 	switch (lval->kind)
@@ -758,12 +764,14 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 
 	ast_func_call_param_t* param = expr->data.func_call.last_param;
 	uint32_t pushed = 0;
+	ast_type_spec_t* ret_type = _get_func_sig_ret_type(decl->type_ref);
 
-	if (decl->type_ref->spec->size > 4)
+	//if (decl->type_ref->spec->size > 4)
+	if (ret_type->size > 4)
 	{
 		//allocate space for return value on the stack
 
-		_gen_asm("subl $%d, %%esp", decl->type_ref->spec->size);
+		_gen_asm("subl $%d, %%esp", ret_type->size);
 		_gen_asm("movl %%esp, %%ebx"); //store the return ptr
 	}
 
@@ -807,7 +815,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		param = param->prev;
 	}
 
-	if (decl->type_ref->spec->size > 4)
+	if (ret_type->size > 4)
 	{
 		_gen_asm("push %%ebx");
 		result->lval.kind = lval_address;
@@ -818,7 +826,7 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("addl $%d, %%esp", pushed);
 	}
-	result->lval.type = decl->type_ref->spec;
+	result->lval.type = ret_type;
 	if(result->lval.type->kind == type_ptr)
 		result->lval.kind = lval_address;
 }
@@ -1015,7 +1023,8 @@ void gen_switch_statement(ast_statement_t* smnt)
 
 void gen_return_statement(ast_statement_t* smnt)
 {
-	if (_cur_fun->type_ref->spec->size > 4)
+	ast_type_spec_t* ret_type = _get_func_sig_ret_type(_cur_fun->type_ref);
+	if (ret_type->size > 4)
 	{
 		gen_expression1(smnt->data.expr);
 
@@ -1027,7 +1036,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		
 		//source address is in eax, dest in edx
 		uint32_t offset = 0;
-		while (offset < _cur_fun->type_ref->spec->size)
+		while (offset < ret_type->size)
 		{
 			if (offset)
 			{
@@ -1048,7 +1057,7 @@ void gen_return_statement(ast_statement_t* smnt)
 	}
 
 	//function epilogue
-	if (_cur_fun->type_ref->spec->size > 4)
+	if (ret_type->size > 4)
 	{
 		_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
  		_gen_asm("leave");
@@ -1193,8 +1202,15 @@ void gen_statement(ast_statement_t* smnt)
 
 		gen_scope_block_enter();
 
-		if (f_data->init_decl)
-			gen_var_decl(f_data->init_decl);
+		//if (f_data->init_decl)
+			//gen_var_decl(f_data->init_decl);
+
+		ast_declaration_t* decl = f_data->decls.first;
+		while (decl)
+		{
+			gen_var_decl(decl);
+			decl = decl->next;
+		}
 
 		_cur_break_label = label_end;
 		_cur_cont_label = label_cont;
@@ -1245,8 +1261,13 @@ void gen_block_item(ast_block_item_t* bi)
 	}
 	else if (bi->kind == blk_decl)
 	{
-		if(bi->data.decl->kind == decl_var)
-			gen_var_decl(bi->data.decl);
+		ast_declaration_t* decl = bi->data.decls.first;
+		while (decl)
+		{
+			if (decl->kind == decl_var)
+				gen_var_decl(decl);
+			decl = decl->next;
+		}
 	}
 }
 

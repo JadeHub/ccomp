@@ -16,7 +16,7 @@ TEST_F(FnCallValidationTest, err_var_shaddows_fn)
 	}
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectError(code, ERR_UNKNOWN_FUNC);
 }
 
 TEST_F(FnCallValidationTest, err_undefined)

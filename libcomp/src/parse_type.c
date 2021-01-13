@@ -530,9 +530,9 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 
 			if (current_is(tok_extern))
 				flags |= TF_SC_EXTERN;
-			if (current_is(tok_static))
+			else if (current_is(tok_static))
 				flags |= TF_SC_STATIC;
-			if (current_is(tok_typedef))
+			else if (current_is(tok_typedef))
 				flags |= TF_SC_TYPEDEF;
 
 			next_tok();
@@ -540,10 +540,14 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 		else if (_is_type_qualifier(current()))
 		{
 			type_qualifiers = true;
-			//allow type qualifier const once only
-			if (flags & TF_Q_CONST)
-				return parse_err(ERR_SYNTAX, "multiple const specifiers are not permitted");
-			flags |= TF_Q_CONST;
+			if (current_is(tok_const))
+			{
+				//allow type qualifier const once only
+				if (flags & TF_QUAL_CONST)
+					return parse_err(ERR_SYNTAX, "multiple const specifiers are not permitted");
+				flags |= TF_QUAL_CONST;
+			}
+			//ignore volatile
 			next_tok();
 		}
 		else
@@ -592,29 +596,53 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 	return type_spec;
 }
 
-ast_type_ref_t* parse_type_ref(ast_type_spec_t* type_spec, uint32_t flags)
+parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flags)
 {
-	ast_type_ref_t* result = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
-	memset(result, 0, sizeof(ast_type_ref_t));
-	result->flags = flags;
-	result->spec = type_spec;
-	result->tokens.start = current();
+	parse_type_ref_result_t result;
+	result.identifier = NULL;
+	result.type = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
+	memset(result.type, 0, sizeof(ast_type_ref_t));
+	result.type->flags = flags;
+	result.type->spec = type_spec;
+	result.type->tokens.start = current();
 
-	while (current_is(tok_star))
+	if (current_is(tok_l_paren) && next_is(tok_star))
 	{
-		//pointer
+		//function pointer
 		next_tok();
-		ast_type_spec_t* ptr_type = ast_make_ptr_type(result->spec);
-
-		if (current_is(tok_const))
+		next_tok();
+		if (current_is(tok_identifier))
 		{
+			result.identifier = current();
 			next_tok();
-			//?
 		}
-		result->spec = ptr_type;
+		expect_cur(tok_r_paren);
+		next_tok();
+
+		//params
+		ast_func_params_t* params = (ast_func_params_t*)malloc(sizeof(ast_func_params_t));
+		memset(params, 0, sizeof(ast_func_params_t));
+		parse_function_parameters(params);
+		result.type->spec = ast_make_func_ptr_type(result.type->spec, params);
+	}
+	else
+	{
+		while (current_is(tok_star))
+		{
+			//pointer
+			next_tok();
+			ast_type_spec_t* ptr_type = ast_make_ptr_type(result.type->spec);
+
+			if (current_is(tok_const))
+			{
+				next_tok();
+				//?
+			}
+			result.type->spec = ptr_type;
+		}
 	}
 	
-	result->tokens.end = current();
+	result.type->tokens.end = current();
 	return result;
 }
 
@@ -626,30 +654,7 @@ ast_type_ref_t* try_parse_type_ref()
 	if (!type_spec)
 		return NULL;
 
-	return parse_type_ref(type_spec, flags);
-	
-	/*while (current_is(tok_star))
-	{
-		//pointer
-		next_tok();
-		ast_type_spec_t* ptr_type = ast_make_ptr_type(type_spec);
-
-		if (current_is(tok_const))
-		{
-			next_tok();
-			//?
-		}
-		type_spec = ptr_type;
-	}
-
-	ast_type_ref_t* result = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
-	memset(result, 0, sizeof(ast_type_ref_t));
-	result->spec = type_spec;
-	result->flags = flags;
-	result->tokens.start = start;
-	result->tokens.end = current();
-
-	return result;*/
+	return parse_type_ref(type_spec, flags).type;
 }
 
 void parse_type_init()

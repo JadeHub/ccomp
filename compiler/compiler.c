@@ -75,10 +75,10 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    char* path = path_resolve(options.input_path);
-    char* src_dir = path_dirname(path);
-    char* src_file = path_filename(path);
-    free(path);
+    const char* path = path_resolve(options.input_path);
+    const char* src_dir = path_dirname(path);
+    const char* src_file = path_filename(path);
+    free((void*)path);
         
     if (!src_file || !src_dir)
         return -1;
@@ -87,8 +87,8 @@ int main(int argc, char* argv[])
     lex_init();
 
     source_range_t* sr = src_load_file(src_file);
-    free(src_file);
-    free(src_dir);
+    free((void*)src_file);
+    free((void*)src_dir);
     if (!sr)
         return -1;
     

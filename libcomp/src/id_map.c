@@ -179,11 +179,12 @@ ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name)
 }
 
 
-void idm_enter_function(identfier_map_t* map, ast_function_decl_t* fn)
+void idm_enter_function(identfier_map_t* map, ast_func_params_t* params)
 {
 	idm_enter_block(map);
+	
 
-	ast_func_param_decl_t* param = fn->first_param;
+	ast_func_param_decl_t* param = params->first_param;
 	while (param)
 	{
 		idm_add_id(map, param->decl);

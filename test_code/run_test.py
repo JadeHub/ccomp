@@ -54,6 +54,7 @@ def run_test(path):
 
 def run_tests(path):
     global total_failures
+    global total_cases
     dir_name = path.rstrip('/')
     print('=' * 50)
     print(dir_name.center(50))
@@ -67,16 +68,19 @@ def run_tests(path):
             successes = successes + 1
         else:
             failures = failures + 1
+        total_cases = total_cases + 1
         print(bcolors.ENDC, end = '')
             
     print('=' * 50)
     if successes > 0:
         print(f'{successes} PASS')
+
     if failures > 0:
         print(f'{bcolors.FAIL}{failures} FAIL{bcolors.ENDC}')
         total_failures +=  failures
 
 total_failures = 0
+total_cases = 0;
 
 if len(sys.argv) == 2:
     selection = sys.argv[1]
@@ -87,5 +91,5 @@ for path in paths:
     run_tests(path)
 
 if total_failures > 0:
-    print(f'{bcolors.FAIL}{total_failures} TOTAL FAILURES{bcolors.ENDC}')
+    print(f'{bcolors.FAIL}{total_failures}/{total_cases} TOTAL FAILURES{bcolors.ENDC}')
     

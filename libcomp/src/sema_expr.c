@@ -303,20 +303,22 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 			expr->data.func_call.name);
 	}
 
-	if (expr->data.func_call.param_count != decl->data.func.param_count)
+	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
+
+	if (expr->data.func_call.param_count != fsig->params->param_count)
 	{
-		if (expr->data.func_call.param_count < decl->data.func.param_count ||
-			!decl->data.func.ellipse_param)
+		if (expr->data.func_call.param_count < fsig->params->param_count ||
+			!fsig->params->ellipse_param)
 		{
 			//not enough params, or no variable arg
 			return _report_err(expr, ERR_INVALID_PARAMS,
 				"incorrect number of params in call to function '%s'. Expected %d",
-				expr->data.func_call.name, decl->data.func.param_count);
+				expr->data.func_call.name, fsig->params->param_count);
 		}
 	}
 
 	ast_func_call_param_t* call_param = expr->data.func_call.first_param;
-	ast_func_param_decl_t* param_decl = decl->data.func.first_param;
+	ast_func_param_decl_t* param_decl = fsig->params->first_param;
 	int p_count = 1;
 	while (param_decl)
 	{
@@ -342,7 +344,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 
 	if (call_param != NULL)
 	{
-		assert(decl->data.func.ellipse_param);
+		assert(fsig->params->ellipse_param);
 
 		//... params
 		while (call_param)
@@ -357,7 +359,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 		}
 	}
 	expr->data.func_call.func_decl = decl;
-	result.result_type = decl->type_ref->spec;
+	result.result_type = decl->type_ref->spec->data.func_sig_spec->ret_type;
 	return result;
 }
 

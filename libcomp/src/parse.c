@@ -887,11 +887,19 @@ ast_block_item_t* parse_block_item()
 	memset(result, 0, sizeof(ast_block_item_t));
 	result->tokens.start = current();
 
-	ast_declaration_t* decl = try_parse_declaration();
-	if (decl)
+	ast_decl_list_t decls = try_parse_decl_list();
+	if (decls.first)
 	{
+		if (!current_is(tok_semi_colon))
+		{
+			parse_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decls.first));
+			ast_destroy_decl_list(decls);
+			return NULL;
+		}
+		next_tok();
+
 		result->kind = blk_decl;
-		result->data.decl = decl;
+		result->data.decls = decls;
 	}
 	else
 	{
@@ -904,7 +912,7 @@ ast_block_item_t* parse_block_item()
 	return result;
 }
 
-static void _add_decl_to_tl(ast_trans_unit_t* tl, ast_declaration_t* decl)
+/*static void _add_decl_to_tl(ast_trans_unit_t* tl, ast_declaration_t* decl)
 {
 	decl->next = NULL;
 	ast_declaration_t* tmp = tl->decls;
@@ -920,15 +928,7 @@ static void _add_decl_to_tl(ast_trans_unit_t* tl, ast_declaration_t* decl)
 		tmp = tmp->next;
 	}
 	tmp->next = decl;
-}
-
-ast_declaration_t* parse_top_level_decl(bool* found_semi)
-{
-	ast_declaration_t* result = try_parse_declaration_opt_semi(found_semi);
-	if (!result && !_parse_err)
-		parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
-	return result;
-}
+}*/
 
 void parse_init(token_t* tok)
 {
@@ -944,8 +944,10 @@ ast_block_item_t* parse_block_list()
 	ast_block_item_t* last = NULL;
 	ast_block_item_t* result = NULL;
 
-	parse_on_enter_block();
+	expect_cur(tok_l_brace);
+	next_tok();
 
+	parse_on_enter_block();
 	while (!current_is(tok_r_brace))
 	{
 		ast_block_item_t* blk = parse_block_item();
@@ -961,11 +963,16 @@ ast_block_item_t* parse_block_list()
 		last->next = NULL;
 	}
 	next_tok();
-
 	parse_on_leave_block();
-
 	return result;
 }
+
+
+
+//int a, b(), const c;
+
+//int b() { return 2; }
+
 
 //<translation_unit> :: = { <function> | <declaration> }
 ast_trans_unit_t* parse_translation_unit()
@@ -976,28 +983,44 @@ ast_trans_unit_t* parse_translation_unit()
 	
 	while (!current_is(tok_eof))
 	{
-		bool found_semi;
-		ast_declaration_t* decl = parse_top_level_decl(&found_semi);
+		ast_decl_list_t decls = try_parse_decl_list();
+		if(!decls.first && !_parse_err)
+			parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
 		if (_parse_err)
 			goto parse_failure;
 
-		if (decl->kind == decl_func && !found_semi)
+		if (current_is(tok_semi_colon))
 		{
-			expect_cur(tok_l_brace);
 			next_tok();
+		}
+		else
+		{			
+			if (decls.first->kind == decl_func && decls.first->next == NULL)
+			{	
+				//function definition must be the only decl
+				decls.first->data.func.blocks = parse_block_list();
+				if (_parse_err)
+					goto parse_failure;
+				decls.first->tokens.end = current();
+			}
+			else
+			{
+				parse_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decls.first));
+				goto parse_failure;
+			}
+		}
 
-			//function definition
-			ast_function_decl_t* func = &decl->data.func;
-			func->blocks = parse_block_list();
-			decl->tokens.end = current();
-		}
-		else if(!found_semi)
+		if (!result->decls.first)
 		{
-			parse_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
+			result->decls = decls;
 		}
-		if (_parse_err)
-			goto parse_failure;
-		_add_decl_to_tl(result, decl);		
+		else
+		{
+			result->decls.last->next = decls.first;
+			result->decls.last = decls.last;
+		}
+
+		//_add_decl_to_tl(result, decls.first);
 	}
 
 	result->tokens.end = current();

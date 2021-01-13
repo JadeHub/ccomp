@@ -170,7 +170,7 @@ void ast_destroy_block_item(ast_block_item_t* b)
 		ast_destroy_statement(b->data.smnt);
 		break;
 	case blk_decl:
-		ast_destroy_declaration(b->data.decl);
+		ast_destroy_decl_list(b->data.decls);
 	};
 	free(b);
 
@@ -211,7 +211,7 @@ void ast_destroy_statement(ast_statement_t* smnt)
 			break;
 		case smnt_for:
 		case smnt_for_decl:
-			ast_destroy_declaration(smnt->data.for_smnt.init_decl);
+			ast_destroy_decl_list(smnt->data.for_smnt.decls);
 			ast_destroy_expression(smnt->data.for_smnt.init);
 			ast_destroy_expression(smnt->data.for_smnt.condition);
 			ast_destroy_expression(smnt->data.for_smnt.post);
@@ -243,11 +243,10 @@ void ast_destroy_function_decl(ast_function_decl_t* fn)
 
 	free(fn);
 }
-void ast_destory_translation_unit(ast_trans_unit_t* tl)
+
+void ast_destroy_decl_list(ast_decl_list_t decl_list)
 {
-	if (!tl) return;
-	
-	ast_declaration_t* decl = tl->decls;
+	ast_declaration_t* decl = decl_list.first;
 
 	while (decl)
 	{
@@ -255,6 +254,13 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl)
 		ast_destroy_declaration(decl);
 		decl = next;
 	}
+}
+
+void ast_destory_translation_unit(ast_trans_unit_t* tl)
+{
+	if (!tl) return;
+
+	ast_destroy_decl_list(tl->decls);
 
 	free(tl);
 }
@@ -359,6 +365,30 @@ ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
 	result->size = 4;
 	result->data.ptr_type = ptr_type;
 	return result;
+}
+
+ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_params_t* params)
+{
+	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+	memset(result, 0, sizeof(ast_type_spec_t));
+	result->kind = type_func_sig;
+	result->size = 4;
+
+	result->data.func_sig_spec = (ast_func_sig_type_spec_t*)malloc(sizeof(ast_func_sig_type_spec_t));
+	memset(result->data.func_sig_spec, 0, sizeof(result->data.func_sig_spec));
+	result->data.func_sig_spec->ret_type = ret_type;
+	result->data.func_sig_spec->params = params;
+	return result;
+}
+
+bool ast_type_is_fn_ptr(ast_type_spec_t* type)
+{
+	return type->kind == type_ptr && type->data.ptr_type->kind == type_func_sig;
+}
+
+ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_params_t* params)
+{
+	return ast_make_ptr_type(ast_make_func_sig_type(ret_type, params));
 }
 
 bool ast_type_is_signed_int(ast_type_spec_t* type)

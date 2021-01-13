@@ -9,73 +9,134 @@ extern "C"
 class ParstDeclTest : public CompilerTest
 {
 public:
-	ast_declaration_t* ParseDecl(const std::string& code)
+	void ParseDecl(const std::string& code)
 	{
 		SetSource(code);
 		Lex();
 
 		parse_init(mTokens);
 
-		decl = try_parse_declaration();
-		return decl;
+		decls = try_parse_decl_list();
+		ast_declaration_t* decl = decls.first;
+
+		while (decl)
+		{
+			count++;
+			decl = decl->next;
+		}
 	}
 
 	void AssertValid()
 	{
+		ASSERT_NE(nullptr, decls.first);
+	}
+
+	void ExpectVarDecl(size_t idx, const std::string& name, ast_type_spec_t* spec, uint32_t type_flags = 0)
+	{
+		ast_declaration_t* decl = DeclNo(idx);
 		ASSERT_NE(nullptr, decl);
-	}
-
-	/*void AssertSpecKind(type_kind k)
-	{
-		AssertValid();
-		ASSERT_EQ(k, type_ref->spec->kind);
-	}
-
-	void ExpectPtrTo(type_kind k)
-	{
-		AssertSpecKind(type_ptr);
-		EXPECT_EQ(k, type_ref->spec->data.ptr_type->kind);
-	}
-
-	void ExpectType(type_kind k, uint32_t flags = 0)
-	{
-		AssertValid();
-		EXPECT_EQ(k, type_ref->spec->kind);
-		EXPECT_EQ(flags, type_ref->flags);
-	}
-
-	void ExpectUserType(user_type_kind ut, uint32_t flags = 0)
-	{
-		AssertValid();
-		ExpectType(type_user, flags);
-		EXPECT_EQ(ut, type_ref->spec->data.user_type_spec->kind);
-	}
-
-	void ExpectUserTypeName(const char* name)
-	{
-		AssertValid();
-		EXPECT_THAT(type_ref->spec->data.user_type_spec->name, StrEq(name));
-	}*/
-
-	void ExpectVarDeclName(const std::string& name)
-	{
-		ASSERT_EQ(decl_var, decl->kind);
+		EXPECT_EQ(decl_var, decl->kind);
 		EXPECT_EQ(name, decl->name);
-	}
-
-	void ExpectVarDeclType(ast_type_spec_t* spec)
-	{
-		ASSERT_EQ(decl_var, decl->kind);
 		EXPECT_EQ(spec, decl->type_ref->spec);
+		EXPECT_EQ(type_flags, decl->type_ref->flags);
 	}
 
-	ast_declaration_t* decl = nullptr;
+	void ExpectVarPtrDecl(size_t idx, const std::string& name, ast_type_spec_t* ptr_type)
+	{
+		ast_declaration_t* decl = DeclNo(idx);
+		ASSERT_NE(nullptr, decl);
+		EXPECT_EQ(decl_var, decl->kind);
+		EXPECT_EQ(name, decl->name);
+		ASSERT_EQ(type_ptr, decl->type_ref->spec->kind);
+		EXPECT_EQ(ptr_type, decl->type_ref->spec->data.ptr_type);
+	}
+
+	void ExpectFnDecl(size_t idx, const std::string& name, ast_type_spec_t* return_type)
+	{
+		ast_declaration_t* decl = DeclNo(idx);
+		ASSERT_NE(nullptr, decl);
+		EXPECT_EQ(decl_func, decl->kind);
+		EXPECT_EQ(name, decl->name);
+		ASSERT_EQ(type_func_sig, decl->type_ref->spec->kind);
+		EXPECT_EQ(return_type, decl->type_ref->spec->data.func_sig_spec->ret_type);
+	}
+
+	ast_declaration_t* DeclNo(size_t i)
+	{
+		ast_declaration_t* result = decls.first;
+
+		while (i)
+		{
+			result = result->next;
+			i--;
+		}
+		return result;
+	}
+
+	ast_decl_list_t decls;
+	size_t count = 0;
 };
 
 TEST_F(ParstDeclTest, global_int)
 {
 	ParseDecl("int j;");
 	AssertValid();
-	ExpectVarDeclName("j");
-	ExpectVarDeclType(int32_type_spec);
+	ASSERT_EQ(1, count);
+	ExpectVarDecl(0, "j", int32_type_spec);
+}
+
+TEST_F(ParstDeclTest, global_const_int)
+{
+	ParseDecl("int const j, i;");
+	AssertValid();
+	ASSERT_EQ(2, count);
+	ExpectVarDecl(0, "j", int32_type_spec, TF_QUAL_CONST);
+	ExpectVarDecl(1, "i", int32_type_spec, TF_QUAL_CONST);
+}
+
+TEST_F(ParstDeclTest, global_int_list)
+{
+	ParseDecl("int j,* i;");
+	AssertValid();
+	ASSERT_EQ(2, count);
+	ExpectVarDecl(0, "j", int32_type_spec);
+	ExpectVarPtrDecl(1, "i", int32_type_spec);
+}
+
+TEST_F(ParstDeclTest, err_const_after_spec)
+{
+	ExpectError(ERR_SYNTAX);
+	ParseDecl("int a, const b;");
+}
+
+TEST_F(ParstDeclTest, var_fn_var_decl)
+{
+	ParseDecl("int a, b(), c;");
+	AssertValid();
+	ASSERT_EQ(3, count);
+
+	ExpectVarDecl(0, "a", int32_type_spec);
+	ExpectFnDecl(1, "b", int32_type_spec);
+	ExpectVarDecl(2, "c", int32_type_spec);
+}
+
+TEST_F(ParstDeclTest, var_fn_ptr_decl)
+{
+	ParseDecl("int (*fn)(int);");
+	/*AssertValid();
+	ASSERT_EQ(3, count);
+
+	ExpectVarDecl(0, "a", int32_type_spec);
+	ExpectFnDecl(1, "b", int32_type_spec);
+	ExpectVarDecl(2, "c", int32_type_spec);*/
+}
+
+TEST_F(ParstDeclTest, var_fn_ptr_typedef)
+{
+	ParseDecl("typedef int (*fn)(int);");
+}
+
+TEST_F(ParstDeclTest, blah)
+{
+	ParseDecl("typedef int (*fn)(int);");
 }

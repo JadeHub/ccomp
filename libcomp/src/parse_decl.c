@@ -2,6 +2,9 @@
 #include "diag.h"
 
 #include <string.h>
+#include <assert.h>
+
+ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags);
 
 /*
 <array_decl> ::= "[" [ <constant-exp> ] "]"
@@ -37,14 +40,24 @@ ast_expression_t* opt_parse_array_spec()
 <function_param_list> ::= <function_param_decl> { "," <function_param_decl> }
 <function_param_decl> ::= <declaration_specifiers> { "*" } <id> [ <array_decl> ]
 */
-void parse_function_parameters(ast_function_decl_t* func)
+ast_func_params_t* parse_function_parameters()
 {
-	while (1)
+	ast_func_params_t* params = (ast_func_params_t*)malloc(sizeof(ast_func_params_t));
+	memset(params, 0, sizeof(ast_func_params_t));
+
+	expect_cur(tok_l_paren);
+	next_tok();
+
+	params->first_param = params->last_param = NULL;
+	params->param_count = 0;
+	params->ellipse_param = false;
+	while (!current_is(tok_eof))
 	{
-		bool found_semi;
-
-		ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
-
+		uint32_t type_flags = 0;
+		ast_type_spec_t* type_spec = try_parse_type_spec(&type_flags);
+		if (!type_spec)
+			break;
+		ast_declaration_t* decl = parse_declarator(type_spec, type_flags);
 		if (!decl)
 			break;
 
@@ -52,17 +65,17 @@ void parse_function_parameters(ast_function_decl_t* func)
 		memset(param, 0, sizeof(ast_func_param_decl_t));
 		param->decl = decl;
 
-		if (!func->first_param)
+		if (!params->first_param)
 		{
-			func->first_param = func->last_param = param;
+			params->first_param = params->last_param = param;
 		}
 		else
 		{
-			param->prev = func->last_param;
-			func->last_param->next = param;
-			func->last_param = param;
+			param->prev = params->last_param;
+			params->last_param->next = param;
+			params->last_param = param;
 		}
-		func->param_count++;
+		params->param_count++;
 
 		if (!current_is(tok_comma))
 			break;
@@ -70,112 +83,144 @@ void parse_function_parameters(ast_function_decl_t* func)
 	}
 
 	// if single void param remove it
-	if (func->param_count == 1 && func->first_param->decl->type_ref->spec->kind == type_void)
+	if (params->param_count == 1 && params->first_param->decl->type_ref->spec->kind == type_void)
 	{
-		free(func->first_param);
-		func->first_param = func->last_param = NULL;
-		func->param_count = 0;
+		free(params->first_param);
+		params->first_param = params->last_param = NULL;
+		params->param_count = 0;
 	}
 
 	if (current_is(tok_ellipse))
 	{
 		next_tok();
-		func->ellipse_param = true;
+		params->ellipse_param = true;
 	}
+
+	expect_cur(tok_r_paren);
+	next_tok();
+	return params;
 }
 
-
-/*
-<declaration> :: = <var_declaration> ";"
-				| <declaration_specifiers> ";"
-				| <function_declaration> ";"
-
-<var_declaration> ::= <declaration_specifiers> <id> [= <exp>]
-<function_declaration> ::= <declaration_specifiers> <id> "(" [ <function_params ] ")"
-<declaration_specifiers> ::= { ( <type_specifier> | <type_qualifier> | <storage_class_specifiers> ) }
-*/
-ast_declaration_t* try_parse_declaration_opt_semi(bool* found_semi)
+ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags)
 {
-	token_t* start = current();
-
-	ast_type_ref_t* type_ref = try_parse_type_ref();
-	if (!type_ref)
-		return NULL;
+	parse_type_ref_result_t type_ref_parse = parse_type_ref(type_spec, type_flags);
+	ast_type_ref_t* type_ref = type_ref_parse.type;
 
 	ast_declaration_t* result = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
 	memset(result, 0, sizeof(ast_declaration_t));
-	result->tokens.start = start;
+	result->tokens.start = current();
 	result->tokens.end = current();
 	result->type_ref = type_ref;
 
 	result->kind = decl_type;
 
-
-	if (current_is(tok_identifier))
+	//if (type_ref->spec->kind == type_func_sig)
+	if(ast_type_is_fn_ptr(type_ref->spec))
+	{
+		if (type_ref_parse.identifier)
+		{
+			tok_spelling_cpy(type_ref_parse.identifier, result->name, MAX_LITERAL_NAME);
+		}
+	}	
+	else if (current_is(tok_identifier))
 	{
 		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
 		next_tok();
 	}
 
+
 	if (strlen(result->name) && current_is(tok_l_paren))
 	{
 		//function			
 		result->kind = decl_func;
-		/*(*/
-		next_tok();
-		parse_function_parameters(&result->data.func);
-		/*)*/
-		expect_cur(tok_r_paren);
-		next_tok();
+		ast_func_params_t* params = parse_function_parameters();
+		result->type_ref->spec = ast_make_func_sig_type(result->type_ref->spec, params);
 	}
 	else
 	{
+		result->kind = decl_type;
+
 		// '[...]'
 		result->array_sz = opt_parse_array_spec();
+
+		if (current_is(tok_equal))
+		{
+			next_tok();
+			result->data.var.init_expr = parse_expression();
+		}
 
 		if (type_ref->flags & TF_SC_TYPEDEF)
 		{
 			//typedef
-			parse_register_alias_name(result->name);
+			if (strlen(result->name) == 0)
+			{
+				parse_err(ERR_SYNTAX, "typedef requires a name");
+				ast_destroy_declaration(result);
+				return NULL;
+			}
 
-			if (current_is(tok_equal))
+			if (result->data.var.init_expr)
 			{
 				parse_err(ERR_SYNTAX, "typedef cannot be initialised");
 				ast_destroy_declaration(result);
 				return NULL;
-			}
+			}			
+			parse_register_alias_name(result->name);
 		}
 		else if (strlen(result->name))
 		{
 			//variable 
 			result->kind = decl_var;
-
-			if (current_is(tok_equal))
-			{
-				next_tok();
-				result->data.var.init_expr = parse_expression();
-			}
+		}
+		else
+		{
+			//unnamed param or type decl
 		}
 	}
-
-	if (found_semi)
-		*found_semi = current_is(tok_semi_colon);
-	if (current_is(tok_semi_colon))
-		next_tok();
-
 	result->tokens.end = current();
 	return result;
 }
 
-
-ast_declaration_t* try_parse_declaration()
+ast_decl_list_t try_parse_decl_list()
 {
-	bool found_semi;
-	ast_declaration_t* decl = try_parse_declaration_opt_semi(&found_semi);
+	uint32_t type_flags = 0;
+	ast_decl_list_t decl_list = { NULL, NULL };
+	ast_type_spec_t* type_spec = try_parse_type_spec(&type_flags);
+	if (!type_spec)
+		goto _err_ret;
 
-	if (decl && !found_semi)
-	{
-		parse_err(ERR_SYNTAX, "expected ';' after declaration of %s", ast_declaration_name(decl));
+	while (!current_is(tok_eof))
+	{		
+		ast_declaration_t* decl = parse_declarator(type_spec, type_flags);
+		if (!decl)
+			goto _err_ret;
+
+		if (!decl_list.first)
+		{
+			decl_list.first = decl_list.last = decl;
+		}
+		else
+		{
+			decl_list.last->next = decl;
+			decl_list.last = decl;
+
+			if (decl->kind == decl_type)
+			{
+				//any type declaration must be first in the list
+				parse_err(ERR_SYNTAX, "variable or function declaration expected");
+				goto _err_ret;
+			}
+		}
+
+		if (!current_is(tok_comma))
+			break;
+		next_tok();
 	}
-	return decl;
+
+	return decl_list;
+_err_ret:
+	ast_destroy_decl_list(decl_list);
+	decl_list.first = decl_list.last = NULL;
+	return decl_list;
+	
 }

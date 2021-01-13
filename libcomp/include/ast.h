@@ -179,7 +179,7 @@ typedef enum
 	type_double,*/
 	type_user,
 	type_ptr,
-
+	type_func_sig,
 	type_alias //typedef
 }type_kind;
 
@@ -232,6 +232,13 @@ typedef struct ast_user_type_spec
 	}data;
 }ast_user_type_spec_t;
 
+typedef struct
+{
+	struct ast_type_spec* ret_type;
+	struct ast_func_params* params;
+
+}ast_func_sig_type_spec_t;
+
 typedef struct ast_type_spec
 {
 	type_kind kind;
@@ -240,10 +247,10 @@ typedef struct ast_type_spec
 	union
 	{
 		ast_user_type_spec_t* user_type_spec;
-
+		ast_func_sig_type_spec_t* func_sig_spec;
 		const char* alias;
 		/*
-		type pointed to if kind is type_ptr or type_array
+		type pointed to if kind is type_ptr
 		*/
 		struct ast_type_spec* ptr_type;
 	}data;
@@ -256,7 +263,7 @@ typedef struct ast_type_spec
 #define TF_SC_TYPEDEF		4
 
 //Type qualifier flags
-#define TF_Q_CONST			8
+#define TF_QUAL_CONST		8
 
 typedef struct ast_type_ref
 {
@@ -279,12 +286,17 @@ typedef struct ast_func_param_decl
 	struct ast_func_param_decl* next, * prev;
 }ast_func_param_decl_t;
 
-typedef struct ast_func_decl
+typedef struct ast_func_params
 {
 	ast_func_param_decl_t* first_param;
 	ast_func_param_decl_t* last_param;
 	uint32_t param_count;
 	bool ellipse_param;
+}ast_func_params_t;
+
+typedef struct ast_func_decl
+{
+	//ast_func_params_t params;
 	
 	uint32_t required_stack_size;
 
@@ -309,7 +321,7 @@ typedef struct ast_declaration
 	char name[MAX_LITERAL_NAME];
 
 	//variable or function return type
-	ast_type_ref_t* type_ref;
+	//ast_type_ref_t* type_ref;
 
 	//optional array size expression ie [....]
 	ast_expression_t* array_sz;
@@ -322,6 +334,11 @@ typedef struct ast_declaration
 
 	struct ast_declaration* next;
 }ast_declaration_t;
+
+typedef struct
+{
+	ast_declaration_t* first, * last;
+}ast_decl_list_t;
 
 /* Statement */
 typedef enum
@@ -367,7 +384,8 @@ for(i=0;i<10;i++)
 */
 typedef struct
 {
-	ast_declaration_t* init_decl; //for(int i = 0;...
+	ast_decl_list_t decls;
+
 	ast_expression_t* init; //for(i = 0;...
 	ast_expression_t* condition;
 	ast_expression_t* post;
@@ -433,7 +451,7 @@ typedef struct ast_block_item
 	union
 	{
 		ast_statement_t* smnt;
-		ast_declaration_t* decl;
+		ast_decl_list_t decls;
 	}data;
 	struct ast_block_item* next;
 }ast_block_item_t;
@@ -442,7 +460,8 @@ typedef struct
 {
 	token_range_t tokens;
 	char path[256];
-	ast_declaration_t* decls;
+	ast_decl_list_t decls;
+
 }ast_trans_unit_t;
 
 void ast_print(ast_trans_unit_t* tl);
@@ -456,10 +475,14 @@ const char* ast_type_ref_name(ast_type_ref_t* ref);
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
 uint32_t ast_user_type_size(ast_user_type_spec_t*);
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
+ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
+ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
+bool ast_type_is_fn_ptr(ast_type_spec_t* type);
 bool ast_type_is_signed_int(ast_type_spec_t* type);
 bool ast_type_is_int(ast_type_spec_t* type);
 bool ast_type_is_enum(ast_type_spec_t* type);
 
+void ast_destroy_decl_list(ast_decl_list_t decl_list);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);
 void ast_destroy_statement(ast_statement_t*);
 void ast_destroy_expression(ast_expression_t*);
