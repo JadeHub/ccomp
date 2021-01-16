@@ -381,6 +381,23 @@ ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_para
 	return result;
 }
 
+ast_type_spec_t* ast_func_decl_return_type(ast_declaration_t* fn)
+{
+	assert(fn->kind == decl_func);
+	return fn->type_ref->spec->data.func_sig_spec->ret_type;
+}
+
+ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn)
+{
+	assert(fn->kind == decl_func);
+	return fn->type_ref->spec->data.func_sig_spec->params;
+}
+
+uint32_t ast_decl_type_size(ast_declaration_t* decl)
+{
+	return decl->type_ref->spec->size;
+}
+
 bool ast_type_is_fn_ptr(ast_type_spec_t* type)
 {
 	return type->kind == type_ptr && type->data.ptr_type->kind == type_func_sig;

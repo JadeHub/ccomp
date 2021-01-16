@@ -59,14 +59,13 @@ var_set_t* var_init_set()
 void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 {
 	/* add the function parameters */
-	//ast_func_param_decl_t* param = fn->data.func.params.first_param;
-	ast_func_param_decl_t* param = fn->type_ref->spec->data.func_sig_spec->params->first_param;
+	ast_func_param_decl_t* param = ast_func_decl_params(fn)->first_param;
 	if (param)
 	{
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
 		int offset = 8;
 
-		if (fn->type_ref->spec->size > 4)
+		if (ast_func_decl_return_type(fn)->size > 4)
 			offset += 4; //add 4 bytes for the return value pointer
 
 		while (param)
@@ -77,7 +76,8 @@ void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 			var->next = vars->vars;
 			vars->vars = var;
 
-			offset += param->decl->type_ref->spec->size < 4 ? 4 : param->decl->type_ref->spec->size;
+			uint32_t param_sz = ast_decl_type_size(param->decl);
+			offset += param_sz < 4 ? 4 : param_sz;
 			param = param->next;
 		}
 	}
@@ -102,7 +102,6 @@ void var_leave_function(var_set_t* vars)
 	}
 	assert(false);
 }
-
 
 void var_enter_block(var_set_t* vars)
 {

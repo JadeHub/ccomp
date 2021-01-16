@@ -672,26 +672,29 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
 {
-	ast_func_sig_type_spec_t* esig = exist->type_ref->spec->data.func_sig_spec;
+	//ast_func_sig_type_spec_t* esig = exist->type_ref->spec->data.func_sig_spec;
 	ast_func_sig_type_spec_t* fsig = func->type_ref->spec->data.func_sig_spec;
 
-	if (esig->ret_type != fsig->ret_type)
+	if(ast_func_decl_return_type(exist) != ast_func_decl_return_type(func))
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"differing return type in declaration of function '%s'. Expected '%s'",
-			ast_declaration_name(func), ast_type_name(fsig->ret_type));
+			ast_declaration_name(func), ast_type_name(ast_func_decl_return_type(exist)));
 	}
 
-	if (esig->params->param_count != fsig->params->param_count ||
-		esig->params->ellipse_param != fsig->params->ellipse_param)
+	ast_func_params_t* exist_params = ast_func_decl_params(exist);
+	ast_func_params_t* new_params = ast_func_decl_params(func);
+
+	if (exist_params->param_count != new_params->param_count ||
+		exist_params->ellipse_param != new_params->ellipse_param)
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
 			"incorrect number of params in declaration of function '%s'. Expected %d",
-			ast_declaration_name(func), esig->params->param_count);
+			ast_declaration_name(func), exist_params->param_count);
 	}
 
-	ast_func_param_decl_t* p_exist = esig->params->first_param;
-	ast_func_param_decl_t* p_func = fsig->params->first_param;
+	ast_func_param_decl_t* p_exist = exist_params->first_param;
+	ast_func_param_decl_t* p_func = new_params->first_param;
 
 	int p_count = 1;
 	while (p_exist && p_func)
@@ -727,9 +730,8 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 
 	assert(decl->type_ref->spec->kind == type_func_sig);
 
-	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
-
-	if(fsig->params->ellipse_param && fsig->params->param_count == 0)
+	ast_func_params_t* params = ast_func_decl_params(decl);
+	if(params->ellipse_param && params->param_count == 0)
 	{
 		_report_err(decl->tokens.start, ERR_SYNTAX,
 			"use of ellipse parameter requires at least one other parameter",

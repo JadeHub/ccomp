@@ -321,7 +321,7 @@ typedef struct ast_declaration
 	char name[MAX_LITERAL_NAME];
 
 	//variable or function return type
-	//ast_type_ref_t* type_ref;
+	ast_type_ref_t* type_ref;
 
 	//optional array size expression ie [....]
 	ast_expression_t* array_sz;
@@ -477,6 +477,9 @@ uint32_t ast_user_type_size(ast_user_type_spec_t*);
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type);
 ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
 ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
+ast_type_spec_t* ast_func_decl_return_type(ast_declaration_t* fn);
+ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn);
+uint32_t ast_decl_type_size(ast_declaration_t* decl);
 bool ast_type_is_fn_ptr(ast_type_spec_t* type);
 bool ast_type_is_signed_int(ast_type_spec_t* type);
 bool ast_type_is_int(ast_type_spec_t* type);
