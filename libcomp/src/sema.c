@@ -282,13 +282,61 @@ bool sema_resolve_type_ref(ast_type_ref_t* ref)
 	return false;
 }
 
+bool sema_is_same_func_params(ast_func_params_t* lhs, ast_func_params_t* rhs)
+{
+	if (lhs->param_count != rhs->param_count ||
+		lhs->ellipse_param != rhs->ellipse_param)
+		return false;
+
+	ast_func_param_decl_t* lhs_param = lhs->first_param;
+	ast_func_param_decl_t* rhs_param = rhs->first_param;
+
+	while (lhs_param && rhs_param)
+	{
+		if (!sema_is_same_type(lhs_param->decl->type_ref->spec, rhs_param->decl->type_ref->spec))
+			return false;
+		lhs_param = lhs_param->next;
+		rhs_param = rhs_param->next;
+	}
+	return lhs_param == rhs_param;
+}
+
+bool sema_is_same_func_sig(ast_func_sig_type_spec_t* lhs, ast_func_sig_type_spec_t* rhs)
+{
+	if (!sema_is_same_type(lhs->ret_type, rhs->ret_type))
+		return false;
+
+	return sema_is_same_func_params(lhs->params, rhs->params);
+}
+
+//expect that lhs and rhs have been 'resolved'
+bool sema_is_same_type(ast_type_spec_t* lhs, ast_type_spec_t* rhs)
+{
+	if (lhs->kind != rhs->kind)
+		return false;
+
+	if (lhs->kind == type_ptr)
+	{
+		return sema_is_same_type(lhs->data.ptr_type, rhs->data.ptr_type);
+	}
+
+	if (lhs->kind == type_func_sig)
+	{
+		return sema_is_same_func_sig(lhs->data.func_sig_spec, rhs->data.func_sig_spec);
+	}
+
+	return lhs == rhs;
+}
+
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 {
 	if (!type)
 		return false;
 
-	if (target == type)
+	if (sema_is_same_type(target, type))
 		return true;
+	//if (target == type)
+	//	return true;
 
 	//integer promotion
 	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size >= type->size)
@@ -517,7 +565,7 @@ bool process_return_statement(ast_statement_t* smnt)
 	
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!sema_can_convert_type(_cur_func_ctx.decl->type_ref->spec->data.func_sig_spec->ret_type, result.result_type))
+		if (!sema_can_convert_type(ast_func_decl_return_type(_cur_func_ctx.decl), result.result_type))
 		{
 			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 				"return value type does not match function declaration");
@@ -667,55 +715,13 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			param_type->size == 0)
 		{
 			return _report_err(param->decl->tokens.start, ERR_TYPE_INCOMPLETE,
-				"function param '%s' returns incomplete type '%s'",
+				"function param '%s' of incomplete type '%s'",
 				param->decl->name, param_type->data.user_type_spec->name);
 		}
 		
 		param = param->next;
 	}
 	return true;
-}
-
-static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
-{
-	if(ast_func_decl_return_type(exist) != ast_func_decl_return_type(func))
-	{
-		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
-			"differing return type in declaration of function '%s'. Expected '%s'",
-			ast_declaration_name(func), ast_type_name(ast_func_decl_return_type(exist)));
-	}
-
-	ast_func_params_t* exist_params = ast_func_decl_params(exist);
-	ast_func_params_t* new_params = ast_func_decl_params(func);
-
-	if (exist_params->param_count != new_params->param_count ||
-		exist_params->ellipse_param != new_params->ellipse_param)
-	{
-		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
-			"incorrect number of params in declaration of function '%s'. Expected %d",
-			ast_declaration_name(func), exist_params->param_count);
-	}
-
-	ast_func_param_decl_t* p_exist = exist_params->first_param;
-	ast_func_param_decl_t* p_func = new_params->first_param;
-
-	int p_count = 1;
-	while (p_exist && p_func)
-	{
-		sema_resolve_type_ref(p_func->decl->type_ref);
-		if (p_exist->decl->type_ref->spec != p_func->decl->type_ref->spec)
-		{
-			return _report_err(func->tokens.start, ERR_INVALID_PARAMS,
-				"conflicting type in param %d of declaration of function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(func), ast_type_ref_name(p_exist->decl->type_ref));
-		}
-
-		p_exist = p_exist->next;
-		p_func = p_func->next;
-		p_count++;
-	}
-
-	return p_exist == NULL && p_func == NULL;
 }
 
 proc_decl_result process_function_decl(ast_declaration_t* decl)
@@ -754,9 +760,13 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 				"redefinition of function '%s'", name);
 			return proc_decl_error;
 		}
-		
-		if (!_compare_func_decls(exist, decl))
+
+		if (!sema_is_same_func_sig(exist->type_ref->spec->data.func_sig_spec, decl->type_ref->spec->data.func_sig_spec))
+		{
+			_report_err(decl->tokens.start, ERR_INVALID_PARAMS,
+				"differing function signature in definition of '%s'", name);
 			return proc_decl_error;
+		}
 
 		if (!_is_fn_definition(exist) && _is_fn_definition(decl))
 		{
@@ -798,8 +808,8 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 	
 	if (exist && exist->kind == decl_var)
 	{		
-		//multiple declarations are allowed
-		if (!type || exist->type_ref->spec != type)
+		//multiple declarations are allowed		
+		if (!type || !sema_is_same_type(exist->type_ref->spec, type))
 		{
 			//different types
 			_report_err(decl->tokens.start, ERR_DUP_SYMBOL,

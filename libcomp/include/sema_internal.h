@@ -27,7 +27,7 @@ expr_result_t sema_process_int_literal(ast_expression_t* expr);
 identfier_map_t* sema_id_map();
 bool sema_resolve_type_ref(ast_type_ref_t* ref);
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type);
-
+bool sema_is_same_type(ast_type_spec_t* lhs, ast_type_spec_t* rhs);
 
 
 bool sema_is_int_constant_expression(ast_expression_t* expr);
