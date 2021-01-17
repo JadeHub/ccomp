@@ -3,6 +3,6 @@
 #include "diag.h"
 #include "sema.h"
 
-typedef void (*write_asm_cb)(const char* line, void* data);
+typedef void (*cg_write_asm_cb)(const char* line, void* data);
 
-void code_gen(valid_trans_unit_t*, write_asm_cb, void* data);
+void code_gen(valid_trans_unit_t*, cg_write_asm_cb, void* data);

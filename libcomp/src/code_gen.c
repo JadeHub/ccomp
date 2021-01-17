@@ -2,6 +2,8 @@
 #include "var_set.h"
 #include "source.h"
 
+#include "x86_asm.h"
+
 #include "id_map.h"
 #include "std_types.h"
 
@@ -11,7 +13,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
 
 typedef struct
 {
@@ -47,7 +48,7 @@ void gen_copy_eax_to_lval(expr_result* result);
 void gen_assignment_expression(ast_expression_t* expr, expr_result* result);
 void gen_expression1(ast_expression_t* expr);
 
-static write_asm_cb _asm_cb;
+static cg_write_asm_cb _asm_cb;
 static void* _asm_cb_data;
 
 static var_set_t* _var_set;
@@ -82,22 +83,6 @@ static bool _is_unsigned_int_type(ast_type_spec_t* type)
 	return type->kind == type_uint8 ||
 		type->kind == type_uint16 ||
 		type->kind == type_uint32;
-}
-
-static const char* _sized_mov(ast_type_spec_t* type)
-{
-	
-	if (type->size == 4)
-		return "movl";
-
-	if (type->size == 2)
-		return "movw";
-
-	if (type->size == 1)
-		return "movb";
-
-	assert(false);
-	return "";
 }
 
 static const char* _promoting_mov_instr(ast_type_spec_t* type)
@@ -154,7 +139,7 @@ void ensure_lval_in_reg(lval_t* lval)
 			{
 				//we are managing a pointer in eax, now we need to dereference it
 				lval->offset = 0;
-				_gen_asm("movl %d(%%eax), %%eax", lval->offset);
+				x86_movl_deref_source(REG_EAX, REG_EAX, lval->offset);
 				
 			}
 			else
@@ -179,13 +164,13 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 	{
 		_gen_asm("cmpl $0, %%eax"); //compare eax to 0
 		_gen_asm("je %s", label1);	//eax is the result of the first expression. If true we exit early
-		_gen_asm("movl $1, %%eax"); //set eax to 1 (result)
+		x86_movl_literal(1, REG_EAX); //set eax to 1 (result)
 		_gen_asm("jmp %s", label2);
 
 		_gen_asm("%s:", label1);
 		gen_expression1(expr->data.binary_op.rhs);
 		_gen_asm("cmpl $0, %%eax"); //compare eax to 0
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setne %%al"); //test flags of comparison
 		_gen_asm("%s:", label2);
 	}
@@ -199,7 +184,7 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 		_gen_asm("%s:", label1);
 		gen_expression1(expr->data.binary_op.rhs);
 		_gen_asm("cmpl $0, %%eax"); //compare eax to 0
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setne %%al"); //test flags of comparison
 		_gen_asm("%s:", label2);
 	}
@@ -288,7 +273,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	}
 	else if (expr->kind == expr_int_literal)
 	{
-		_gen_asm("movl $%d, %%eax", int_val_as_uint32(&expr->data.int_literal.val));
+		x86_movl_literal(int_val_as_uint32(&expr->data.int_literal.val), REG_EAX);
 		result->lval.type = expr->data.int_literal.type;
 	}
 	else if (expr->kind == expr_str_literal)
@@ -344,7 +329,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		_gen_asm("addl $%d, %%eax", member->offset);
 		if (member->type_ref->spec->kind == type_ptr)
 		{
-			_gen_asm("movl (%%eax), %%eax");
+			x86_movl_deref_source(REG_EAX, REG_EAX, 0);
 			result->lval.kind = lval_address;
 		}
 		result->lval.type = member->type_ref->spec;
@@ -387,7 +372,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		result->lval.kind = lval_address;
 		if (result->lval.type->data.ptr_type->kind == type_ptr)
 		{
-			_gen_asm("movl (%%eax), %%eax");
+			x86_movl_deref_source(REG_EAX, REG_EAX, 0);
 			result->lval.kind = lval_address;
 		}
 		
@@ -428,7 +413,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 
 			if (result->lval.type->data.ptr_type->kind == type_ptr)
 			{
-				_gen_asm("movl (%%eax), %%eax");
+				x86_movl_deref_source(REG_EAX, REG_EAX, 0);
 				result->lval.kind = lval_address;
 			}
 
@@ -471,7 +456,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		case op_not:
 			gen_expression1(param);
 			_gen_asm("cmpl $0, %%eax"); //compare eax to 0
-			_gen_asm("movl $0, %%eax"); //set eax to 0
+			x86_movl_literal(0, REG_EAX); //set eax to 0
 			_gen_asm("sete %%al"); //if eax was 0 in cmpl, set al to 1
 			break;
 		case op_prefix_inc:
@@ -566,7 +551,8 @@ void gen_copy_eax_to_lval(expr_result* target)
 {
 	/*
 	* eax contains the source
-	* lval specifies the destination 
+	* target->lval specifies the destination 
+	* if target->lval.kind is lval_address then the target address will be in edx
 	* 
 	* for types <= 4 byte length the desination can be a stack offset (+ offset), label (+ offset), or a memory address stored in edx (+ offset)
 	* for types > 4 byte length, eax always represents an address and data is copied from there to the address at edx, or an address stored on the stack
@@ -578,18 +564,14 @@ void gen_copy_eax_to_lval(expr_result* target)
 		switch (target->lval.kind)
 		{
 		case lval_stack:
-			_gen_asm("%s %%eax, %d(%%ebp)", _sized_mov(target->lval.type), target->lval.data.stack_offset + target->lval.offset);
+			x86_mov_sz_deref_dest(target->lval.type->size, REG_EAX, REG_EBP, target->lval.data.stack_offset + target->lval.offset);
 			break;
 		case lval_label:
-			if (target->lval.offset)
-				_gen_asm("%s %%eax, %s + %d", _sized_mov(target->lval.type), target->lval.data.label, target->lval.offset);
-			else
-				_gen_asm("%s %%eax, %s", _sized_mov(target->lval.type), target->lval.data.label);
+			x86_mov_sz_label_dest(target->lval.type->size, REG_EAX, target->lval.data.label, target->lval.offset);
 			break;
 		case lval_address:
-			_gen_asm("%s %%eax, %d(%%edx)", _sized_mov(target->lval.type), target->lval.offset);
-			//the result of the expression is now the address stored in edx, move to eax
-			_gen_asm("movl %%edx, %%eax");
+			x86_mov_sz_deref_dest(target->lval.type->size, REG_EAX, REG_EDX, target->lval.offset);
+			x86_movl(REG_EDX, REG_EAX);
 			break;
 		}
 	}
@@ -602,8 +584,8 @@ void gen_copy_eax_to_lval(expr_result* target)
 			uint32_t offset = 0;
 			while (offset < target->lval.type->size)
 			{
-				_gen_asm("movl %d(%%eax), %%edx", offset);
-				_gen_asm("movl %%edx, %d(%%ebp)", dest_off);
+				x86_movl_deref_source(REG_EAX, REG_EDX, offset);
+				x86_movl_deref_dest(REG_EDX, REG_EBP, dest_off);
 				offset += 4;
 				dest_off += 4;
 			}
@@ -614,8 +596,8 @@ void gen_copy_eax_to_lval(expr_result* target)
 			uint32_t offset = 0;
 			while (offset < target->lval.type->size)
 			{
-				_gen_asm("movl %d(%%eax), %%edx", offset);
-				_gen_asm("movl %%edx, %s+%d", target->lval.data.label, offset);
+				x86_movl_deref_source(REG_EAX, REG_EDX, offset);
+				x86_movl_label(REG_EDX, target->lval.data.label, offset);
 				offset += 4;
 			}
 
@@ -625,8 +607,8 @@ void gen_copy_eax_to_lval(expr_result* target)
 			uint32_t offset = 0;
 			while (offset < target->lval.type->size)
 			{
-				_gen_asm("movl %d(%%eax), %%ecx", offset);
-				_gen_asm("movl %%ecx, %d(%%edx)", offset);
+				x86_movl_deref_source(REG_EAX, REG_ECX, offset);
+				x86_movl_deref_dest(REG_ECX, REG_EDX, offset);
 				offset += 4;
 			}
 		}
@@ -676,32 +658,32 @@ void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
 		break;
 	case op_eq:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("sete %%al"); //test flags of comparison
 		break;
 	case op_neq:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setne %%al"); //test flags of comparison
 		break;
 	case op_greaterthanequal:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setge %%al"); //test flags of comparison
 		break;
 	case op_greaterthan:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setg %%al"); //test flags of comparison
 		break;
 	case op_lessthanequal:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setle %%al"); //test flags of comparison
 		break;
 	case op_lessthan:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setl %%al"); //test flags of comparison
 		break;
 	case op_bitwise_and:
@@ -717,7 +699,8 @@ void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
 		_gen_asm("xor %%edx, %%edx");
 		_gen_asm("cdq");
 		_gen_asm("idivl %%ecx");
-		_gen_asm("movl %%edx, %%eax");
+		x86_movl(REG_EDX, REG_EAX);
+		//_gen_asm("movl %%edx, %%eax");
 		break;
 	}
 
@@ -772,7 +755,8 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		//allocate space for return value on the stack
 
 		_gen_asm("subl $%d, %%esp", ret_type->size);
-		_gen_asm("movl %%esp, %%ebx"); //store the return ptr
+		x86_movl(REG_ESP, REG_EBX); //store the return ptr
+		//_gen_asm("movl %%esp, %%ebx"); //store the return ptr
 	}
 
 	while (param)
@@ -870,32 +854,32 @@ void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* resul
 		break;
 	case op_eq:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("sete %%al"); //test flags of comparison
 		break;
 	case op_neq:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setne %%al"); //test flags of comparison
 		break;
 	case op_greaterthanequal:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setge %%al"); //test flags of comparison
 		break;
 	case op_greaterthan:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setg %%al"); //test flags of comparison
 		break;
 	case op_lessthanequal:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setle %%al"); //test flags of comparison
 		break;
 	case op_lessthan:
 		_gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
-		_gen_asm("movl $0, %%eax"); //set eax to 0
+		x86_movl_literal(0, REG_EAX); //set eax to 0
 		_gen_asm("setl %%al"); //test flags of comparison
 		break;
 	case op_bitwise_and:
@@ -911,7 +895,8 @@ void gen_arithmetic_binary_expression(ast_expression_t* expr, expr_result* resul
 		_gen_asm("xor %%edx, %%edx");
 		_gen_asm("cdq");
 		_gen_asm("idivl %%ecx");
-		_gen_asm("movl %%edx, %%eax");
+		x86_movl(REG_EDX, REG_EAX);
+		//_gen_asm("movl %%edx, %%eax");
 		break;
 	}
 }
@@ -935,7 +920,7 @@ void gen_var_decl(ast_declaration_t* decl)
 	{
 		for (uint32_t i = 0; i < decl->type_ref->spec->size / 4; i++)
 		{
-			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
+			x86_movl_literal_deref_dest(0, REG_EBP, var->bsp_offset + i * 4);
 		}
 	}
 }
@@ -1032,21 +1017,25 @@ void gen_return_statement(ast_statement_t* smnt)
 		
 		//the destination address is in the stack at stack_offset
 		//load the address into edx
-		_gen_asm("movl %d(%%ebp), %%edx", 8);
+		x86_movl_deref_source(REG_EBP, REG_EDX, 8);
 		
 		//source address is in eax, dest in edx
 		uint32_t offset = 0;
 		while (offset < ret_type->size)
 		{
-			if (offset)
+			//if (offset)
 			{
-				_gen_asm("movl %d(%%eax), %%ecx", offset);
-				_gen_asm("movl %%ecx, %d(%%edx)", offset);
+				x86_movl_deref_source(REG_EAX, REG_ECX, offset);
+				x86_movl_deref_dest(REG_ECX, REG_EDX, offset);
+
+				//_gen_asm("movl %%ecx, %d(%%edx)", offset);
 			}
-			else
+			//else
 			{
-				_gen_asm("movl (%%eax), %%ecx");
-				_gen_asm("movl %%ecx, (%%edx)");
+				//_gen_asm("movl (%%eax), %%ecx");
+				//x86_movl_deref_source(REG_EAX, REG_ECX, 0);
+				//x86_movl_deref_dest(REG_ECX, REG_EDX, 0);
+				//_gen_asm("movl %%ecx, (%%edx)");
 			}
 			offset += 4;
 		}
@@ -1059,7 +1048,9 @@ void gen_return_statement(ast_statement_t* smnt)
 	//function epilogue
 	if (ret_type->size > 4)
 	{
-		_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
+		//_gen_asm("movl 8(%%ebp), %%eax"); //restore return value address in eax
+		x86_movl_deref_source(REG_EBP, REG_EAX, 8); //restore return value address in eax
+
  		_gen_asm("leave");
 		_gen_asm("ret $4");
 	}
@@ -1301,7 +1292,8 @@ void gen_function(ast_declaration_t* fn)
 	if (!_returned)
 	{
 		//function epilogue
-		_gen_asm("movl $0, %%eax");
+		x86_movl_literal(0, REG_EAX); //set eax to 0
+		//_gen_asm("movl $0, %%eax");
 		_gen_asm("leave");
 
 		_gen_asm("ret");
@@ -1364,8 +1356,10 @@ void gen_string_literal(const char* value, const char* label)
 	_gen_asm(".string \"%s\"", value);
 }
 
-void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
+void code_gen(valid_trans_unit_t* tl, cg_write_asm_cb cb, void* data)
 {
+	x86_init(cb, data);
+
 	_asm_cb = cb;
 	_asm_cb_data = data;
 	_cur_tl = tl;
