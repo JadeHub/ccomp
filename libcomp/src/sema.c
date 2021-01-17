@@ -142,63 +142,67 @@ static void _add_user_type(ast_type_spec_t* typeref)
 	idm_add_tag(_id_map, typeref);
 }
 
-ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref, token_t* start)
+ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 {
-	if (typeref->kind == type_alias)
+	if (spec->kind == type_alias)
 	{
-		ast_declaration_t* decl = idm_find_decl(_id_map, typeref->data.alias);
+		ast_declaration_t* decl = idm_find_decl(_id_map, spec->data.alias);
 		if (!decl)
 		{
-			_report_err(start, ERR_UNKNOWN_TYPE, "type alias %s unknown", typeref->data.alias);
+			_report_err(start, ERR_UNKNOWN_TYPE, "type alias %s unknown", spec->data.alias);
 			return NULL;
 		}
 		if (decl->kind != decl_type)
 		{
-			_report_err(start, ERR_INCOMPATIBLE_TYPE, "%s does not name a type alias", typeref->data.alias);
+			_report_err(start, ERR_INCOMPATIBLE_TYPE, "%s does not name a type alias", spec->data.alias);
 			return NULL;
 		}
 
-		typeref = decl->type_ref->spec;
+		spec = decl->type_ref->spec;
 	}
 
-	if (typeref->kind == type_ptr)
+	if (spec->kind == type_ptr)
 	{
-		typeref->data.ptr_type = sema_resolve_type(typeref->data.ptr_type, start);
-		return typeref;
+		spec->data.ptr_type = sema_resolve_type(spec->data.ptr_type, start);
+		return spec;
 	}
 
-	if (typeref->kind != type_user)
-		return typeref;
+	if (spec->kind != type_user)
+		return spec;
 
 	/*
 	structs, unions & enums
 
-	if typeref is a definition
+	if spec is a definition
 		Look for a type with the same name in the current lexical block
 			If declaration found: Update with definition
 			If definition found: Error duplicate definition
 			If not found: Add to id_map
-	else if typeref is a declaration
+	else if spec is a declaration
 		Look for a type with the same name in any lexical block
 		If found: return
 		If not found: Add to id_map
 	*/
-	token_t* loc = typeref->data.user_type_spec->tokens.start;
-	if (_user_type_is_definition(typeref->data.user_type_spec))
+	token_t* loc = spec->data.user_type_spec->tokens.start;
+	if (_user_type_is_definition(spec->data.user_type_spec))
 	{
-		ast_type_spec_t* exist = idm_find_block_tag(_id_map, typeref->data.user_type_spec->name);
-		if (typeref == exist)
+		//ignore anonymous types
+		if (strlen(spec->data.user_type_spec->name) == 0)
+			return spec;
+
+		ast_type_spec_t* exist = idm_find_block_tag(_id_map, spec->data.user_type_spec->name);
+		if (spec == exist)
 			return exist;
 
 		if (exist)
 		{
-			if (exist->data.user_type_spec->kind != typeref->data.user_type_spec->kind)
+			if (exist->data.user_type_spec->kind != spec->data.user_type_spec->kind)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
 					user_type_kind_name(exist->data.user_type_spec->kind),
-					typeref->data.user_type_spec->name,
-					user_type_kind_name(typeref->data.user_type_spec->kind));
+					spec->data.user_type_spec->name,
+					user_type_kind_name(spec->data.user_type_spec->kind));
 				return NULL;
 			}
 
@@ -207,62 +211,62 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* typeref, token_t* start)
 				//multiple definitions
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s'",
-					user_type_kind_name(typeref->data.user_type_spec->kind),
-					typeref->data.user_type_spec->name);
+					user_type_kind_name(spec->data.user_type_spec->kind),
+					spec->data.user_type_spec->name);
 				return NULL;
 			}
 			//update the existing declaration
-			if (typeref->data.user_type_spec->kind == user_type_enum)
+			if (spec->data.user_type_spec->kind == user_type_enum)
 			{
-				exist->data.user_type_spec->data.enum_members = typeref->data.user_type_spec->data.enum_members;
-				typeref->data.user_type_spec->data.enum_members = NULL;
+				exist->data.user_type_spec->data.enum_members = spec->data.user_type_spec->data.enum_members;
+				spec->data.user_type_spec->data.enum_members = NULL;
 				_register_enum_constants(exist->data.user_type_spec);
 			}
 			else
 			{
 				//update definition
-				exist->data.user_type_spec->data.struct_members = typeref->data.user_type_spec->data.struct_members;
-				typeref->data.user_type_spec->data.struct_members = NULL;
+				exist->data.user_type_spec->data.struct_members = spec->data.user_type_spec->data.struct_members;
+				spec->data.user_type_spec->data.struct_members = NULL;
 				_resolve_struct_member_types(exist->data.user_type_spec);
 			}
 			exist->size = _calc_user_type_size(exist);
-			ast_destroy_type_spec(typeref);
-			typeref = exist;
+			ast_destroy_type_spec(spec);
+			spec = exist;
 		}
 		else
 		{
-			_add_user_type(typeref);
+			_add_user_type(spec);
 		}
 	}
 	else
 	{
 		//declaration
-		ast_type_spec_t* exist = idm_find_tag(_id_map, typeref->data.user_type_spec->name);
+		ast_type_spec_t* exist = idm_find_tag(_id_map, spec->data.user_type_spec->name);
 		if (exist)
 		{
-			if (exist->data.user_type_spec->kind != typeref->data.user_type_spec->kind)
+			if (exist->data.user_type_spec->kind != spec->data.user_type_spec->kind)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
 					user_type_kind_name(exist->data.user_type_spec->kind),
-					typeref->data.user_type_spec->name,
-					user_type_kind_name(typeref->data.user_type_spec->kind));
+					spec->data.user_type_spec->name,
+					user_type_kind_name(spec->data.user_type_spec->kind));
 				return NULL;
 			}
-			ast_destroy_type_spec(typeref);
-			typeref = exist;
+			ast_destroy_type_spec(spec);
+			spec = exist;
 		}
 		else
 		{
-			_add_user_type(typeref);
+			_add_user_type(spec);
 		}
 	}
 
 	//treat enums as int32_t
-	if (ast_type_is_enum(typeref))
+	if (ast_type_is_enum(spec))
 		return int32_type_spec;
 
-	return typeref;
+	return spec;
 }
 
 bool sema_resolve_type_ref(ast_type_ref_t* ref)
@@ -295,6 +299,8 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 
 	if (target->kind == type_ptr && type->kind == type_ptr)
 		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
+
+	//compare func_sigs
 
 	return false;
 }
@@ -672,9 +678,6 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 static bool _compare_func_decls(ast_declaration_t* exist, ast_declaration_t* func)
 {
-	//ast_func_sig_type_spec_t* esig = exist->type_ref->spec->data.func_sig_spec;
-	ast_func_sig_type_spec_t* fsig = func->type_ref->spec->data.func_sig_spec;
-
 	if(ast_func_decl_return_type(exist) != ast_func_decl_return_type(func))
 	{
 		return _report_err(func->tokens.start, ERR_INVALID_PARAMS,

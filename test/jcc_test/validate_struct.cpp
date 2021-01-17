@@ -69,6 +69,24 @@ TEST_F(StructValidationTest, redefine_new_scope)
 	ExpectNoError(code);
 }
 
+TEST_F(StructValidationTest, anonymous)
+{
+	std::string code = R"(
+	
+	int main()
+	{
+		struct {int i; int j;} a;
+		a.i = 5;
+		
+		struct {int x; int y;} b;
+		a.i = 5;
+		return a.i;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(StructValidationTest, err_incorrect_ret_type)
 {
 	std::string code = R"(
@@ -282,4 +300,38 @@ TEST_F(StructValidationTest, typedef_struct)
 	)";
 
 	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, typedef_struct_return)
+{
+	std::string code = R"(
+	typedef struct {int i;} A;
+	A a;
+
+	A fn() 
+	{
+		a.i = 7;
+		return a;
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, err_typedef_struct_dup)
+{
+	std::string code = R"(
+	typedef struct {int i;} A;
+	typedef struct {char c;} A;
+	A a;
+
+	void fn() 
+	{
+		a.i = 7;
+	}
+
+	)";
+
+	ExpectError(code, ERR_DUP_TYPE_DEF);
 }

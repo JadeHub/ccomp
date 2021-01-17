@@ -90,12 +90,12 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 			expr->data.binary_op.operation == op_ptr_member_access ? "->" : ".");
 	}
 
-	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec, expr->data.binary_op.rhs->data.var_reference.name);
+	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec, expr->data.binary_op.rhs->data.identifier.name);
 	if (member == NULL)
 	{
 		return _report_err(expr, ERR_UNKNOWN_MEMBER_REF,
 			"%s is not a member of %s",
-			expr->data.binary_op.rhs->data.var_reference.name,
+			expr->data.binary_op.rhs->data.identifier.name,
 			ast_type_name(user_type));
 	}
 
@@ -238,7 +238,7 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name);
+	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.identifier.name);
 	if (decl && decl->kind == decl_var)
 	{
 		if (decl->type_ref->spec->size == 0)
@@ -251,8 +251,15 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 		return result;
 	}
 
+	if (decl && decl->kind == decl_func)
+	{
+		//return function pointer type
+		result.result_type = ast_make_ptr_type(decl->type_ref->spec);
+		return result;
+	}
+
 	//enum value?
-	int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.var_reference.name);
+	int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.identifier.name);
 	if (enum_val)
 	{
 		ast_destroy_expression_data(expr);
@@ -262,7 +269,7 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	}
 
 	return _report_err(expr, ERR_UNKNOWN_VAR, "unknown var %s",
-		expr->data.var_reference.name);
+		expr->data.identifier.name);
 }
 
 static expr_result_t _process_condition(ast_expression_t* expr)
@@ -294,7 +301,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.var_reference.name);
+	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.identifier.name);
 
 	if (!decl || decl->kind != decl_func)
 	{

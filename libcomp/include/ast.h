@@ -153,7 +153,7 @@ typedef struct ast_expression
 		ast_expr_binary_op_t binary_op;
 		ast_int_literal_t int_literal;
 		ast_string_literal_t str_literal;
-		ast_expr_identifier_t var_reference;
+		ast_expr_identifier_t identifier;
 		ast_cond_expr_data_t condition;
 		ast_expr_func_call_t func_call;
 		ast_sizeof_call_t sizeof_call;
@@ -479,6 +479,8 @@ ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_para
 ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
 ast_type_spec_t* ast_func_decl_return_type(ast_declaration_t* fn);
 ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn);
+//bool ast_compare_func_specs(ast_func_sig_type_spec_t* lhs, ast_func_sig_type_spec_t* rhs);
+
 uint32_t ast_decl_type_size(ast_declaration_t* decl);
 bool ast_type_is_fn_ptr(ast_type_spec_t* type);
 bool ast_type_is_signed_int(ast_type_spec_t* type);

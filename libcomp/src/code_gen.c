@@ -264,12 +264,12 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	start_expr(expr);
 	if (expr->kind == expr_identifier)
 	{
-		var_data_t* var = var_find(_var_set, expr->data.var_reference.name);
+		var_data_t* var = var_find(_var_set, expr->data.identifier.name);
 		if (!var)
 		{
 			diag_err(expr->tokens.start, ERR_UNKNOWN_VAR,
 				"reference to unknown variabe %s",
-				expr->data.var_reference.name);
+				expr->data.identifier.name);
 			return ;
 		}
 
@@ -310,7 +310,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
 		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->data.user_type_spec,
-									expr->data.binary_op.rhs->data.var_reference.name);
+									expr->data.binary_op.rhs->data.identifier.name);
 		assert(member);
 		if (result->lval.kind == lval_address)
 			_gen_asm("addl $%d, %%eax", member->offset);
@@ -338,7 +338,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
 		ast_struct_member_t* member = ast_find_struct_member(result->lval.type->data.ptr_type->data.user_type_spec,
-			expr->data.binary_op.rhs->data.var_reference.name);
+			expr->data.binary_op.rhs->data.identifier.name);
 		assert(member);
 
 		_gen_asm("addl $%d, %%eax", member->offset);

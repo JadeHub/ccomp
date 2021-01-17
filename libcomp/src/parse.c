@@ -379,7 +379,7 @@ ast_expression_t* parse_identifier()
 	//<factor> ::= <id>
 	ast_expression_t* expr = parse_alloc_expr();
 	expr->kind = expr_identifier;
-	tok_spelling_cpy(current(), expr->data.var_reference.name, MAX_LITERAL_NAME);
+	tok_spelling_cpy(current(), expr->data.identifier.name, MAX_LITERAL_NAME);
 	next_tok();
 	expr->tokens.end = current();
 	return expr;
@@ -494,7 +494,7 @@ ast_expression_t* try_parse_postfix_expr()
 			expr->kind = expr_func_call;
 			expr->data.func_call.target = primary;
 			//todo - remove name and handle target as possible function ptr
-			strcpy(expr->data.func_call.name, primary->data.var_reference.name);
+			strcpy(expr->data.func_call.name, primary->data.identifier.name);
 			next_tok(); //skip tok_l_paren
 
 			while (!current_is(tok_r_paren))

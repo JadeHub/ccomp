@@ -16,7 +16,11 @@ TEST_F(FnPtrSmntValidationTest, foo)
 
 	std::string code = R"(
 	void foo() {}
-	void (*fn)() = foo;
+
+	void test()
+	{
+		void (*fn)() = foo;
+	}
 	
 	)";
 

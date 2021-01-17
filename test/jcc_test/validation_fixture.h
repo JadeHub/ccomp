@@ -181,7 +181,7 @@ public:
 	~LexTest()
 	{
 		pre_proc_deinit();
-		src_deinit();
+	//	src_deinit();
 	}
 
 	void Lex(const std::string& src, const std::string path = "test.c")
