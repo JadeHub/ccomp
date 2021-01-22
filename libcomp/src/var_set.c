@@ -12,13 +12,13 @@ static var_data_t* _make_stack_var(int bsp_offset, const char* name)
 {
 	var_data_t* var = (var_data_t*)malloc(sizeof(var_data_t));
 	memset(var, 0, sizeof(var_data_t));
-	var->kind = 
+	var->kind = var_stack;
 	var->bsp_offset = bsp_offset;
 	strcpy(var->name, name);
 	return var;
 }
 
-var_data_t* var_cur_block_find(var_set_t* vars, const char* name)
+static var_data_t* var_cur_block_find(var_set_t* vars, const char* name)
 {
 	var_data_t* var = vars->vars;
 	while (var && var->kind != var_block_mark)
@@ -139,6 +139,7 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 	var_data_t* var = var_cur_block_find(vars, decl->name);
 	if (var)
 	{
+		assert(false);
 		return NULL;
 	}
 	

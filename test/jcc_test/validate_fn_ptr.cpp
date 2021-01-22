@@ -4,25 +4,61 @@ class FnPtrSmntValidationTest : public ValidationTest {};
 
 void foo() {}
 void foo1() {}
-void (*fn)() = foo;
 
-
-TEST_F(FnPtrSmntValidationTest, foo)
+void fff()
 {
-	(*fn)();
+	void (*fn)() = foo;
 	fn();
-	fn = foo1;
-	fn = &foo;
+	void (*fn1)() = fn;
+}
 
+TEST_F(FnPtrSmntValidationTest, assign_fn)
+{
 	std::string code = R"(
 	void foo() {}
 
 	void test()
 	{
 		void (*fn)() = foo;
+		void (*fn1)();
+
+		fn1 = fn;
 	}
 	
 	)";
 
+	ExpectNoError(code);
+}
+
+TEST_F(FnPtrSmntValidationTest, call)
+{
+	std::string code = R"(
+	void foo() {}
+
+	void test()
+	{
+		void (*fn)() = foo;
+		fn();
+
+	}
+	
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(FnPtrSmntValidationTest, assign_fn_params)
+{
+	std::string code = R"(
+	int f(int a, char* f)
+	{
+		return a + f[0];
+	}
+
+	int main()
+	{
+		int (*p)(int, char*) = f;
+		return 0;
+	})";
 	ExpectNoError(code);
 }

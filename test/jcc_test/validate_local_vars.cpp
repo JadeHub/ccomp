@@ -42,7 +42,7 @@ TEST_F(LocalVarsValidationTest, err_undeclared_var)
 	}	
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_VAR);
+	ExpectError(code, ERR_UNKNOWN_IDENTIFIER);
 }
 
 TEST_F(LocalVarsValidationTest, err_incorrect_type_assign)

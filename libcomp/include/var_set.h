@@ -19,12 +19,6 @@ typedef struct var_data
 
 	ast_declaration_t* var_decl;
 
-	//union
-	//{
-		//ast_var_decl_t* decl;
-		
-	//}data;
-
 	struct var_data* next;
 }var_data_t;
 
@@ -59,9 +53,6 @@ var_data_t* var_decl_global_var(var_set_t*, ast_declaration_t*);
 
 /* search from the current block outwards looking for a variable */
 var_data_t* var_find(var_set_t*, const char* name);
-
-/* search only the current block */
-var_data_t* var_cur_block_find(var_set_t*, const char* name);
 
 token_t* var_get_tok(var_data_t*);
 

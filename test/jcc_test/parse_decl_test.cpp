@@ -122,18 +122,21 @@ TEST_F(ParstDeclTest, var_fn_var_decl)
 
 TEST_F(ParstDeclTest, var_fn_ptr_decl)
 {
-	ParseDecl("int (*fn)(int);");
-	/*AssertValid();
-	ASSERT_EQ(3, count);
-
-	ExpectVarDecl(0, "a", int32_type_spec);
-	ExpectFnDecl(1, "b", int32_type_spec);
-	ExpectVarDecl(2, "c", int32_type_spec);*/
+	ParseDecl("int (*fn)(char, int);");
+	AssertValid();
+	ASSERT_EQ(1, count);	
 }
 
 TEST_F(ParstDeclTest, var_fn_ptr_typedef)
 {
 	ParseDecl("typedef int (*fn)(int);");
+}
+
+TEST_F(ParstDeclTest, array_type)
+{
+	ParseDecl("int p[5];");
+	ASSERT_EQ(1, count);
+	ExpectVarPtrDecl(0, "p", int32_type_spec);
 }
 
 TEST_F(ParstDeclTest, blah)

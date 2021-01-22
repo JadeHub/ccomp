@@ -263,15 +263,19 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 {
 	start_expr(expr);
 	if (expr->kind == expr_identifier)
-	{
-		var_data_t* var = var_find(_var_set, expr->data.identifier.name);
-		if (!var)
+	{		
+		result->lval.type = expr->data.identifier.decl->type_ref->spec;
+		if (result->lval.type->kind == type_func_sig)
 		{
-			diag_err(expr->tokens.start, ERR_UNKNOWN_VAR,
-				"reference to unknown variabe %s",
-				expr->data.identifier.name);
-			return ;
+			//function
+			result->lval.type = ast_make_ptr_type(result->lval.type);
+			result->lval.kind = lval_address;
+			_gen_asm("movl $%s, %%eax", expr->data.identifier.name);
+			return;
 		}
+
+		var_data_t* var = var_find(_var_set, expr->data.identifier.name);
+		assert(var);
 
 		result->lval.type = var->var_decl->type_ref->spec;
 
@@ -354,6 +358,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	{
 		gen_expression(expr->data.unary_op.expression, result);
 
+		if (ast_type_is_fn_ptr(result->lval.type))
+			return; //function pointer is already an address?
+
 		//generate code to place the target address in eax
 		//adjust result type
 
@@ -378,6 +385,9 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	else if (_is_unary_op(expr, op_dereference))
 	{
 		gen_expression(expr->data.unary_op.expression, result);
+
+		if (ast_type_is_fn_ptr(result->lval.type))
+			return; //function pointer must remain address
 
 		//must be a pointer type to be dereferenced
 		assert(result->lval.kind != lval_none);
@@ -757,23 +767,21 @@ void gen_assignment_expression(ast_expression_t* expr, expr_result* result)
 
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 {
-	ast_declaration_t* decl = expr->data.func_call.func_decl;
-	assert(decl);
-	if (!decl)
-		return;
+	//find the sig of the function we're calling
+	ast_type_spec_t* target_fn_type = ast_type_is_fn_ptr(expr->data.func_call.sema.target_type) ?
+		expr->data.func_call.sema.target_type->data.ptr_type : expr->data.func_call.sema.target_type;
+	assert(target_fn_type->kind == type_func_sig);
+	ast_func_sig_type_spec_t* sig = target_fn_type->data.func_sig_spec;
+	assert(sig);
 
-	ast_func_call_param_t* param = expr->data.func_call.last_param;
-	uint32_t pushed = 0;
-	ast_type_spec_t* ret_type = _get_func_sig_ret_type(decl->type_ref);
-
-	//if (decl->type_ref->spec->size > 4)
-	if (ret_type->size > 4)
+	if (sig->ret_type->size > 4)
 	{
 		//allocate space for return value on the stack
-
-		_gen_asm("subl $%d, %%esp", ret_type->size);
+		_gen_asm("subl $%d, %%esp", sig->ret_type->size);
 		_gen_asm("movl %%esp, %%ebx"); //store the return ptr
 	}
+	ast_func_call_param_t* param = expr->data.func_call.last_param;
+	uint32_t pushed = 0;
 
 	while (param)
 	{
@@ -815,18 +823,37 @@ void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
 		param = param->prev;
 	}
 
-	if (ret_type->size > 4)
+	if (sig->ret_type->size > 4)
 	{
 		_gen_asm("push %%ebx");
 		result->lval.kind = lval_address;
 	}
+
+	//are we calling a function directly by name, or via a pointer?
+	if (ast_type_is_fn_ptr(expr->data.func_call.sema.target_type))
+	{
+		expr_result target_result;
+		memset(&target_result, 0, sizeof(expr_result));
+		gen_expression(expr->data.func_call.target, &target_result);
+		//we expect a function address
+		assert(ast_type_is_fn_ptr(target_result.lval.type));
+		
+		ensure_lval_in_reg(&target_result.lval);
+
+		_gen_asm("call *%%eax");
+	}
+	else
+	{
+		//if calling directly the target must be an identifier
+		assert(expr->data.func_call.target->kind == expr_identifier);
+		_gen_asm("call %s", expr->data.func_call.target->data.identifier.name);
+	}
 	
-	_gen_asm("call %s", expr->data.func_call.name);
 	if (pushed > 0)
 	{
 		_gen_asm("addl $%d, %%esp", pushed);
 	}
-	result->lval.type = ret_type;
+	result->lval.type = sig->ret_type;
 	if(result->lval.type->kind == type_ptr)
 		result->lval.kind = lval_address;
 }
@@ -1201,9 +1228,6 @@ void gen_statement(ast_statement_t* smnt)
 		_make_label_name(label_cont);
 
 		gen_scope_block_enter();
-
-		//if (f_data->init_decl)
-			//gen_var_decl(f_data->init_decl);
 
 		ast_declaration_t* decl = f_data->decls.first;
 		while (decl)

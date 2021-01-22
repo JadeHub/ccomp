@@ -16,7 +16,7 @@ TEST_F(FnCallValidationTest, err_var_shaddows_fn)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_FUNC);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_undefined)
@@ -28,7 +28,7 @@ TEST_F(FnCallValidationTest, err_undefined)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_FUNC);
+	ExpectError(code, ERR_UNKNOWN_IDENTIFIER);
 }
 
 TEST_F(FnCallValidationTest, err_too_many_params)

@@ -116,24 +116,27 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	if (result.failure)
 		return result;
 
-	if (source->kind == expr_int_literal && target_result.result_type->kind != type_ptr)
+	if (result.result_type->kind == type_func_sig)
 	{
+		//implicit conversion to function pointer
+		result.result_type = ast_make_ptr_type(result.result_type);
+	}
 
-		if (!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
+	if (source->kind == expr_int_literal)
+	{
+		if ( (target_result.result_type->kind == type_ptr && source->data.int_literal.val.v.int64 != 0 ) ||
+				!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
 		{
 			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 				"assignment to incompatible type. expected %s",
 				ast_type_name(target_result.result_type));
 		}
 	}
-	else if (target_result.result_type->kind != type_ptr)
+	else if (!sema_can_convert_type(target_result.result_type, result.result_type))
 	{
-		if (!sema_can_convert_type(target_result.result_type, result.result_type))
-		{
-			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_result.result_type));
-		}
+		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+			"assignment to incompatible type. expected %s",
+			ast_type_name(target_result.result_type));
 	}
 
 	return target_result;
@@ -144,19 +147,26 @@ static expr_result_t _process_binary_op(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	if (ast_is_assignment_op(expr->data.binary_op.operation))
+	switch (expr->data.binary_op.operation)
 	{
+	case op_assign:
+	case op_mul_assign:
+	case op_div_assign:
+	case op_mod_assign:
+	case op_add_assign:
+	case op_sub_assign:
+	case op_left_shift_assign:
+	case op_right_shift_assign:
+	case op_and_assign:
+	case op_xor_assign:
+	case op_or_assign:
 		return _process_assignment(expr);
-	}
-	else if (expr->data.binary_op.operation == op_member_access || expr->data.binary_op.operation == op_ptr_member_access)
-	{
+	case op_member_access:
+	case op_ptr_member_access:
 		return _process_member_access_binary_op(expr);
-	}
-	else if (expr->data.binary_op.operation == op_array_subscript)
-	{
+	case op_array_subscript:
 		return _process_array_subscript_binary_op(expr);
 	}
-
 
 	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
 	if (lhs_result.failure)
@@ -183,7 +193,7 @@ static expr_result_t _process_unary_op(ast_expression_t* expr)
 	case op_address_of:
 	{
 		ast_type_spec_t* ptr_type = ast_make_ptr_type(result.result_type);
-		result.result_type = ptr_type;// sema_resolve_type(ptr_type);
+		result.result_type = ptr_type;
 		break;
 	}
 	case op_dereference:
@@ -239,23 +249,26 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	memset(&result, 0, sizeof(expr_result_t));
 
 	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.identifier.name);
-	if (decl && decl->kind == decl_var)
+	if (decl)
 	{
-		if (decl->type_ref->spec->size == 0)
+		expr->data.identifier.decl = decl;
+		if (decl->kind == decl_var)
 		{
-			return _report_err(expr, ERR_TYPE_INCOMPLETE,
-				"var %s is of incomplete type",
-				ast_declaration_name(decl));
+			if (decl->type_ref->spec->size == 0)
+			{
+				return _report_err(expr, ERR_TYPE_INCOMPLETE,
+					"var %s is of incomplete type",
+					ast_declaration_name(decl));
+			}
+			result.result_type = decl->type_ref->spec;
+			return result;
 		}
-		result.result_type = decl->type_ref->spec;
-		return result;
-	}
-
-	if (decl && decl->kind == decl_func)
-	{
-		//return function pointer type
-		result.result_type = ast_make_ptr_type(decl->type_ref->spec);
-		return result;
+		else if (decl->kind == decl_func)
+		{
+			//return function type
+			result.result_type = decl->type_ref->spec;
+			return result;
+		}
 	}
 
 	//enum value?
@@ -267,8 +280,9 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 		expr->data.int_literal.val = *enum_val;
 		return sema_process_expression(expr);
 	}
-
-	return _report_err(expr, ERR_UNKNOWN_VAR, "unknown var %s",
+	
+	return _report_err(expr, ERR_UNKNOWN_IDENTIFIER,
+		"identifier '%s' not defined",
 		expr->data.identifier.name);
 }
 
@@ -301,16 +315,35 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_declaration_t* decl = idm_find_decl(sema_id_map(), expr->data.identifier.name);
+	expr_result_t target_result = sema_process_expression(expr->data.func_call.target);
+	if (target_result.failure)
+		return target_result;
 
-	if (!decl || decl->kind != decl_func)
+	ast_type_spec_t* tt = target_result.result_type;
+
+	//target is either an identifier referencing a function
+	//or something which resolves to a function pointer
+	ast_func_sig_type_spec_t* fsig = NULL;
+	const char* fn_name = "anonymous";
+	if (tt->kind == type_func_sig)
 	{
-		return _report_err(expr, ERR_UNKNOWN_FUNC,
-			"function '%s' not defined",
-			expr->data.func_call.name);
+		if (expr->data.func_call.target->kind != expr_identifier)
+		{
+			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+				"func call bad target");
+		}
+		fsig = tt->data.func_sig_spec;
+		fn_name = expr->data.func_call.target->data.identifier.name;
 	}
-
-	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
+	else if (ast_type_is_fn_ptr(tt))
+	{
+		fsig = tt->data.ptr_type->data.func_sig_spec;
+	}
+	else
+	{
+		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+			"func call bad target");
+	}
 
 	if (expr->data.func_call.param_count != fsig->params->param_count)
 	{
@@ -320,7 +353,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 			//not enough params, or no variable arg
 			return _report_err(expr, ERR_INVALID_PARAMS,
 				"incorrect number of params in call to function '%s'. Expected %d",
-				expr->data.func_call.name, fsig->params->param_count);
+				fn_name, fsig->params->param_count);
 		}
 	}
 
@@ -339,7 +372,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 		{
 			return _report_err(call_param->expr, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, ast_declaration_name(decl), ast_type_name(param_decl->decl->type_ref->spec));
+				p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));
 		}
 
 		call_param->expr_type = param_result.result_type;
@@ -365,8 +398,8 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 			p_count++;
 		}
 	}
-	expr->data.func_call.func_decl = decl;
-	result.result_type = decl->type_ref->spec->data.func_sig_spec->ret_type;
+	expr->data.func_call.sema.target_type = tt;
+	result.result_type = fsig->ret_type;
 	return result;
 }
 
@@ -454,8 +487,6 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		return sema_process_int_literal(expr);
 	case expr_str_literal:
 		return _process_str_literal(expr);
-	//case expr_assign:
-		//return _process_assignment(expr);
 	case expr_identifier:
 		return _process_variable_reference(expr);
 	case expr_condition:

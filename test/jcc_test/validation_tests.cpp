@@ -73,11 +73,6 @@ TEST_F(ValidationTest, unary_nested_missing_semi)
 	ExpectSyntaxErrors("int main() {return !5}");
 }
 
-TEST_F(ValidationTest, binary_malformed_paran)
-{
-	ExpectSyntaxErrors("int main() {return 2 (- 3);}");
-}
-
 TEST_F(ValidationTest, binary_missing_semi)
 {
 	ExpectSyntaxErrors("int main() {return 2*2}");

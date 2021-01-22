@@ -188,7 +188,10 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 	{
 		//ignore anonymous types
 		if (strlen(spec->data.user_type_spec->name) == 0)
+		{
+			_add_user_type(spec);
 			return spec;
+		}
 
 		ast_type_spec_t* exist = idm_find_block_tag(_id_map, spec->data.user_type_spec->name);
 		if (spec == exist)
@@ -333,22 +336,25 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	if (!type)
 		return false;
 
+	//are they exactly the same type?
 	if (sema_is_same_type(target, type))
 		return true;
-	//if (target == type)
-	//	return true;
 
 	//integer promotion
 	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size >= type->size)
 	{
 		return true;
 	}
-		
 
+	//are they pointing at convertable types?
 	if (target->kind == type_ptr && type->kind == type_ptr)
 		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
 
-	//compare func_sigs
+	//are the compatible functionn sigs (?)
+	if (target->kind == type_func_sig && type->kind == type_func_sig)
+	{
+
+	}
 
 	return false;
 }
@@ -375,6 +381,12 @@ bool process_variable_declaration(ast_declaration_t* decl)
 		expr_result_t result = sema_process_expression(decl->data.var.init_expr);
 		if (result.failure)
 			return false;
+
+		if (result.result_type->kind == type_func_sig)
+		{
+			//implicit conversion to function pointer
+			result.result_type = ast_make_ptr_type(result.result_type);
+		}
 
 		ast_type_spec_t* init_type = result.result_type;
 
@@ -522,9 +534,17 @@ bool process_switch_statement(ast_statement_t * smnt)
 			"switch statement has no case or default statement");
 	}
 
+	if (!process_expression(smnt->data.switch_smnt.expr))
+		return false;
+
 	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
 	while (case_data)
 	{
+		//todo - fold const_expr?
+
+		if (!process_expression(case_data->const_expr))
+			return false;
+
 		if (case_data->const_expr->kind != expr_int_literal)
 		{
 			return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,

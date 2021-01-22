@@ -620,9 +620,7 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 		next_tok();
 
 		//params
-		ast_func_params_t* params = (ast_func_params_t*)malloc(sizeof(ast_func_params_t));
-		memset(params, 0, sizeof(ast_func_params_t));
-		parse_function_parameters(params);
+		ast_func_params_t* params = parse_function_parameters();
 		result.type->spec = ast_make_func_ptr_type(result.type->spec, params);
 	}
 	else

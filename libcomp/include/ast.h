@@ -38,23 +38,13 @@ typedef struct
 }ast_expr_binary_op_t;
 
 /*
-assignment expression data
-eg x = 5
-*/
-typedef struct
-{
-	//todo - remove name?
-	struct ast_expression* target;
-	struct ast_expression* expr;
-}ast_expr_assign_t;
-
-/*
 variable reference data
 eg x or y in x = y + 5;
 */
 typedef struct
 {
 	char name[MAX_LITERAL_NAME];
+	struct ast_declaration* decl; //set in sema
 }ast_expr_identifier_t;
 
 /*
@@ -82,15 +72,17 @@ function call expression data
 */
 typedef struct
 {
-	char name[MAX_LITERAL_NAME];
-	struct ast_expression* target; //todo - unused
+	struct ast_expression* target;
 
 	ast_func_call_param_t* first_param;
 	ast_func_call_param_t* last_param;
 
 	uint32_t param_count;
 
-	struct ast_declaration* func_decl; //set during validation
+	struct {
+		struct ast_type_spec* target_type;
+	}sema; //set during validation
+
 }ast_expr_func_call_t;
 
 typedef struct
@@ -105,8 +97,6 @@ typedef struct
 
 typedef struct
 {
-	//uint32_t value;
-
 	int_val_t val;
 
 	//Type to ultimatly be set to the smallest size required to hold 'value'
@@ -232,7 +222,7 @@ typedef struct ast_user_type_spec
 	}data;
 }ast_user_type_spec_t;
 
-typedef struct
+typedef struct ast_func_sig_type_spec
 {
 	struct ast_type_spec* ret_type;
 	struct ast_func_params* params;
@@ -296,8 +286,6 @@ typedef struct ast_func_params
 
 typedef struct ast_func_decl
 {
-	//ast_func_params_t params;
-	
 	uint32_t required_stack_size;
 
 	//Definitions will have a list of blocks
@@ -384,11 +372,11 @@ for(i=0;i<10;i++)
 */
 typedef struct
 {
-	ast_decl_list_t decls;
+	ast_decl_list_t decls; //for(int i = 0;...
 
 	ast_expression_t* init; //for(i = 0;...
-	ast_expression_t* condition;
-	ast_expression_t* post;
+	ast_expression_t* condition; //for(...;i<10;...
+	ast_expression_t* post; //for(...;...;i++)
 	struct ast_statement* statement;
 }ast_for_smnt_data_t;
 
@@ -479,7 +467,6 @@ ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_para
 ast_type_spec_t* ast_make_func_sig_type(ast_type_spec_t* ret_type, ast_func_params_t* params);
 ast_type_spec_t* ast_func_decl_return_type(ast_declaration_t* fn);
 ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn);
-//bool ast_compare_func_specs(ast_func_sig_type_spec_t* lhs, ast_func_sig_type_spec_t* rhs);
 
 uint32_t ast_decl_type_size(ast_declaration_t* decl);
 bool ast_type_is_fn_ptr(ast_type_spec_t* type);

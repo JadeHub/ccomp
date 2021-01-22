@@ -483,18 +483,9 @@ ast_expression_t* try_parse_postfix_expr()
 		expr->tokens = primary->tokens;
 		if (current_is(tok_l_paren))
 		{
-			if (primary->kind != expr_identifier)
-			{
-				parse_err(ERR_SYNTAX, "identifier must proceed function call");
-				ast_destroy_expression(primary);
-				return NULL;
-			}
-
 			//function call
 			expr->kind = expr_func_call;
 			expr->data.func_call.target = primary;
-			//todo - remove name and handle target as possible function ptr
-			strcpy(expr->data.func_call.name, primary->data.identifier.name);
 			next_tok(); //skip tok_l_paren
 
 			while (!current_is(tok_r_paren))
@@ -504,7 +495,6 @@ ast_expression_t* try_parse_postfix_expr()
 					expect_cur(tok_comma);
 					next_tok();
 				}
-				//ast_expression_t* param_expr = parse_expression();
 				ast_func_call_param_t* param = (ast_func_call_param_t*)malloc(sizeof(ast_func_call_param_t));
 				memset(param, 0, sizeof(ast_func_call_param_t));
 				param->expr = parse_expression();
@@ -520,8 +510,6 @@ ast_expression_t* try_parse_postfix_expr()
 					expr->data.func_call.last_param = param;
 				}
 
-				//param_expr->next = expr->data.func_call.params;
-				//expr->data.func_call.params = param_expr;
 				expr->data.func_call.param_count++;
 			}
 			next_tok();

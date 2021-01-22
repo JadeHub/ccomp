@@ -9,7 +9,7 @@ using namespace ::testing;
 
 TEST(CmdLineParser, test1)
 {
-	const char* argv[] =
+	char* argv[] =
 	{
 		"testapp",
 		"blah.c",
@@ -28,7 +28,7 @@ TEST(CmdLineParser, test1)
 
 TEST(CmdLineParser, test2)
 {
-	const char* argv[] =
+	char* argv[] =
 	{
 		"testapp",
 		"-Evo",
@@ -44,7 +44,7 @@ TEST(CmdLineParser, test2)
 
 TEST(CmdLineParser, test3)
 {
-	const char* argv[] =
+	char* argv[] =
 	{
 		"testapp",
 		"-Evo",
@@ -60,7 +60,7 @@ TEST(CmdLineParser, test3)
 
 TEST(CmdLineParser, test_invalid1)
 {
-	const char* argv[] =
+	char* argv[] =
 	{
 		"testapp"
 	};
@@ -71,7 +71,7 @@ TEST(CmdLineParser, test_invalid1)
 
 TEST(CmdLineParser, test_version)
 {
-	const char* argv[] =
+	char* argv[] =
 	{
 		"testapp",
 		"-v"

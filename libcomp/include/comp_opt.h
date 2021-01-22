@@ -13,4 +13,4 @@ typedef struct
 
 }comp_opt_t;
 
-comp_opt_t parse_command_line(int argc, const char* argv[]);
+comp_opt_t parse_command_line(int argc,	char* argv[]);

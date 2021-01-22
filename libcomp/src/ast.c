@@ -56,9 +56,6 @@ void ast_destroy_expression(ast_expression_t* expr)
 		break;
 	case expr_int_literal:
 		break;
-	//case expr_assign:
-//		ast_destroy_expression(expr->data.assignment.expr);
-	//	break;
 	case expr_identifier:
 		break;	
 	case expr_condition:
