@@ -289,6 +289,13 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			result->lval.kind = lval_stack;
 			result->lval.data.stack_offset = var->bsp_offset;
 		}
+		
+		if (var->var_decl->array_sz)
+		{
+			//convert to address
+			_gen_asm("leal %d(%%ebp), %%eax", var->bsp_offset);;
+			result->lval.kind = lval_address;
+		}
 	}
 	else if (expr->kind == expr_int_literal)
 	{
@@ -431,6 +438,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			gen_expression1(expr->data.binary_op.rhs);
 			//todo multiply
 
+			_gen_asm("imul $%d, %%eax", result->lval.type->data.ptr_type->size);
 
 
 			_gen_asm("popl %%ecx");
@@ -960,7 +968,7 @@ void gen_var_decl(ast_declaration_t* decl)
 	}
 	else
 	{
-		for (uint32_t i = 0; i < decl->type_ref->spec->size / 4; i++)
+		for (uint32_t i = 0; i < abi_calc_var_decl_stack_size(decl) / 4; i++)
 		{
 			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}

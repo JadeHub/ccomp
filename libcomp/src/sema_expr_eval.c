@@ -1,6 +1,9 @@
 #include "sema_internal.h"
 
-bool sema_is_int_constant_expression(ast_expression_t* expr)
+#include <assert.h>
+#include <string.h>
+
+bool sema_is_const_int_expr(ast_expression_t* expr)
 {
 	switch (expr->kind)
 	{
@@ -23,7 +26,7 @@ bool sema_is_int_constant_expression(ast_expression_t* expr)
 			return false;
 		}
 
-		return sema_is_int_constant_expression(expr->data.unary_op.expression);
+		return sema_is_const_int_expr(expr->data.unary_op.expression);
 	case expr_binary_op:
 		switch (expr->data.binary_op.operation)
 		{
@@ -33,7 +36,7 @@ bool sema_is_int_constant_expression(ast_expression_t* expr)
 		case op_assign: //...
 			return false;
 		}		
-		return sema_is_int_constant_expression(expr->data.binary_op.lhs) && sema_is_int_constant_expression(expr->data.binary_op.rhs);
+		return sema_is_const_int_expr(expr->data.binary_op.lhs) && sema_is_const_int_expr(expr->data.binary_op.rhs);
 	case expr_int_literal:	
 	case expr_sizeof:
 	
@@ -70,4 +73,18 @@ int_val_t sema_eval_constant_expr(ast_expression_t* expr)
 	}
 
 	return int_val_zero();
+}
+
+int_val_t sema_fold_const_int_expr(ast_expression_t* expr)
+{
+	if (expr->kind == expr_int_literal)
+		return expr->data.int_literal.val;
+
+	assert(sema_is_const_int_expr(expr));
+	int_val_t result = sema_eval_constant_expr(expr);
+	ast_destroy_expression_data(expr);
+	memset(expr, 0, sizeof(ast_expression_t));
+	expr->kind = expr_int_literal;
+	expr->data.int_literal.val = result;
+	return result;
 }

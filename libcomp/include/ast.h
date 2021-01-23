@@ -311,7 +311,7 @@ typedef struct ast_declaration
 	//variable or function return type
 	ast_type_ref_t* type_ref;
 
-	//optional array size expression ie [....]
+	//optional array size expression [...]
 	ast_expression_t* array_sz;
 
 	union

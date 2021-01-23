@@ -142,6 +142,11 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 
 		// '[...]'
 		result->array_sz = opt_parse_array_spec();
+		if (result->array_sz)
+		{
+			//array implies ptr type
+			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
+		}
 
 		if (current_is(tok_equal))
 		{

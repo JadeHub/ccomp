@@ -4,6 +4,7 @@
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
+#include "abi.h"
 
 #include "std_types.h"
 
@@ -92,15 +93,13 @@ static bool _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 	{
 		if (member->value)
 		{
-			if (!sema_is_int_constant_expression(member->value))
+			if (!sema_is_const_int_expr(member->value))
 			{
 				//err
 				return false;
 			}
-			next_val = sema_eval_constant_expr(member->value);			
+			next_val = sema_fold_const_int_expr(member->value);
 		}
-
-		//idm_find_decl
 
 		idm_add_enum_val(_id_map, member->name, next_val);
 
@@ -376,6 +375,16 @@ bool process_variable_declaration(ast_declaration_t* decl)
 			ast_declaration_name(decl));
 	}
 
+	if (decl->array_sz)
+	{
+		if (!sema_is_const_int_expr(decl->array_sz))
+		{
+			return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+				"array size must be constant expression",
+				ast_declaration_name(decl));
+		}
+	}
+
 	if (decl->data.var.init_expr)
 	{
 		expr_result_t result = sema_process_expression(decl->data.var.init_expr);
@@ -400,7 +409,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	}
 
 	idm_add_id(_id_map, decl);
-	_cur_func_ctx.decl->data.func.required_stack_size += decl->type_ref->spec->size;
+	_cur_func_ctx.decl->data.func.required_stack_size += abi_calc_var_decl_stack_size(decl);
 
 	return true;
 }

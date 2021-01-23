@@ -17,7 +17,7 @@ public:
 		parse_init(mTokens);
 		ast_expression_t* expr = parse_constant_expression();
 
-		int_val_t iv = sema_eval_constant_expr(expr);
+		int_val_t iv = sema_fold_const_int_expr(expr);
 
 		return iv;
 	}

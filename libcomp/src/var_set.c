@@ -1,5 +1,6 @@
 #include "var_set.h"
 #include "diag.h"
+#include "abi.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -134,6 +135,16 @@ void var_leave_block(var_set_t* vars)
 	assert(false);
 }
 
+static size_t _calc_decl_size(ast_declaration_t* decl)
+{
+	if (decl->array_sz)
+	{
+		assert(decl->array_sz->kind == expr_int_literal && decl->type_ref->spec->kind == type_ptr);
+		return decl->array_sz->data.int_literal.val.v.int64 * decl->type_ref->spec->data.ptr_type->size;
+	}
+	return decl->type_ref->spec->size;
+}
+
 var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 {
 	var_data_t* var = var_cur_block_find(vars, decl->name);
@@ -143,13 +154,14 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 		return NULL;
 	}
 	
-	var = _make_stack_var(vars->bsp_offset - decl->type_ref->spec->size, decl->name);
+	size_t sz = abi_calc_var_decl_stack_size(decl);
+
+	var = _make_stack_var(vars->bsp_offset - sz, decl->name);
 	var->kind = var_stack;
 	var->var_decl = decl;
 		
-	vars->bsp_offset -= (decl->type_ref->spec->size + 0x01) & ~0x01;
-	
-	
+	vars->bsp_offset -= (sz + 0x01) & ~0x01;
+		
 	// add to start of list
 	var->next = vars->vars;
 	vars->vars = var;

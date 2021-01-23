@@ -124,8 +124,16 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 
 	if (source->kind == expr_int_literal)
 	{
-		if ( (target_result.result_type->kind == type_ptr && source->data.int_literal.val.v.int64 != 0 ) ||
-				!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
+		if (target_result.result_type->kind == type_ptr)
+		{
+			if (source->data.int_literal.val.v.int64 != 0)
+			{
+				return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+					"assignment to incompatible type. expected %s",
+					ast_type_name(target_result.result_type));
+			}
+		}
+		else if (!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
 		{
 			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 				"assignment to incompatible type. expected %s",
@@ -464,14 +472,10 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	if (sema_is_int_constant_expression(expr) && expr->kind != expr_int_literal)
+	if (sema_is_const_int_expr(expr))
 	{
 		//we can evalulate to a constant
-		int_val_t val = sema_eval_constant_expr(expr);
-		ast_destroy_expression_data(expr);
-		memset(expr, 0, sizeof(ast_expression_t));
-		expr->kind = expr_int_literal;
-		expr->data.int_literal.val = val;
+		sema_fold_const_int_expr(expr);
 	}
 
 	switch (expr->kind)

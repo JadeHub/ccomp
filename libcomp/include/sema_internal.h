@@ -28,11 +28,8 @@ identfier_map_t* sema_id_map();
 bool sema_resolve_type_ref(ast_type_ref_t* ref);
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type);
 bool sema_is_same_type(ast_type_spec_t* lhs, ast_type_spec_t* rhs);
-
-
-bool sema_is_int_constant_expression(ast_expression_t* expr);
-int_val_t sema_eval_constant_expr(ast_expression_t* expr);
+bool sema_is_const_int_expr(ast_expression_t* expr);
+int_val_t sema_fold_const_int_expr(ast_expression_t* expr);
 bool process_sizeof_expr(ast_expression_t* expr);
-
 ast_type_spec_t* int_val_smallest_size(int_val_t* val);
 bool int_val_will_fit(int_val_t* val, ast_type_spec_t* type);
