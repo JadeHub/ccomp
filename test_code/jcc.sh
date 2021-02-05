@@ -1,1 +1,1 @@
-../build/compiler/jcc $1
+../build/compiler/jcc $1 $2

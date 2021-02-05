@@ -440,3 +440,23 @@ bool ast_type_is_enum(ast_type_spec_t* type)
 {
 	return type->kind == type_user && type->data.user_type_spec->kind == user_type_enum;
 }
+
+bool ast_is_assignment_op(op_kind op)
+{
+	switch (op)
+	{
+	case op_assign:
+	case op_mul_assign:
+	case op_div_assign:
+	case op_mod_assign:
+	case op_add_assign:
+	case op_sub_assign:
+	case op_left_shift_assign:
+	case op_right_shift_assign:
+	case op_and_assign:
+	case op_xor_assign:
+	case op_or_assign:
+		return true;
+	}
+	return false;
+}

@@ -8,6 +8,8 @@ typedef struct
 	bool display_version;
 	bool pre_proc_only;
 
+	bool annotate_asm;
+
 	char* output_path;
 	char* input_path;
 

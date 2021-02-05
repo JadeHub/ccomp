@@ -6,5 +6,5 @@ int main()
 
 	**pp = 11;
 
-	return i;
+	return **pp;
 }

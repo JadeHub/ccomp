@@ -1,3 +1,4 @@
+*.swp
 test_code/test.c
 a.out
 *.s

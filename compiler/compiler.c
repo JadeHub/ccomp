@@ -13,11 +13,13 @@
 
 #include <libj/include/platform.h>
 
-void asm_print(const char* line, void* data)
+void asm_print(const char* line, bool lf, void* data)
 {
     data;
-    if(line[0] != '\n' && line[0] != '#')
-        printf("%s\n", line);
+  //  if(line[0] != '\n' && line[0] != '#')
+    printf("%s", line);
+    if (lf)
+        printf("\n");
 }
 
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
@@ -114,7 +116,7 @@ int main(int argc, char* argv[])
         printf("Failed to validate\n");
         return -1;
     }
-    code_gen(tl, &asm_print, NULL);
+    code_gen(tl, &asm_print, NULL, options.annotate_asm);
     tl_destroy(tl);
     
     src_deinit();

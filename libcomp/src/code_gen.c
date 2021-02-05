@@ -1,6 +1,7 @@
 #include "code_gen.h"
 #include "var_set.h"
 #include "source.h"
+#include "abi.h"
 
 #include "id_map.h"
 #include "std_types.h"
@@ -49,6 +50,8 @@ void gen_expression1(ast_expression_t* expr);
 
 static write_asm_cb _asm_cb;
 static void* _asm_cb_data;
+static bool _annotation = false;
+static uint32_t _annotate_depth = 0;
 
 static var_set_t* _var_set;
 static bool _returned = false;
@@ -67,7 +70,54 @@ static void _gen_asm(const char* format, ...)
 	vsnprintf(buff, 256, format, args);
 	va_end(args);
 
-	_asm_cb(buff, _asm_cb_data);
+	if (_annotation)
+	{
+		int tabs = _annotate_depth;
+		while ((--tabs)>0)
+		{
+			_asm_cb("\t", false, _asm_cb_data);
+		}
+	}
+
+	_asm_cb(buff, true, _asm_cb_data);
+}
+
+static void _annotate(const char* format, ...)
+{
+	if (_annotation)
+	{
+		char buff[256];
+
+		va_list args;
+		va_start(args, format);
+		vsnprintf(buff, 256, format, args);
+		va_end(args);
+
+		_gen_asm("#%s", buff);
+	}
+}
+
+static void _annotate_start(const char* format, ...)
+{
+	_annotate_depth++;
+	if (_annotation)
+	{
+		char buff[256];
+
+		va_list args;
+		va_start(args, format);
+		vsnprintf(buff, 256, format, args);
+		va_end(args);
+
+		_asm_cb("\n", true, _asm_cb_data);
+
+		_gen_asm("#%s", buff);
+	}
+}
+
+static void _annotate_end()
+{
+	_annotate_depth--;
 }
 
 static uint32_t _next_label = 0;
@@ -211,13 +261,7 @@ static inline bool _is_binary_op(ast_expression_t* expr, op_kind op)
 	return expr->kind == expr_binary_op && expr->data.binary_op.operation == op;
 }
 
-static inline bool _is_binary_assignment_op(ast_expression_t* expr)
-{
-	return expr->kind == expr_binary_op && 
-		ast_is_assignment_op(expr->data.binary_op.operation);
-}
-
-static inline op_kind _get_non_assign_op(op_kind assign_op)
+static inline op_kind _assignment_op_to_op(op_kind assign_op)
 {
 	switch (assign_op)
 	{
@@ -264,48 +308,58 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	start_expr(expr);
 	if (expr->kind == expr_identifier)
 	{		
+		_annotate_start("expr_identifier '%s'", expr->data.identifier.name);
 		result->lval.type = expr->data.identifier.decl->type_ref->spec;
 		if (result->lval.type->kind == type_func_sig)
 		{
 			//function
 			result->lval.type = ast_make_ptr_type(result->lval.type);
 			result->lval.kind = lval_address;
+			_annotate("'%s' is a function pointer, load its address in eax", expr->data.identifier.name);;
 			_gen_asm("movl $%s, %%eax", expr->data.identifier.name);
-			return;
 		}
 
-		var_data_t* var = var_find(_var_set, expr->data.identifier.name);
-		assert(var);
-
-		result->lval.type = var->var_decl->type_ref->spec;
-
-		if (var->kind == var_global)
-		{
-			result->lval.kind = lval_label;
-			result->lval.data.label = var->global_name;
-		}
 		else
 		{
-			result->lval.kind = lval_stack;
-			result->lval.data.stack_offset = var->bsp_offset;
+			var_data_t* var = var_find(_var_set, expr->data.identifier.name);
+			assert(var);
+
+			result->lval.type = var->var_decl->type_ref->spec;
+
+			if (var->kind == var_global)
+			{
+				result->lval.kind = lval_label;
+				result->lval.data.label = var->global_name;
+			}
+			else
+			{
+				result->lval.kind = lval_stack;
+				result->lval.data.stack_offset = var->bsp_offset;
+			}
+
+			if (var->var_decl->array_sz)
+			{
+				//convert to address
+				_annotate("'%s' is an array, load its address in eax", expr->data.identifier.name);
+				_gen_asm("leal %d(%%ebp), %%eax", var->bsp_offset);;
+				result->lval.kind = lval_address;				
+			}
 		}
-		
-		if (var->var_decl->array_sz)
-		{
-			//convert to address
-			_gen_asm("leal %d(%%ebp), %%eax", var->bsp_offset);;
-			result->lval.kind = lval_address;
-		}
+		_annotate_end();
 	}
 	else if (expr->kind == expr_int_literal)
 	{
+		_annotate_start("expr_int_literal %d", expr->data.int_literal.val.v.int64);
 		_gen_asm("movl $%d, %%eax", int_val_as_uint32(&expr->data.int_literal.val));
 		result->lval.type = expr->data.int_literal.type;
+		_annotate_end();
 	}
 	else if (expr->kind == expr_str_literal)
 	{
+		_annotate_start("expr_str_literal '%s'", expr->data.str_literal.value);
 		_gen_asm("leal .%s, %%eax", expr->data.str_literal.label);
 		result->lval.type = ast_make_ptr_type(int8_type_spec);
+		_annotate_end();
 	}
 	else if (expr->kind == expr_func_call)
 	{
@@ -313,6 +367,7 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 	}
 	else if (_is_binary_op(expr, op_member_access))
 	{
+		_annotate_start("op_member_access");
 		//lhs.rhs
 		gen_expression(expr->data.binary_op.lhs, result);
 
@@ -328,9 +383,11 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		else
 			result->lval.offset += member->offset;
 		result->lval.type = member->type_ref->spec;
+		_annotate_end();
 	}
 	else if (_is_binary_op(expr, op_ptr_member_access))
 	{
+		_annotate_start("op_ptr_member_access");
 		//lhs.rhs
 		gen_expression(expr->data.binary_op.lhs, result);
 
@@ -359,10 +416,11 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			result->lval.kind = lval_address;
 		}
 		result->lval.type = member->type_ref->spec;
-		
+		_annotate_end();
 	}
 	else if (_is_unary_op(expr, op_address_of))
 	{
+		_annotate_start("op_address_of");
 		gen_expression(expr->data.unary_op.expression, result);
 
 		if (ast_type_is_fn_ptr(result->lval.type))
@@ -388,9 +446,11 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 			break;
 		}
 		result->lval.type = ast_make_ptr_type(result->lval.type);
+		_annotate_end();
 	}
 	else if (_is_unary_op(expr, op_dereference))
 	{
+		_annotate_start("op_dereference");
 		gen_expression(expr->data.unary_op.expression, result);
 
 		if (ast_type_is_fn_ptr(result->lval.type))
@@ -405,64 +465,58 @@ void gen_expression(ast_expression_t* expr, expr_result* result)
 		if (result->lval.type->data.ptr_type->kind == type_ptr)
 		{
 			_gen_asm("movl (%%eax), %%eax");
-			result->lval.kind = lval_address;
 		}
 		
 		//adjust type
 		result->lval.type = result->lval.type->data.ptr_type;
 		result->lval.kind = lval_address;
+		_annotate_end();
 	}
 	else if (_is_binary_op(expr, op_array_subscript))
 	{
+		_annotate_start("op_array_subscript");
 		//generate the lhs which should result in a pointer in eax
 		//push the pointer
 		//generate rhs (the index) which should result in an int
 		//multiply by size of the item pointed to
 		//pop the pointer from the stack and add the offset
 
+		_annotate("lhs expr");
 		gen_expression(expr->data.binary_op.lhs, result);
+		_annotate("lhs should be a pointer, move its address to eax and then push into the stack");
+		ensure_lval_in_reg(&result->lval);
+		//lhs must be a pointer
+		_gen_asm("pushl %%eax");
 
-	/*	if ((result->lval.kind == lval_stack || result->lval.kind == lval_label) &&
-			expr->data.binary_op.rhs->kind == expr_int_literal)
+		//index
+		_annotate("rhs expr");
+		gen_expression1(expr->data.binary_op.rhs);
+		_annotate("mul by size of item in array");
+		_gen_asm("imul $%d, %%eax", result->lval.type->data.ptr_type->size);
+
+		_annotate("pop the address of rhs from the stack and add the rhs * size offset in eax");
+		_gen_asm("popl %%ecx");
+		_gen_asm("addl %%ecx, %%eax");
+
+		if (result->lval.type->data.ptr_type->kind == type_ptr)
 		{
-			result->lval.offset += expr->data.binary_op.rhs->data.int_literal.value * result->lval.type->ptr_type->size;
-			result->lval.type = result->lval.type->ptr_type;
-		}
-		else*/
-		{
-			ensure_lval_in_reg(&result->lval);
-			//lhs must be a pointer
-			_gen_asm("pushl %%eax");
-
-			//index
-			gen_expression1(expr->data.binary_op.rhs);
-			//todo multiply
-
-			_gen_asm("imul $%d, %%eax", result->lval.type->data.ptr_type->size);
-
-
-			_gen_asm("popl %%ecx");
-			_gen_asm("addl %%ecx, %%eax");
-
-			if (result->lval.type->data.ptr_type->kind == type_ptr)
-			{
-				_gen_asm("movl (%%eax), %%eax");
-				result->lval.kind = lval_address;
-			}
-
-			//adjust type
-			result->lval.type = result->lval.type->data.ptr_type;
-			result->lval.kind = lval_address;
+			_gen_asm("movl (%%eax), %%eax");
+		//	result->lval.kind = lval_address;
 		}
 
-	}
-	else if(_is_binary_assignment_op(expr))
-	{
-		gen_assignment_expression(expr, result);
+		//adjust type
+		result->lval.type = result->lval.type->data.ptr_type;
+		result->lval.kind = lval_address;
+	
+		_annotate_end();
 	}
 	else if (expr->kind == expr_binary_op)
 	{
-		if (expr->data.binary_op.operation == op_and ||
+		if (ast_is_assignment_op(expr->data.binary_op.operation))
+		{
+			gen_assignment_expression(expr, result);
+		}
+		else if (expr->data.binary_op.operation == op_and ||
 			expr->data.binary_op.operation == op_or)
 		{
 			gen_logical_binary_expr(expr, result);
@@ -596,15 +650,18 @@ void gen_copy_eax_to_lval(expr_result* target)
 		switch (target->lval.kind)
 		{
 		case lval_stack:
+			_annotate("target is stack %d + %d", target->lval.data.stack_offset, target->lval.offset);
 			_gen_asm("%s %%eax, %d(%%ebp)", _sized_mov(target->lval.type), target->lval.data.stack_offset + target->lval.offset);
 			break;
 		case lval_label:
+			_annotate("target is label %s + %d", target->lval.data.label, target->lval.offset);
 			if (target->lval.offset)
 				_gen_asm("%s %%eax, %s + %d", _sized_mov(target->lval.type), target->lval.data.label, target->lval.offset);
 			else
 				_gen_asm("%s %%eax, %s", _sized_mov(target->lval.type), target->lval.data.label);
 			break;
 		case lval_address:
+			_annotate("target is an address in edx");
 			_gen_asm("%s %%eax, %d(%%edx)", _sized_mov(target->lval.type), target->lval.offset);
 			//the result of the expression is now the address stored in edx, move to eax
 			_gen_asm("movl %%edx, %%eax");
@@ -668,7 +725,7 @@ void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
 
 	ensure_lval_in_reg(&result->lval);
 
-	switch (_get_non_assign_op(expr->data.binary_op.operation))
+	switch (_assignment_op_to_op(expr->data.binary_op.operation))
 	{
 	case op_add:
 		_gen_asm("addl %%ecx, %%eax");
@@ -747,9 +804,12 @@ void gen_op_assign_expression(ast_expression_t* expr, expr_result* result)
 
 void gen_assignment_expression(ast_expression_t* expr, expr_result* result)
 {
-	if (_is_binary_assignment_op(expr) && expr->data.binary_op.operation != op_assign)
+	_annotate_start("%s operation", ast_op_name(expr->data.binary_op.operation));	
+
+	if (expr->data.binary_op.operation != op_assign)
 	{
 		gen_op_assign_expression(expr, result);
+		_annotate_end();
 		return;
 	}
 
@@ -759,18 +819,29 @@ void gen_assignment_expression(ast_expression_t* expr, expr_result* result)
 		B) types greater than 4 bytes in length are copied to a stack location or to an address stored in a stack location
 	*/
 	
+	_annotate("assignment: lhs (target) expr");
  	gen_expression(expr->data.binary_op.lhs, result);
 	
 	assert(result->lval.kind != lval_none);
 
-	if(result->lval.kind == lval_address)
+	if (result->lval.kind == lval_address)
+	{
+		_annotate("assignment: target is an address in eax, push onto the stack");
 		_gen_asm("pushl %%eax");
+	}
 
+	_annotate("assignment: rhs expr");
 	gen_expression1(expr->data.binary_op.rhs);
 	
 	if (result->lval.kind == lval_address)
+	{
+		_annotate("assignment: pop target address from the stack");
 		_gen_asm("popl %%edx");
+	}
+	_annotate("assignment: copy result from eax to target");
 	gen_copy_eax_to_lval(result);
+
+	_annotate_end();
 }
 
 void gen_func_call_expression(ast_expression_t* expr, expr_result* result)
@@ -955,6 +1026,7 @@ void gen_var_decl(ast_declaration_t* decl)
 {
 	var_data_t* var = var_decl_stack_var(_var_set, decl);
 	assert(var);
+	_annotate_start("local variable '%s' at stack %d", decl->name, var->bsp_offset);
 	if (decl->data.var.init_expr)
 	{
 		expr_result result;
@@ -963,16 +1035,20 @@ void gen_var_decl(ast_declaration_t* decl)
 		result.lval.kind = lval_stack;
 		result.lval.data.stack_offset = var->bsp_offset;
 		
+		_annotate("init expression");
 		gen_expression1(decl->data.var.init_expr);
+		_annotate("assignment");
 		gen_copy_eax_to_lval(&result);
 	}
 	else
 	{
-		for (uint32_t i = 0; i < abi_calc_var_decl_stack_size(decl) / 4; i++)
+		_annotate("init with zero");
+		for (int i = 0; i < abi_calc_var_decl_stack_size(decl) / 4; i++)
 		{
 			_gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}
 	}
+	_annotate_end();
 }
 
 void gen_scope_block_enter()
@@ -995,6 +1071,7 @@ void gen_expression1(ast_expression_t* expr)
 
 	if (result.lval.type)
 	{
+		_annotate("ensure expression result is in eax");
 		ensure_lval_in_reg(&result.lval);
 	}
 }
@@ -1058,6 +1135,7 @@ void gen_switch_statement(ast_statement_t* smnt)
 
 void gen_return_statement(ast_statement_t* smnt)
 {
+	_annotate_start("smnt_return");
 	ast_type_spec_t* ret_type = _get_func_sig_ret_type(_cur_fun->type_ref);
 	if (ret_type->size > 4)
 	{
@@ -1091,6 +1169,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		gen_expression1(smnt->data.expr);
 	}
 
+	_annotate("epilogue");
 	//function epilogue
 	if (ret_type->size > 4)
 	{
@@ -1104,6 +1183,7 @@ void gen_return_statement(ast_statement_t* smnt)
 		_gen_asm("ret");
 	}
 	_returned = true;
+	_annotate_end();
 }
 
 void gen_statement(ast_statement_t* smnt)
@@ -1308,10 +1388,12 @@ void gen_function(ast_declaration_t* fn)
 	_returned = false;
 	_cur_fun = fn;
 
+	_annotate_start("function '%s'", fn->name);
 	_gen_asm(".globl %s", fn->name);
 	_gen_asm("%s:", fn->name);
 
 	//function prologue
+	_annotate("prologue");
 	_gen_asm("push %%ebp");
 	_gen_asm("movl %%esp, %%ebp");
 
@@ -1332,12 +1414,14 @@ void gen_function(ast_declaration_t* fn)
 
 	if (!_returned)
 	{
+		_annotate("epilogue");
 		//function epilogue
 		_gen_asm("movl $0, %%eax");
 		_gen_asm("leave");
 
 		_gen_asm("ret");
 	}
+	_annotate_end();
 	_gen_asm("\n");
 	_gen_asm("\n");
 
@@ -1346,12 +1430,13 @@ void gen_function(ast_declaration_t* fn)
 
 void gen_global_var(ast_declaration_t* decl)
 {	
+	_annotate_start("global variable '%s'", decl->name);
+
 	_gen_asm(".globl _var_%s", decl->name); //export symbol
-
 	ast_expression_t* var_expr = decl->data.var.init_expr;
-
 	if (var_expr && var_expr->kind == expr_int_literal && int_val_as_uint32(&var_expr->data.int_literal.val) != 0)
 	{
+		_annotate("int literal initialisation");
 		//initialised var goes in .data section
 		_gen_asm(".data"); //data section
 		_gen_asm(".align 4");
@@ -1372,6 +1457,7 @@ void gen_global_var(ast_declaration_t* decl)
 	}
 	else if (var_expr && var_expr->kind == expr_str_literal)
 	{
+		_annotate("string literal initialisation");
 		_gen_asm(".data"); //data section
 		_gen_asm("_var_%s:", decl->name); //label
 		_gen_asm(".long .%s", var_expr->data.str_literal.label); //label
@@ -1380,6 +1466,7 @@ void gen_global_var(ast_declaration_t* decl)
 	}
 	else
 	{
+		_annotate("init with zeros");
 		//0 or uninitialised var goes in .BSS section
 		_gen_asm(".bss"); //bss section
 		_gen_asm(".align 4");
@@ -1387,20 +1474,24 @@ void gen_global_var(ast_declaration_t* decl)
 		_gen_asm(".zero %d", decl->type_ref->spec->size); //data length		
 		_gen_asm(".text"); //back to text section
 		_gen_asm("\n");
-	}	
+	}
+	_annotate_end();
 }
 
 void gen_string_literal(const char* value, const char* label)
 {
+	_annotate_start("string literal");
 	_gen_asm(".%s:", label);
 	_gen_asm(".string \"%s\"", value);
+	_annotate_end();
 }
 
-void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data)
+void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data, bool annotation)
 {
 	_asm_cb = cb;
 	_asm_cb_data = data;
 	_cur_tl = tl;
+	_annotation = annotation;
 	_var_set = var_init_set();
 
 	tl_decl_t* var_decl = tl->var_decls;
