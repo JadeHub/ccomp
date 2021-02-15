@@ -6,6 +6,6 @@ int main()
 	int x = 7;
 	a.b = x;
 
-	return a.b + a.a;
+	return a.a;
 }
 

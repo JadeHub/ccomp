@@ -327,6 +327,7 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 	if (target_result.failure)
 		return target_result;
 
+	//target type - the type_spec of the function, or function pointer being called
 	ast_type_spec_t* tt = target_result.result_type;
 
 	//target is either an identifier referencing a function
@@ -481,28 +482,38 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	switch (expr->kind)
 	{
 	case expr_null:
-		return _process_null(expr);
+		result = _process_null(expr);
+		break;
 	case expr_postfix_op:
 	case expr_unary_op:
-		return _process_unary_op(expr);
+		result = _process_unary_op(expr);
+		break;
 	case expr_binary_op:
-		return _process_binary_op(expr);
+		result = _process_binary_op(expr);
+		break;
 	case expr_int_literal:
-		return sema_process_int_literal(expr);
+		result = sema_process_int_literal(expr);
+		break;
 	case expr_str_literal:
-		return _process_str_literal(expr);
+		result = _process_str_literal(expr);
+		break;
 	case expr_identifier:
-		return _process_variable_reference(expr);
+		result = _process_variable_reference(expr);
+		break;
 	case expr_condition:
-		return _process_condition(expr);
+		result = _process_condition(expr);
+		break;
 	case expr_func_call:
-		return _process_func_call(expr);
+		result = _process_func_call(expr);
+		break;
 	case expr_sizeof:
-		return _process_sizeof(expr);
+		result = _process_sizeof(expr);
+		break;
 	case expr_cast:
-		return _process_cast(expr);
-	
+		result = _process_cast(expr);
+		break;
 	}
-
+	if (!result.failure)
+		expr->sema.result_type = result.result_type;
 	return result;
 }

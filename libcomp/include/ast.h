@@ -149,6 +149,13 @@ typedef struct ast_expression
 		ast_sizeof_call_t sizeof_call;
 		ast_expr_cast_data_t cast;
 	}data;
+
+	//data set during semantic analysis
+	struct
+	{
+		struct ast_type_spec* result_type;
+	}sema;
+
 }ast_expression_t;
 
 /* Type */

@@ -4,25 +4,23 @@ int main()
 
 	struct Sub
 	{
-		int x; //-16
-		int y; //-20
-		int z; //-24
-	} ; // -24
+		int x; // -8
+		int y; // -12
+		int z; // -16
+	};
 
 	struct A 
 	{
-		int a; // 0
-		struct Sub s; // -12
-		int b;  //-16
-	} aVal; 	//-16
+		int a; // -4
+		struct Sub s; // -16
+		int b;  // -20
+	} aVal; 	// -20
 	
-	struct A* aPtr; //-20
+	struct A* aPtr; // -24
 	
 	aPtr = &aVal;
 
-
 	aPtr->s.y = 7;
 
-
-	return aPtr->s.y;
+	return aVal.s.y;
 }

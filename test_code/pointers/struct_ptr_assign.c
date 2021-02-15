@@ -11,6 +11,7 @@ int main()
 
         int j;
 	j = (*ptr).a;
+//	j = i.a;
         return j;
 }
 

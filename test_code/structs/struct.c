@@ -1,4 +1,3 @@
-
 int main()
 {
 	struct A {int a; int b;} v;

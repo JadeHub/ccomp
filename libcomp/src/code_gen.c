@@ -1,3 +1,4 @@
+#if 0
 #include "code_gen.h"
 #include "var_set.h"
 #include "source.h"
@@ -221,8 +222,7 @@ void gen_logical_binary_expr(ast_expression_t* expr, expr_result* result)
 	char label2[16];
 	_make_label_name(label1);
 	_make_label_name(label2);
-
-	
+		
 	gen_expression1(expr->data.binary_op.lhs);
 
 	if (expr->data.binary_op.operation == op_or)
@@ -1526,3 +1526,5 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data, bool annotati
 	_asm_cb_data = NULL;
 	_asm_cb = NULL;
 }
+
+#endif
