@@ -2,6 +2,6 @@ int main()
 {
 	int* vals[2];
 	int p = 5;
-	vals[0] = &p;
-	return *vals[0];
+	vals[1] = &p;
+	return *vals[1];
 }

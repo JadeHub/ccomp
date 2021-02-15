@@ -45,6 +45,7 @@ void gen_assignment(ast_expression_t* expr)
 	gen_annotate_start("assignment expression");
 
 	gen_annotate("lval");
+	bool lval_prev = lval;
 	lval = true;
 	gen_expression(expr->data.binary_op.lhs);
 	gen_asm("push %%eax");
@@ -52,6 +53,7 @@ void gen_assignment(ast_expression_t* expr)
 	gen_annotate("rval");
 	lval = false;
 	gen_expression(expr->data.binary_op.rhs);
+	lval = lval_prev;
 	gen_asm("pop %%edx");
 
 	//if the target is a user defined type we assume eax and edx are pointers
@@ -71,6 +73,13 @@ void gen_assignment(ast_expression_t* expr)
 		gen_annotate("store result");
 		gen_asm("movl %%eax, (%%edx)");
 	}
+
+	if (lval_prev)
+	{
+		//we need to leave the address in eax
+		gen_asm("movl %%edx, %%eax");
+	}
+
 	gen_annotate_end();
 }
 
@@ -88,13 +97,20 @@ void gen_identifier(ast_expression_t* expr)
 	var_data_t* var = var_find(gen_var_set(), expr->data.identifier.name);
 	assert(var);
 
+	if (var->kind == var_global)
+		gen_annotate("'%s' is global with label '%s'", expr->data.identifier.name, var->global_name);
+	else
+		gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
+
 	//if we are processing an lval or we are referencing a user defined type load the address into eax
-	if (lval || expr->sema.result_type->kind == type_user)
+	if (lval || expr->sema.result_type->kind == type_user || var->var_decl->array_sz)
 	{
 		if (lval)
-			gen_annotate("loading address in eax for lval");
+			gen_annotate("loading address of lval into eax");
+		else if (var->var_decl->array_sz)
+			gen_annotate("loading address  of array into eax");
 		else
-			gen_annotate("loading address in eax of user_type");
+			gen_annotate("loading address of user_type into eax");
 
 		//place address in eax
 		if (var->kind == var_global)
@@ -273,11 +289,6 @@ void gen_condition_expr(ast_expression_t* expr)
 
 void gen_member_access(ast_expression_t* expr)
 {
-	gen_annotate_start("member access '%s'", expr->data.binary_op.rhs->data.identifier.name);
-
-	gen_annotate("lhs");
-	gen_expression(expr->data.binary_op.lhs);
-
 	assert(expr->data.binary_op.lhs->sema.result_type->kind == type_user);
 	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result_type;
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
@@ -285,6 +296,11 @@ void gen_member_access(ast_expression_t* expr)
 		expr->data.binary_op.rhs->data.identifier.name);
 	assert(member);
 
+	gen_annotate_start("member access '%s'", member->name);
+
+	gen_annotate("lhs");
+	gen_expression(expr->data.binary_op.lhs);
+		
 	//assume eax contains a pointer
 	gen_annotate("add offset %d", member->offset);
 	gen_asm("addl $%d, %%eax", member->offset);
@@ -305,20 +321,22 @@ void gen_ptr_member_access(ast_expression_t* expr)
 	assert(user_type->kind == type_user);
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
-	gen_annotate_start("pointer member access '%s'", expr->data.binary_op.rhs->data.identifier.name);
-
-	gen_annotate("lhs");
-	gen_expression(expr->data.binary_op.lhs);
-
-	if (lval)
-	{
-		//?
-		gen_asm("movl (%%eax), %%eax");
-	}
-
 	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec,
 		expr->data.binary_op.rhs->data.identifier.name);
 	assert(member);
+
+	gen_annotate_start("pointer member access '%s'", member->name);
+
+	gen_annotate("lhs");
+	gen_expression(expr->data.binary_op.lhs);
+	ast_type_spec_t* lhs_type = expr->data.binary_op.lhs->sema.result_type;
+
+	if (lval)// || lhs_type->kind != type_ptr)
+	{
+		//we want to be left with the address of the member in eax
+		gen_asm("movl (%%eax), %%eax");
+	}
+
 	
 	//assume eax contains a pointer
 	gen_annotate("add offset %d", member->offset);
@@ -330,6 +348,41 @@ void gen_ptr_member_access(ast_expression_t* expr)
 		//we are not processing an lval and the member type is not a user type so move the value into eax
 		gen_asm("movl (%%eax), %%eax");
 	}
+	gen_annotate_end();
+}
+
+void gen_array_subscript(ast_expression_t* expr)
+{
+	gen_annotate_start("array subscript");
+
+	//generate the lhs which should result in a pointer in eax
+	//push the pointer
+	//generate rhs (the index) which should result in an int offset
+	//multiply this by the size of the item pointed to
+	//pop the pointer from the stack and add the offset
+
+	gen_annotate("lhs");
+	gen_expression(expr->data.binary_op.lhs);
+	gen_annotate("push lhs pointer");
+	gen_asm("pushl %%eax");
+
+	//index
+	gen_annotate("rhs");
+	gen_expression(expr->data.binary_op.rhs);
+	gen_annotate("mul by size of item in array");
+	gen_asm("imul $%d, %%eax", expr->sema.result_type->size);
+
+	gen_annotate("pop the address of rhs from the stack and add the rhs * size offset in eax");
+	gen_asm("popl %%ecx");
+	gen_asm("addl %%ecx, %%eax");
+
+	if (!lval && expr->sema.result_type->kind != type_user)
+	{
+		gen_annotate("store item value in eax");
+		//we are not processing an lval and the member type is not a user type so move the value into eax
+		gen_asm("movl (%%eax), %%eax");
+	}
+
 	gen_annotate_end();
 }
 
@@ -536,6 +589,8 @@ void gen_binary_op(ast_expression_t* expr)
 		gen_member_access(expr);
 	else if (is_binary_op(expr, op_ptr_member_access))
 		gen_ptr_member_access(expr);
+	else if (is_binary_op(expr, op_array_subscript))
+		gen_array_subscript(expr);
 	else
 		gen_arithmetic_binary(expr);
 }

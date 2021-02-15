@@ -13,8 +13,9 @@ int main()
 	struct A* a;
 	
 	(a = fn())->b = 20;
+//	a = fn();
 
 
-	return g.a + g.b;
+	return a->a + a->b;
 }
 
