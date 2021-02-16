@@ -484,7 +484,6 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	case expr_null:
 		result = _process_null(expr);
 		break;
-	case expr_postfix_op:
 	case expr_unary_op:
 		result = _process_unary_op(expr);
 		break;

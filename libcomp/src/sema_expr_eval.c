@@ -10,7 +10,6 @@ bool sema_is_const_int_expr(ast_expression_t* expr)
 	case expr_func_call:
 	case expr_condition:
 	case expr_identifier:
-	case expr_postfix_op:	
 	case expr_str_literal:
 	case expr_null:
 	case expr_cast:

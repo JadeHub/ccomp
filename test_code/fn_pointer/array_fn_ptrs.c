@@ -14,7 +14,7 @@ int main()
 {
 	fn_t p[2];
 
-//	p[0] = fn;
+	p[0] = fn;
 	p[1] = fn2;
 
 	fn_t f = p[1];

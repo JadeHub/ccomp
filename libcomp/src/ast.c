@@ -14,7 +14,6 @@ void ast_destroy_expression_data(ast_expression_t* expr)
 
 	switch (expr->kind)
 	{
-	case expr_postfix_op:
 	case expr_unary_op:
 		ast_destroy_expression(expr->data.unary_op.expression);
 		break;
@@ -46,7 +45,6 @@ void ast_destroy_expression(ast_expression_t* expr)
 
 	switch (expr->kind)
 	{
-	case expr_postfix_op:
 	case expr_unary_op:
 		ast_destroy_expression(expr->data.unary_op.expression);
 		break;

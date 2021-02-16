@@ -120,7 +120,6 @@ typedef struct
 
 typedef enum
 {
-	expr_postfix_op,
 	expr_unary_op,
 	expr_binary_op,
 	expr_int_literal,
@@ -139,7 +138,7 @@ typedef struct ast_expression
 	expression_kind kind;
 	union
 	{
-		ast_expr_unary_op_t unary_op; //expr_unary_op & expr_postfix_op
+		ast_expr_unary_op_t unary_op;
 		ast_expr_binary_op_t binary_op;
 		ast_int_literal_t int_literal;
 		ast_string_literal_t str_literal;

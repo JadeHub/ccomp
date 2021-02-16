@@ -206,38 +206,46 @@ void gen_identifier(ast_expression_t* expr)
 {
 	gen_annotate_start("identifier expression '%s'", expr->data.identifier.name);
 
-	var_data_t* var = var_find(gen_var_set(), expr->data.identifier.name);
-	assert(var);
-
-	if (var->kind == var_global)
-		gen_annotate("'%s' is global with label '%s'", expr->data.identifier.name, var->global_name);
-	else
-		gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
-
-	//if we are processing an lval or we are referencing a user defined type load the address into eax
-	if (lval || expr->sema.result_type->kind == type_user || var->var_decl->array_sz)
+	if (expr->sema.result_type->kind == type_func_sig)
 	{
-		if (lval)
-			gen_annotate("loading address of lval into eax");
-		else if (var->var_decl->array_sz)
-			gen_annotate("loading address  of array into eax");
-		else
-			gen_annotate("loading address of user_type into eax");
-
-		//place address in eax
-		if (var->kind == var_global)
-			gen_asm("leal %s, %%eax", var->global_name);
-		else
-			gen_asm("leal %d(%%ebp), %%eax", var->bsp_offset);
+		gen_annotate("'%s' is a function pointer, load its address in eax", expr->data.identifier.name);;
+		gen_asm("movl $%s, %%eax", expr->data.identifier.name);
 	}
 	else
 	{
-		gen_annotate("loading value in eax");
-		//place value in eax
+		var_data_t* var = var_find(gen_var_set(), expr->data.identifier.name);
+		assert(var);
+
 		if (var->kind == var_global)
-			gen_asm("movl %s, %%eax", var->global_name);
+			gen_annotate("'%s' is global with label '%s'", expr->data.identifier.name, var->global_name);
 		else
-			gen_asm("movl %d(%%ebp), %%eax", var->bsp_offset);
+			gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
+
+		//if we are processing an lval or we are referencing a user defined type load the address into eax
+		if (lval || expr->sema.result_type->kind == type_user || var->var_decl->array_sz)
+		{
+			if (lval)
+				gen_annotate("loading address of lval into eax");
+			else if (var->var_decl->array_sz)
+				gen_annotate("loading address  of array into eax");
+			else
+				gen_annotate("loading address of user_type into eax");
+
+			//place address in eax
+			if (var->kind == var_global)
+				gen_asm("leal %s, %%eax", var->global_name);
+			else
+				gen_asm("leal %d(%%ebp), %%eax", var->bsp_offset);
+		}
+		else
+		{
+			gen_annotate("loading value in eax");
+			//place value in eax
+			if (var->kind == var_global)
+				gen_asm("movl %s, %%eax", var->global_name);
+			else
+				gen_asm("movl %d(%%ebp), %%eax", var->bsp_offset);
+		}
 	}
 
 	gen_annotate_end();
@@ -677,6 +685,50 @@ void gen_prefix_unary(ast_expression_t* expr)
 	gen_annotate_end();
 }
 
+
+void gen_postfix_op(ast_expression_t* expr)
+{
+	gen_annotate_start("postfix op %s", ast_op_name(expr->data.unary_op.operation));
+
+	bool prev_lval = lval;
+	lval = true;
+	gen_annotate("param");
+	gen_expression(expr->data.unary_op.expression);
+	lval = prev_lval;
+
+	gen_annotate("store target address");
+	gen_asm("movl %%eax, %%edx");
+	gen_annotate("load value into eax");
+	gen_asm("movl (%%eax), %%eax");
+	
+	if (!prev_lval)
+	{
+		gen_annotate("store unincremented value");
+		gen_asm("pushl %%eax");
+	}	
+
+	if (expr->data.unary_op.operation == op_postfix_inc)
+		gen_asm("incl %%eax");
+	else
+		gen_asm("decl %%eax");
+
+	gen_annotate("store result");
+	gen_asm("movl %%eax, (%%edx)");
+
+	if (prev_lval)
+	{
+		gen_annotate("restore lval address");
+		gen_asm("movl %%edx, %%eax");
+	}
+	else
+	{
+		gen_annotate("restore unincremented value");
+		gen_asm("popl %%eax");
+	}
+
+	gen_annotate_end();
+}
+
 void gen_binary_op(ast_expression_t* expr)
 {
 	if (is_binary_op(expr, op_assign))
@@ -705,65 +757,10 @@ void gen_unary_op(ast_expression_t* expr)
 		gen_logical_unary(expr);
 	else if (is_unary_op(expr, op_prefix_inc) || is_unary_op(expr, op_prefix_dec))
 		gen_prefix_unary(expr);
+	else if (is_unary_op(expr, op_postfix_inc) || is_unary_op(expr, op_postfix_dec))
+		gen_postfix_op(expr);
 	else
 		assert(false);
-}
-
-void gen_postfix_op(ast_expression_t* expr)
-{
-	/*gen_annotate_start("postfix op %s", ast_op_name(expr->data.unary_op.operation));
-	
-	ast_expression_t* param = expr->data.unary_op.expression;
-
-	bool prev_lval = lval;
-	lval = true;
-	gen_annotate("param");
-	gen_expression(param);
-	lval = prev_lval;
-
-	//if lval is true we need to leave the
-	//we need to leave the unincremented value in eax
-
-	gen_annotate("push address");
-	gen_asm("pushl %%eax");
-	gen_annotate("get value");
-	gen_asm("movl (%%eax), %%eax");
-	gen_annotate("push value");
-	gen_asm("pushl %%eax");
-
-	if (expr->data.unary_op.operation == op_prefix_inc)
-		gen_asm("incl %%eax");
-	else
-		gen_asm("decl %%eax");
-
-
-
-
-
-
-
-
-	//get the value of the parameter
-	gen_expression(param);
-
-	//save the current value
-	gen_asm("pushl %%eax");
-
-	if (expr->data.unary_op.operation == op_postfix_inc)
-		gen_asm("incl %%eax");
-	else
-		gen_asm("decl %%eax");
-
-	gen_copy_eax_to_lval(&exp_result);
-	//pop the un-incremented value back into eax
-	gen_asm("popl %%eax");
-
-	
-
-
-	gen_annotate_end();*/
-
-	assert(false);
 }
 
 /*
@@ -791,8 +788,6 @@ void gen_expression(ast_expression_t* expr)
 		gen_unary_op(expr);
 	else if (expr->kind == expr_binary_op)
 		gen_binary_op(expr);
-	else if (expr->kind == expr_postfix_op)
-		gen_postfix_op(expr);
-	else
+	else if(expr->kind != expr_null)
 		assert(false);
 }

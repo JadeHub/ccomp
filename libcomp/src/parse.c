@@ -538,7 +538,7 @@ ast_expression_t* try_parse_postfix_expr()
 		else if (current_is(tok_plusplus) || current_is(tok_minusminus))
 		{
 			//postfix inc/dec
-			expr->kind = expr_postfix_op;
+			expr->kind = expr_unary_op;
 			expr->data.unary_op.operation = _get_postfix_operator(current());
 			expr->data.unary_op.expression = primary;
 			next_tok();
