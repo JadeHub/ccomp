@@ -83,6 +83,118 @@ void gen_assignment(ast_expression_t* expr)
 	gen_annotate_end();
 }
 
+void gen_op_assign(ast_expression_t* expr)
+{
+	gen_annotate("op assign operation %s", ast_op_name(expr->data.binary_op.operation));
+	// x+= 5;
+
+	gen_annotate("lval");
+	bool lval_prev = lval;
+	lval = true;
+	gen_expression(expr->data.binary_op.lhs);
+	gen_asm("push %%eax");	//eax contains the address of lhs
+
+	gen_annotate("rval");
+	lval = false;
+	gen_expression(expr->data.binary_op.rhs);
+	lval = lval_prev;
+	gen_annotate("move rhs to ecx");
+	gen_asm("movl %%eax, %%ecx");
+
+	gen_annotate("pop lhs address into ebx");
+	gen_asm("pop %%ebx");
+
+	gen_annotate("move lhs value into eax");
+	gen_asm("movl (%%ebx), %%eax");
+
+	gen_annotate("operation");
+	//eax contains rhs, edx contains the address of lhs
+	switch (expr->data.binary_op.operation)
+	{
+	case op_add_assign:
+		gen_asm("addl %%ecx, %%eax");
+		break;
+	case op_sub_assign:
+		gen_asm("subl %%ecx, %%eax");
+		break;
+	case op_mul_assign:
+		gen_asm("imul %%ecx, %%eax");
+		break;
+	case op_div_assign:
+		//clear edx
+		gen_asm("xor %%edx, %%edx");
+		//sign extend eax into edx:eax
+		gen_asm("cdq");
+		gen_asm("idivl %%ecx");
+		break;
+	case op_left_shift_assign:
+		gen_asm("sall %%cl, %%eax");
+		break;
+	case op_right_shift_assign:
+		gen_asm("sarl %%cl, %%eax");
+		break;
+	case op_eq:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("sete %%al"); //test flags of comparison
+		break;
+	case op_neq:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("setne %%al"); //test flags of comparison
+		break;
+	case op_greaterthanequal:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("setge %%al"); //test flags of comparison
+		break;
+	case op_greaterthan:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("setg %%al"); //test flags of comparison
+		break;
+	case op_lessthanequal:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("setle %%al"); //test flags of comparison
+		break;
+	case op_lessthan:
+		gen_asm("cmpl %%ecx, %%eax"); //compare eax to ecx
+		gen_asm("movl $0, %%eax"); //set eax to 0
+		gen_asm("setl %%al"); //test flags of comparison
+		break;
+	case op_and_assign:
+		gen_asm("andl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_or_assign:
+		gen_asm("orl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_xor_assign:
+		gen_asm("xorl %%ecx, %%eax"); //and eax to ecx, store in eax
+		break;
+	case op_mod_assign:
+		gen_asm("xor %%edx, %%edx");
+		gen_asm("cdq");
+		gen_asm("idivl %%ecx");
+		gen_asm("movl %%edx, %%eax");
+		break;
+
+	default:
+		assert(false);
+	}
+
+	gen_annotate("store result");
+	gen_asm("movl %%eax, (%%ebx)");
+
+	if(lval_prev)
+	{
+		gen_annotate("leave lval address in eax");
+		gen_asm("movl %%ebx, %%eax");
+	}
+
+	gen_annotate_end();
+}
+
 void gen_int_literal(ast_expression_t* expr)
 {
 	gen_annotate_start("int literal expression %d", expr->data.int_literal.val.v.int64);
@@ -538,51 +650,39 @@ void gen_logical_unary(ast_expression_t* expr)
 
 void gen_prefix_unary(ast_expression_t* expr)
 {
-	switch (expr->data.unary_op.operation)
+	gen_annotate_start("prefix op %s", ast_op_name(expr->data.unary_op.operation));
+	
+	bool prev_lval = lval;
+	lval = true;
+	gen_expression(expr->data.unary_op.expression);
+	lval = prev_lval;
+
+	gen_annotate("store target address");
+	gen_asm("movl %%eax, %%edx");
+	gen_annotate("load value into eax");
+	gen_asm("movl (%%eax), %%eax");
+	if (expr->data.unary_op.operation == op_prefix_inc)
+		gen_asm("incl %%eax");
+	else
+		gen_asm("decl %%eax");
+
+	gen_annotate("store result");
+	gen_asm("movl %%eax, (%%edx)");
+
+	if (prev_lval)
 	{
-	case op_prefix_inc:
-	case op_prefix_dec:
-	{
-	/*	expr_result exp_result;
-		memset(&exp_result, 0, sizeof(expr_result));
-		exp_result.lval.kind = lval_none;
-
-		gen_expression(param, &exp_result);
-
-		if (exp_result.lval.kind == lval_address)
-			_gen_asm("pushl %%eax");
-
-		ensure_lval_in_reg(&exp_result.lval);
-
-		if (expr->data.unary_op.operation == op_prefix_inc)
-			_gen_asm("incl %%eax");
-		else
-			_gen_asm("decl %%eax");
-
-		if (exp_result.lval.kind == lval_address)
-			_gen_asm("popl %%edx");
-
-		gen_copy_eax_to_lval(&exp_result);
-
-		//if result.lval.kind is lval_address we are left with its address in eax, so we need to dereference it
-		ensure_lval_in_reg(&exp_result.lval);
-
-		if (exp_result.lval.type->kind == type_ptr)
-		{
-			result->lval.kind = lval_address;
-			result->lval.type = exp_result.lval.type;
-			result->lval.offset = 0;
-		}*/
-
-		break;
+		gen_asm("movl %%edx, %%eax");
 	}
-	}
+	
+	gen_annotate_end();
 }
 
 void gen_binary_op(ast_expression_t* expr)
 {
 	if (is_binary_op(expr, op_assign))
 		gen_assignment(expr);
+	else if (ast_is_assignment_op(expr->data.binary_op.operation))
+		gen_op_assign(expr);
 	else if (is_binary_op(expr, op_and) || is_binary_op(expr, op_or))
 		gen_logical_binary(expr);
 	else if (is_binary_op(expr, op_member_access))
@@ -611,6 +711,58 @@ void gen_unary_op(ast_expression_t* expr)
 
 void gen_postfix_op(ast_expression_t* expr)
 {
+	/*gen_annotate_start("postfix op %s", ast_op_name(expr->data.unary_op.operation));
+	
+	ast_expression_t* param = expr->data.unary_op.expression;
+
+	bool prev_lval = lval;
+	lval = true;
+	gen_annotate("param");
+	gen_expression(param);
+	lval = prev_lval;
+
+	//if lval is true we need to leave the
+	//we need to leave the unincremented value in eax
+
+	gen_annotate("push address");
+	gen_asm("pushl %%eax");
+	gen_annotate("get value");
+	gen_asm("movl (%%eax), %%eax");
+	gen_annotate("push value");
+	gen_asm("pushl %%eax");
+
+	if (expr->data.unary_op.operation == op_prefix_inc)
+		gen_asm("incl %%eax");
+	else
+		gen_asm("decl %%eax");
+
+
+
+
+
+
+
+
+	//get the value of the parameter
+	gen_expression(param);
+
+	//save the current value
+	gen_asm("pushl %%eax");
+
+	if (expr->data.unary_op.operation == op_postfix_inc)
+		gen_asm("incl %%eax");
+	else
+		gen_asm("decl %%eax");
+
+	gen_copy_eax_to_lval(&exp_result);
+	//pop the un-incremented value back into eax
+	gen_asm("popl %%eax");
+
+	
+
+
+	gen_annotate_end();*/
+
 	assert(false);
 }
 
