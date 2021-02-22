@@ -61,9 +61,6 @@ typedef struct
 typedef struct ast_func_call_param
 {
 	struct ast_expression* expr;
-
-	struct ast_type_spec* expr_type; //set during analysis
-
 	struct ast_func_call_param* next, * prev;
 }ast_func_call_param_t;
 
@@ -156,6 +153,12 @@ typedef struct ast_expression
 	}sema;
 
 }ast_expression_t;
+
+typedef struct ast_expression_list
+{
+	ast_expression_t* expr;
+	struct ast_expression_list* next;
+}ast_expression_list_t;
 
 /* Type */
 typedef enum
@@ -292,7 +295,7 @@ typedef struct ast_func_params
 
 typedef struct ast_func_decl
 {
-	uint32_t required_stack_size;
+	size_t required_stack_size;
 
 	//Definitions will have a list of blocks
 	struct ast_block_item* blocks;
@@ -318,7 +321,11 @@ typedef struct ast_declaration
 	ast_type_ref_t* type_ref;
 
 	//optional array size expression [...]
-	ast_expression_t* array_sz;
+	//ast_expression_t* array_sz;
+
+
+	//[10][20]...
+	ast_expression_list_t* array_dimentions;
 
 	union
 	{
@@ -327,6 +334,11 @@ typedef struct ast_declaration
 	}data;
 
 	struct ast_declaration* next;
+
+	struct {
+		size_t alloc_size;
+	}sema;
+
 }ast_declaration_t;
 
 typedef struct
@@ -460,6 +472,7 @@ typedef struct
 
 void ast_print(ast_trans_unit_t* tl);
 
+bool ast_is_array_decl(ast_declaration_t* decl);
 bool ast_is_assignment_op(op_kind op);
 const char* ast_op_name(op_kind);
 const char* ast_declaration_name(ast_declaration_t* decl);
@@ -486,4 +499,5 @@ void ast_destroy_statement(ast_statement_t*);
 void ast_destroy_expression(ast_expression_t*);
 void ast_destroy_expression_data(ast_expression_t*);
 void ast_destroy_declaration(ast_declaration_t*);
+void ast_destroy_expression_list(ast_expression_list_t* list);
 void ast_destroy_type_spec(ast_type_spec_t*);

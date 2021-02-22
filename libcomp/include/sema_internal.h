@@ -18,7 +18,7 @@ Result of analysing an expression
 typedef struct
 {
 	bool failure;
-	ast_type_spec_t* result_type;
+	ast_type_spec_t* result_type; //can be replaced with ast_expression_t::sema::result_type
 }expr_result_t;
 
 expr_result_t sema_process_expression(ast_expression_t* expr);

@@ -176,7 +176,7 @@ void gen_var_decl(ast_declaration_t* decl)
 	else
 	{
 		gen_annotate("init with zero");
-		for (int i = 0; i < abi_calc_var_decl_stack_size(decl) / 4; i++)
+		for (int i = 0; i < decl->sema.alloc_size / 4; i++)
 		{
 			gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}

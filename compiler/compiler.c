@@ -61,6 +61,7 @@ source_range_t _file_loader(const char* dir, const char* file, void* data)
 
 int main(int argc, char* argv[])
 {
+    fn1();
     diag_set_handler(&diag_err_print, NULL);
 
     comp_opt_t options = parse_command_line(argc, argv);

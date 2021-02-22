@@ -124,7 +124,7 @@ TEST_F(ParstDeclTest, var_fn_ptr_decl)
 {
 	ParseDecl("int (*fn)(char, int);");
 	AssertValid();
-	ASSERT_EQ(1, count);	
+	ASSERT_EQ(1, count);
 }
 
 TEST_F(ParstDeclTest, var_fn_ptr_typedef)
@@ -139,7 +139,18 @@ TEST_F(ParstDeclTest, array_type)
 	ExpectVarPtrDecl(0, "p", int32_type_spec);
 }
 
-TEST_F(ParstDeclTest, blah)
+TEST_F(ParstDeclTest, int_array_multidimention)
 {
-	ParseDecl("typedef int (*fn)(int);");
+	//int p[][1] = { { 1 } };
+	//int p[] = {1, 2, 3};
+
+	typedef struct
+	{
+		int i;
+		int j;
+	}t;
+
+	int i[sizeof(t)];
+
+	ParseDecl("int p[5][10];");
 }

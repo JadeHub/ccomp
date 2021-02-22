@@ -222,12 +222,12 @@ void gen_identifier(ast_expression_t* expr)
 			gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
 
 		//if we are processing an lval or we are referencing a user defined type load the address into eax
-		if (lval || expr->sema.result_type->kind == type_user || var->var_decl->array_sz)
+		if (lval || expr->sema.result_type->kind == type_user || ast_is_array_decl(var->var_decl))
 		{
 			if (lval)
 				gen_annotate("loading address of lval into eax");
-			else if (var->var_decl->array_sz)
-				gen_annotate("loading address  of array into eax");
+			else if (ast_is_array_decl(var->var_decl))
+				gen_annotate("loading address of array into eax");
 			else
 				gen_annotate("loading address of user_type into eax");
 
@@ -449,14 +449,12 @@ void gen_ptr_member_access(ast_expression_t* expr)
 
 	gen_annotate("lhs");
 	gen_expression(expr->data.binary_op.lhs);
-	ast_type_spec_t* lhs_type = expr->data.binary_op.lhs->sema.result_type;
 
-	if (lval)// || lhs_type->kind != type_ptr)
+	if (lval)
 	{
 		//we want to be left with the address of the member in eax
 		gen_asm("movl (%%eax), %%eax");
 	}
-
 	
 	//assume eax contains a pointer
 	gen_annotate("add offset %d", member->offset);
@@ -473,6 +471,8 @@ void gen_ptr_member_access(ast_expression_t* expr)
 
 void gen_array_subscript(ast_expression_t* expr)
 {
+	assert(expr->data.binary_op.lhs->sema.result_type->kind == type_ptr);
+
 	gen_annotate_start("array subscript");
 
 	//generate the lhs which should result in a pointer in eax
@@ -480,8 +480,9 @@ void gen_array_subscript(ast_expression_t* expr)
 	//generate rhs (the index) which should result in an int offset
 	//multiply this by the size of the item pointed to
 	//pop the pointer from the stack and add the offset
-
+	
 	gen_annotate("lhs");
+
 	gen_expression(expr->data.binary_op.lhs);
 	gen_annotate("push lhs pointer");
 	gen_asm("pushl %%eax");
@@ -558,7 +559,7 @@ void gen_func_call(ast_expression_t* expr)
 	while (param)
 	{
 		gen_expression(param->expr);
-		ast_type_spec_t* param_type = param->expr_type;
+		ast_type_spec_t* param_type = param->expr->sema.result_type;
 
 		if (param_type->size == 1)
 		{

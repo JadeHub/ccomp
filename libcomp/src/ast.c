@@ -143,7 +143,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 	if (!decl) return;
 
 	ast_destroy_type_ref(decl->type_ref);
-	ast_destroy_expression(decl->array_sz);
+	ast_destroy_expression_list(decl->array_dimentions);
 	switch (decl->kind)
 	{
 	case decl_var:
@@ -154,6 +154,17 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 		break;
 	}
 	free(decl);
+}
+
+void ast_destroy_expression_list(ast_expression_list_t* list)
+{
+	while (list)
+	{
+		ast_expression_list_t* next = list->next;
+		ast_destroy_expression(list->expr);
+		free(list);
+		list = next;
+	}
 }
 
 void ast_destroy_block_item(ast_block_item_t* b)
@@ -457,4 +468,9 @@ bool ast_is_assignment_op(op_kind op)
 		return true;
 	}
 	return false;
+}
+
+bool ast_is_array_decl(ast_declaration_t* decl)
+{
+	return decl->array_dimentions != NULL;
 }

@@ -358,6 +358,41 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	return false;
 }
 
+static size_t _process_array_alloc_size(ast_declaration_t* decl)
+{
+	ast_expression_list_t* array_sz = decl->array_dimentions;
+	size_t result = 0;
+
+	while (array_sz)
+	{
+		ast_expression_t* expr = array_sz->expr;
+
+		if (!sema_is_const_int_expr(expr))
+		{
+			_report_err(expr->tokens.start, ERR_TYPE_INCOMPLETE,
+				"array size must be constant expression",
+				ast_declaration_name(decl));
+			return 0;
+			
+		}
+		int_val_t expr_val = sema_fold_const_int_expr(expr);
+		if(!result)
+			result = expr_val.v.uint64 * decl->type_ref->spec->data.ptr_type->size;
+		else
+			result *= expr_val.v.uint64;
+		array_sz = array_sz->next;
+	}
+
+	if (result == 0)
+	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"array size unknown",
+			ast_declaration_name(decl));
+		return 0;
+	}
+	return result;
+}
+
 bool process_variable_declaration(ast_declaration_t* decl)
 {
 	ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->name);
@@ -375,14 +410,15 @@ bool process_variable_declaration(ast_declaration_t* decl)
 			ast_declaration_name(decl));
 	}
 
-	if (decl->array_sz)
+	if (ast_is_array_decl(decl))
 	{
-		if (!sema_is_const_int_expr(decl->array_sz))
-		{
-			return _report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-				"array size must be constant expression",
-				ast_declaration_name(decl));
-		}
+		decl->sema.alloc_size = _process_array_alloc_size(decl);
+		if (decl->sema.alloc_size == 0)
+			return false;
+	}
+	else
+	{
+		decl->sema.alloc_size = decl->type_ref->spec->size;
 	}
 
 	if (decl->data.var.init_expr)
@@ -409,7 +445,8 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	}
 
 	idm_add_id(_id_map, decl);
-	_cur_func_ctx.decl->data.func.required_stack_size += abi_calc_var_decl_stack_size(decl);
+	//_cur_func_ctx.decl->data.func.required_stack_size += abi_calc_var_decl_stack_size(decl);
+	_cur_func_ctx.decl->data.func.required_stack_size += decl->sema.alloc_size;
 
 	return true;
 }

@@ -2,7 +2,7 @@
 
 #include <assert.h>
 
-size_t abi_calc_var_decl_stack_size(ast_declaration_t* decl)
+/*size_t abi_calc_var_decl_stack_size(ast_declaration_t* decl)
 {
 	if (decl->array_sz)
 	{
@@ -10,4 +10,4 @@ size_t abi_calc_var_decl_stack_size(ast_declaration_t* decl)
 		return decl->array_sz->data.int_literal.val.v.int64 * decl->type_ref->spec->data.ptr_type->size;
 	}
 	return decl->type_ref->spec->size;
-}
+}*/

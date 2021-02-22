@@ -6,5 +6,6 @@ int idx()
 int main()
 {
 	char* test = "Hello";
-	return test[idx()];
+//	return test[idx()];
+	return test[3];
 }

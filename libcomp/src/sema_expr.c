@@ -384,8 +384,6 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 				p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));
 		}
 
-		call_param->expr_type = param_result.result_type;
-
 		param_decl = param_decl->next;
 		call_param = call_param->next;
 		p_count++;
@@ -402,7 +400,6 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 			if (param_result.failure)
 				return param_result;
 
-			call_param->expr_type = param_result.result_type;
 			call_param = call_param->next;
 			p_count++;
 		}
