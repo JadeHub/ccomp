@@ -29,6 +29,9 @@ typedef source_range_t (*src_load_cb)(const char* dir, const char* file, void* d
 
 void src_init(const char* src_path, src_load_cb load_cb, void* load_data);
 void src_deinit();
+
+void src_add_header_path(const char* path);
+
 file_pos_t src_file_position(const char* pos);
 const char* src_file_path(const char* pos);
 const char* src_file_pos_str(file_pos_t);

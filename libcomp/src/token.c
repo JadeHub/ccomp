@@ -402,3 +402,33 @@ bool tok_range_empty(token_range_t* range)
 {
 	return range->start == range->end;
 }
+
+void tok_range_add(token_range_t* range, token_t* tok)
+{
+	if (tok->flags & TF_START_LINE)
+		tok->flags = TF_LEADING_SPACE; //hmm?
+
+	if (range->start == NULL)
+	{
+		tok->next = tok->prev = NULL;
+		range->start = range->end = tok;
+	}
+	else
+	{
+		range->end->next = tok;
+		tok->prev = range->end;
+		range->end = tok;
+		tok->next = NULL;
+	}
+}
+
+void tok_range_append(token_range_t* range, token_range_t* add)
+{
+	token_t* tok = add->start;
+	while (tok != add->end)
+	{
+		token_t* next = tok->next;
+		tok_range_add(range, tok);
+		tok = next;
+	}
+}

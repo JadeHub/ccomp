@@ -36,6 +36,13 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 					result.output_path = strdup(argv[idx]);
 					break;
 				}
+				else if (*pos == 'c')
+				{
+					if (++idx == argc)
+						goto _err_ret;
+					result.config_path = strdup(argv[idx]);
+					break;
+				}
 				pos++;
 			}
 		}

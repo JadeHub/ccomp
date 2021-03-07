@@ -24,7 +24,17 @@ Map of path to source_file_t* for each open file
 We can find the file associated with a char pointer by looking at the source ranges of each file
 */
 static hash_table_t* _files;
+
+/*
+Include path information
+*/
 static const char* _src_dir = NULL;
+#define MAX_INCLUDE_DIRS 20
+static const char* _include_dirs[MAX_INCLUDE_DIRS];
+
+/*
+Callback to load a file
+*/
 static src_load_cb _load_cb;
 static void* _load_data;
 
@@ -202,9 +212,27 @@ source_range_t* src_load_header(const char* fn, include_kind kind)
 {
 	kind;
 	assert(_src_dir);
+
+	source_file_t* file = NULL;
+	if (kind == include_local)
+	{
+		file = _load_file(_src_dir, fn); //local dir first if local include
+		if (file)
+			return &file->range;
+	}
+
+	//search list
+	int i;
+	for (i = 0; i < MAX_INCLUDE_DIRS && _include_dirs[i]; i++)
+	{
+		file = _load_file(_include_dirs[i], fn);
+		if (file)
+			return &file->range;
+	}
 	
-	source_file_t* file = _load_file(_src_dir, fn);
-	//search different paths...
+	if (kind != include_local)
+		file = _load_file(_src_dir, fn); //local dir last if system include
+
 	return file ? &file->range : NULL;
 }
 
@@ -216,8 +244,25 @@ source_range_t* src_load_file(const char* fn)
 	return file ? &file->range : NULL;
 }
 
+void src_add_header_path(const char* path)
+{
+	int i;
+	for (i = 0; i < MAX_INCLUDE_DIRS; i++)
+	{
+		if (!_include_dirs[i])
+		{
+			_include_dirs[i] = path_resolve(path);
+			if (!_include_dirs[i])
+				fprintf(stderr, "failed to resolve include path '%s'", path);
+			return;
+		}
+	}
+	fputs("too many include paths", stderr);
+}
+
 void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
 {
+	memset(_include_dirs, 0, MAX_INCLUDE_DIRS * sizeof(const char*));
 	_src_dir = path_resolve(src_path);
 	_files = sht_create(32);
 	_load_cb = load_cb;

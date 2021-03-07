@@ -300,3 +300,31 @@ int i;
 		tok_semi_colon,
 		tok_eof });
 }
+
+TEST_F(PreProcCondTest, condition_included)
+{
+	const std::string inc = R"(
+#pragma once
+
+#if defined(__cplusplus)
+#define __LIBC_BEGIN_H  extern "C" {
+#define __LIBC_END_H    };
+#else
+#define __LIBC_BEGIN_H
+#define __LIBC_END_H
+#endif
+)";
+
+	std::string src = R"(
+#include "inc.h"
+)";
+
+	ExpectFileLoad("inc.h", inc);
+
+	PreProc(src.c_str());
+	PrintTokens();
+	ExpectTokTypes({ tok_int,
+		tok_identifier,
+		tok_semi_colon,
+		tok_eof });
+}

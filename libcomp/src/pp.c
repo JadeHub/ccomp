@@ -106,12 +106,36 @@ static token_t* _pop_next()
 	return tok;
 }
 
+static token_t* _create_end_marker(token_t* param_end)
+{
+	token_t* end = tok_create();
+	end->kind = tok_pp_end_marker;
+	if (param_end)
+		param_end->next = end;
+	end->prev = param_end;
+
+	return end;
+}
+
 static token_t* _pop_to_eol(token_t* tok)
 {
-	while (!(_peek_next()->flags & TF_START_LINE))
+	while ((_peek_next()->flags & TF_START_LINE) != TF_START_LINE)
 		tok = _pop_next();
 
 	return tok;
+}
+
+static token_range_t _extract_till_eol(token_t* start)
+{
+	token_range_t range = { start, start };
+	
+	while ((_peek_next()->flags & TF_START_LINE) != TF_START_LINE)
+	{
+		token_t* tok = _pop_next();
+		tok_range_add(&range, tok);
+	}
+	range.end = _create_end_marker(range.end);
+	return range;
 }
 
 static input_range_t* _begin_token_range_expansion(token_range_t* range)
@@ -300,17 +324,6 @@ static inline void _emit_token(token_t* tok)
 		tok->prev = range->end;
 		range->end = tok;
 	}
-}
-
-static token_t* _create_end_marker(token_t* param_end)
-{
-	token_t* end = tok_create();
-	end->kind = tok_pp_end_marker;
-	if(param_end)
-		param_end->next = end;
-	end->prev = param_end;
-
-	return end;
 }
 
 static inline void* _diag_expected(token_t* tok, tok_kind kind)
@@ -641,8 +654,9 @@ static str_buff_t* _make_system_inc_path(token_range_t* range)
 static bool _process_include(token_t* tok)
 {
 	tok = _pop_next();
-	token_range_t* range = tok_range_create(tok, _pop_to_eol(tok));
-	range->end = _create_end_marker(range->end);
+	token_range_t* range = tok_range_create(tok, tok);
+	*range = _extract_till_eol(tok);
+	//range->end = _create_end_marker(range->end);
 
 	if (tok->kind == tok_identifier)
 	{
@@ -719,9 +733,11 @@ returns the token after the expression
 */
 static bool _eval_pp_expression(token_t* start, bool* result)
 {
-	token_range_t range = { start, _pop_to_eol(start) };
-	range.end = _create_end_marker(range.end);
+	/*token_range_t range = { start, _pop_to_eol(start) };
+	range.end = _create_end_marker(range.end);*/
 	token_range_t expanded = { NULL, NULL };
+	
+	token_range_t range = _extract_till_eol(start);
 
 	_context->define_id_supression_state = dss_in_cond;
 
@@ -927,36 +943,6 @@ static token_range_t* _lookup_fn_param(const char* name)
 	return NULL;
 }
 
-static void _token_range_add(token_range_t* range, token_t* tok)
-{
-	if (tok->flags & TF_START_LINE)
-		tok->flags = TF_LEADING_SPACE;
-
-	if (range->start == NULL)
-	{
-		tok->next = tok->prev = NULL;
-		range->start = range->end = tok;
-	}
-	else
-	{
-		range->end->next = tok;
-		tok->prev = range->end;
-		range->end = tok;
-		tok->next = NULL;
-	}
-}
-
-static void _token_range_append(token_range_t* range, token_range_t* add)
-{
-	token_t* tok = add->start;
-	while (tok != add->end)
-	{
-		token_t* next = tok->next;
-		_token_range_add(range, tok);
-		tok = next;
-	}
-}
-
 /*
 Returns a sht of param name -> token_range_t*
 */
@@ -998,13 +984,13 @@ static hash_table_t* _process_fn_call_params(macro_t* macro)
 				if (p_range)
 				{
 					p_range = _expand_param_range(p_range);
-					_token_range_append(range, p_range);
+					tok_range_append(range, p_range);
 					tok = _pop_next();
 					continue;
 				}
 			}
 
-			_token_range_add(range, tok);
+			tok_range_add(range, tok);
 			tok = _pop_next();
 		}
 

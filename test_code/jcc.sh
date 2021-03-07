@@ -1,1 +1,1 @@
-../build/compiler/jcc $1 $2
+../build/compiler/jcc $@

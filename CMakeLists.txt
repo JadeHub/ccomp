@@ -16,6 +16,9 @@ ENDFOREACH (MODE)
 
 add_definitions("/D_CRT_SECURE_NO_WARNINGS /W4 /wd6387 /wd4996 /wd6011")
 
+ELSE (WIN32)
+
+add_definitions("-g")
 
 ENDIF (WIN32)
 

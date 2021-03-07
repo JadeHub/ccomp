@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <assert.h>
 #include <libcomp/include/token.h>
 #include <libcomp/include/lexer.h>
@@ -16,7 +17,6 @@
 void asm_print(const char* line, bool lf, void* data)
 {
     data;
-  //  if(line[0] != '\n' && line[0] != '#')
     printf("%s", line);
     if (lf)
         printf("\n");
@@ -59,9 +59,46 @@ source_range_t _file_loader(const char* dir, const char* file, void* data)
     return result;
 }
 
+char* trim(char* str)
+{
+    if (!str) return str;
+
+    while (isspace(*str))
+        str++;
+
+    while (isspace(str[strlen(str) - 1]))
+        str[strlen(str) - 1] = '\0';
+
+    return str;
+}
+
+bool load_config(const char* path)
+{
+    FILE* f = fopen(path, "r");
+    if (!f)
+        return false;
+
+    char line[1024];
+
+    while(fgets(line, sizeof(line), f))
+    {
+        char* eq = strchr(line, '=');
+        if (!eq)
+            return false;
+        *eq = '\0';
+        eq++;
+        eq = trim(eq);
+        if (strcmp(line, "inc_path") == 0 && strlen(eq))
+            src_add_header_path(eq);
+    }
+
+    fclose(f);
+
+    return true;
+}
+
 int main(int argc, char* argv[])
 {
-    fn1();
     diag_set_handler(&diag_err_print, NULL);
 
     comp_opt_t options = parse_command_line(argc, argv);
@@ -87,6 +124,10 @@ int main(int argc, char* argv[])
         return -1;
 
     src_init(src_dir, &_file_loader, NULL);
+
+    if (options.config_path && !load_config(options.config_path))
+        return -1;
+
     lex_init();
 
     source_range_t* sr = src_load_file(src_file);

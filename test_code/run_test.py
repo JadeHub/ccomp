@@ -34,7 +34,7 @@ def run_test(path):
     gcc_result = run_command('~/temp/test.app')
        
     #compile
-    if run_command('../build/compiler/jcc ' + path + ' > temp.s') != 0:
+    if run_command('../build/compiler/jcc -c comp.cfg ' + path + ' > temp.s') != 0:
         print(f'{bcolors.FAIL}JCC FAIL')
         return False
     #link

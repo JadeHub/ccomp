@@ -58,6 +58,25 @@ TEST(CmdLineParser, test3)
 	EXPECT_THAT(opt.output_path, StrEq("output.asm"));
 }
 
+TEST(CmdLineParser, test4)
+{
+	char* argv[] =
+	{
+		"testapp",
+		"-Evo",
+		"output.asm",
+		"-c",
+		"config.cfg"
+	};
+
+	comp_opt_t opt = parse_command_line(5, argv);
+	EXPECT_EQ(true, opt.valid);
+	EXPECT_EQ(true, opt.display_version);
+	EXPECT_EQ(true, opt.pre_proc_only);
+	EXPECT_THAT(opt.output_path, StrEq("output.asm"));
+	EXPECT_THAT(opt.config_path, StrEq("config.cfg"));
+}
+
 TEST(CmdLineParser, test_invalid1)
 {
 	char* argv[] =

@@ -12,6 +12,7 @@ typedef struct
 
 	char* output_path;
 	char* input_path;
+	char* config_path;
 
 }comp_opt_t;
 
