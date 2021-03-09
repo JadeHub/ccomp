@@ -28,7 +28,6 @@ static hash_table_t* _files;
 /*
 Include path information
 */
-static const char* _src_dir = NULL;
 #define MAX_INCLUDE_DIRS 20
 static const char* _include_dirs[MAX_INCLUDE_DIRS];
 
@@ -42,11 +41,11 @@ static int _is_line_ending(const char* ptr)
 {
 	if (*ptr == '\r')
 	{
-		return 1;
+		return *(++ptr) == '\n' ? 2 : 1;
 	}
 	else if (*ptr == '\n')
 	{
-		return *(ptr++) == '\r' ? 2 : 1;
+		return 1;
 	}
 	return 0;
 }
@@ -54,7 +53,7 @@ static int _is_line_ending(const char* ptr)
 static uint32_t _count_lines(source_range_t* range)
 {
 	const char* ptr = range->ptr;
-	uint32_t result = 0;
+	uint32_t result = 1;
 	while (ptr < range->end)
 	{
 		int adv = _is_line_ending(ptr);
@@ -79,7 +78,8 @@ static void _init_line_data(source_file_t* f)
 
 	//store pointers to the start of each line
 	const char* ptr = f->range.ptr;
-	int line = 0;
+	int line = 1;
+	f->lines[0] = ptr;
 	while (ptr < f->range.end)
 	{
 		int adv = _is_line_ending(ptr);
@@ -126,7 +126,7 @@ file_pos_t src_file_position(const char* pos)
 	uint32_t line = 0;
 	for (line = 0; line < file->line_count; line++)
 	{
-		if (pos < file->lines[line])
+		if (pos <= file->lines[line])
 		{
 			if (line == 0)
 			{
@@ -141,6 +141,13 @@ file_pos_t src_file_position(const char* pos)
 			return result;
 		}
 	}
+
+	if (pos <= file->range.end)
+	{
+		result.line = file->line_count;
+		result.col = (uint16_t)(pos - file->lines[result.line-1] + 1);
+	}
+
 	return result;
 }
 
@@ -208,15 +215,14 @@ source_file_t* _load_file(const char* dir, const char* fn)
 	return file;
 }
 
-source_range_t* src_load_header(const char* fn, include_kind kind)
+source_range_t* src_load_header(const char* cur_dir, const char* fn, include_kind kind)
 {
 	kind;
-	assert(_src_dir);
 
 	source_file_t* file = NULL;
 	if (kind == include_local)
 	{
-		file = _load_file(_src_dir, fn); //local dir first if local include
+		file = _load_file(cur_dir, fn); //local dir first if local include
 		if (file)
 			return &file->range;
 	}
@@ -231,16 +237,14 @@ source_range_t* src_load_header(const char* fn, include_kind kind)
 	}
 	
 	if (kind != include_local)
-		file = _load_file(_src_dir, fn); //local dir last if system include
+		file = _load_file(cur_dir, fn); //local dir last if system include
 
 	return file ? &file->range : NULL;
 }
 
-source_range_t* src_load_file(const char* fn)
+source_range_t* src_load_file(const char* path, const char* file_name)
 {
-	assert(_src_dir);
-	
-	source_file_t* file = _load_file(_src_dir, fn);
+	source_file_t* file = _load_file(path, file_name);
 	return file ? &file->range : NULL;
 }
 
@@ -260,10 +264,9 @@ void src_add_header_path(const char* path)
 	fputs("too many include paths", stderr);
 }
 
-void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
+void src_init(src_load_cb load_cb, void* load_data)
 {
-	memset(_include_dirs, 0, MAX_INCLUDE_DIRS * sizeof(const char*));
-	_src_dir = path_resolve(src_path);
+	memset((void*)_include_dirs, 0, MAX_INCLUDE_DIRS * sizeof(const char*));
 	_files = sht_create(32);
 	_load_cb = load_cb;
 	_load_data = load_data;
@@ -271,7 +274,6 @@ void src_init(const char* src_path, src_load_cb load_cb, void* load_data)
 
 void src_deinit()
 {
-	free((void*)_src_dir);
 	sht_iterator_t it = sht_begin(_files);
 	while (!sht_end(_files, &it))
 	{

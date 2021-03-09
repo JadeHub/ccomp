@@ -28,7 +28,7 @@ const char* path_dirname(const char* path)
 
 const char* path_filename(const char* path)
 {
-	char* fn = basename(path);
+	const char* fn = basename((char*)path);
 	char* buff = (char*)malloc(strlen(fn) + 1);
 	strcpy(buff, fn);
 	return buff;

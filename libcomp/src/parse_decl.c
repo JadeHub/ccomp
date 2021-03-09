@@ -53,13 +53,16 @@ ast_func_params_t* parse_function_parameters()
 	params->ellipse_param = false;
 	while (!current_is(tok_eof))
 	{
+		if (current_is(tok_ellipse) || current_is(tok_r_paren))
+			break;
+
 		uint32_t type_flags = 0;
 		ast_type_spec_t* type_spec = try_parse_type_spec(&type_flags);
 		if (!type_spec)
-			break;
+			return parse_err(ERR_UNKNOWN_TYPE, "Expected parameter type, found %s", tok_kind_spelling(current()->kind));
 		ast_declaration_t* decl = parse_declarator(type_spec, type_flags);
 		if (!decl)
-			break;
+			return parse_err(ERR_UNKNOWN_TYPE, "Error parsing declaration");
 
 		ast_func_param_decl_t* param = (ast_func_param_decl_t*)malloc(sizeof(ast_func_param_decl_t));
 		memset(param, 0, sizeof(ast_func_param_decl_t));

@@ -5,6 +5,8 @@
 #include "lexer.h"
 #include "ast.h"
 
+#include <libj/include/platform.h>
+
 #include <libj/include/str_buff.h>
 
 #include <stdlib.h>
@@ -516,7 +518,9 @@ static bool _process_define(token_t* def)
 	}
 	else
 	{
-		macro->tokens.start = macro->tokens.end = _pop_next();
+		macro->tokens = _extract_till_eol(_pop_next());
+
+		/*macro->tokens.start = macro->tokens.end = _pop_next();
 		tok = _peek_next();
 		while (!(tok->flags & TF_START_LINE))
 		{
@@ -524,9 +528,10 @@ static bool _process_define(token_t* def)
 			tok = _peek_next();
 		}
 		macro->tokens.end = _create_end_marker(macro->tokens.end);
+		*/
 	}
 
-	if (macro->tokens.start != macro->tokens.end)
+	if (!tok_range_empty(&macro->tokens))
 	{
 		macro->tokens.start->flags = 0;
 
@@ -561,7 +566,9 @@ static bool _process_define(token_t* def)
 			free(macro);
 			return true;
 		}
-		diag_err(tok, ERR_SYNTAX, "redefinition of macro '%s'", macro->name);
+		diag_err(tok, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s:%s", macro->name,
+			src_file_path(existing->tokens.start->loc),
+			diag_pos_str(existing->tokens.start));
 		free(macro);
 		return false;
 	}
@@ -656,7 +663,6 @@ static bool _process_include(token_t* tok)
 	tok = _pop_next();
 	token_range_t* range = tok_range_create(tok, tok);
 	*range = _extract_till_eol(tok);
-	//range->end = _create_end_marker(range->end);
 
 	if (tok->kind == tok_identifier)
 	{
@@ -683,11 +689,11 @@ static bool _process_include(token_t* tok)
 		inc_kind = include_local;
 
 		sb_append(path_buff, range->start->data.str);
-		tok = range->start->next;
-		if(tok != range->end)
+		if(range->start->next != range->end)
 		{
 			diag_err(tok, ERR_SYNTAX,
 				"expected newline after #include directive");
+			sb_destroy(path_buff);
 			return false;
 		}
 	}
@@ -701,28 +707,33 @@ static bool _process_include(token_t* tok)
 	if(path_buff->len == 0)
 	{
 		diag_err(tok, ERR_SYNTAX, "expected '<path>' or '\"path\"' after #include directive");
+		sb_destroy(path_buff);
 		return false;
 	}
 
-	source_range_t* sr = src_load_header(sb_str(path_buff), inc_kind);
+	const char* cur_path = path_dirname(_context->input_stack->path);
+	source_range_t* sr = src_load_header(cur_path, sb_str(path_buff), inc_kind);
+	free(cur_path);
 	if (!src_is_valid_range(sr))
 	{
 		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", sb_str(path_buff));
+		sb_destroy(path_buff);
 		return false;
 	}
 
 	sb_destroy(path_buff);
 
+	//check if previously #pragma once'd
 	const char* inc_path = src_file_path(sr->ptr);
 	assert(inc_path);
-
 	if (sht_lookup(_context->praga_once_paths, inc_path))
 		return true;
 
+	//lex the file
 	token_range_t toks = lex_source(sr);
 	if (!toks.start)
 		return false;
-	
+
 	return _process_token_range(&toks);
 }
 
@@ -733,10 +744,7 @@ returns the token after the expression
 */
 static bool _eval_pp_expression(token_t* start, bool* result)
 {
-	/*token_range_t range = { start, _pop_to_eol(start) };
-	range.end = _create_end_marker(range.end);*/
 	token_range_t expanded = { NULL, NULL };
-	
 	token_range_t range = _extract_till_eol(start);
 
 	_context->define_id_supression_state = dss_in_cond;
@@ -879,7 +887,6 @@ static token_t* _stringize_range(token_range_t* range)
 			break;
 		}
 		default:
-			//sb_append(sb, tok->data.str);
 			tok_spelling_append(tok->loc, tok->len, sb);
 			break;
 		}
@@ -1053,6 +1060,9 @@ static bool _process_arg_substitution(token_t* identifier, token_range_t* param)
 
 static bool _process_replacement_list(token_t* replaced, macro_t* macro, hash_table_t* params)
 {
+	if (tok_range_empty(&macro->tokens))
+		return true;
+
 	input_range_t* ir = _begin_macro_expansion(macro, params);
 
 	_set_next_tok_flags(replaced->flags);
@@ -1282,10 +1292,8 @@ static bool _process_token(token_t* tok)
 	return true;
 }
 
-token_range_t pre_proc_file(token_range_t* range)
+token_range_t pre_proc_file(const char* src_dir, token_range_t* range)
 {
-	_context->input = *range;
-
 	_begin_token_range_expansion(range);
 
 	token_t* tok = _pop_next();

@@ -40,14 +40,15 @@ source_range_t _file_loader(const char* dir, const char* file, void* data)
  //   printf("opening %s dir %s file %s\n", path, dir, file);
 
     source_range_t result = {NULL, NULL};
-    FILE* f = fopen(path, "r");
+    FILE* f = fopen(path, "rb");
     if (f)
     {
         fseek(f, 0, SEEK_END);
         unsigned long len = (unsigned long)ftell(f);
         fseek(f, 0, SEEK_SET);
         char* buff = (char*)malloc(len + 1);
-        if (fread(buff, 1, len, f) == len)
+        size_t b = fread(buff, 1, len, f);
+        if (b == len)
         {
             buff[len] = '\0';
             result.ptr = buff;
@@ -123,16 +124,16 @@ int main(int argc, char* argv[])
     if (!src_file || !src_dir)
         return -1;
 
-    src_init(src_dir, &_file_loader, NULL);
+    src_init(&_file_loader, NULL);
 
     if (options.config_path && !load_config(options.config_path))
         return -1;
 
     lex_init();
 
-    source_range_t* sr = src_load_file(src_file);
+    source_range_t* sr = src_load_file(src_dir, src_file);
     free((void*)src_file);
-    free((void*)src_dir);
+    
     if (!sr)
         return -1;
     
@@ -141,7 +142,7 @@ int main(int argc, char* argv[])
         return -1;
 
     pre_proc_init();
-    token_range_t preproced = pre_proc_file(&range);
+    token_range_t preproced = pre_proc_file(src_dir, &range);
     pre_proc_deinit();
 
     if (options.pre_proc_only)

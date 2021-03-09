@@ -317,6 +317,8 @@ TEST_F(PreProcCondTest, condition_included)
 
 	std::string src = R"(
 #include "inc.h"
+
+__LIBC_BEGIN_H
 )";
 
 	ExpectFileLoad("inc.h", inc);

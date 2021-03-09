@@ -173,7 +173,7 @@ public:
 
 	LexTest()
 	{
-		src_init("./", &load_file, this);
+		src_init(&load_file, this);
 		lex_init();
 		pre_proc_init();
 	}
@@ -265,7 +265,7 @@ public:
 	{
 		Lex(src, path);
 		if (!tok_range_empty(&tokens))
-			tokens = pre_proc_file(&tokens);
+			tokens = pre_proc_file(".", &tokens);
 	}
 
 	MOCK_METHOD1(on_load_file, source_range_t(const std::string&));
