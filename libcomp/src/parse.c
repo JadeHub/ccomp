@@ -112,6 +112,11 @@ Note <declaration_specifiers> is incorrect for cast and size of - need to handle
 token_t* _cur_tok = NULL;
 static bool _parse_err = false;
 
+bool parse_seen_err()
+{
+	return _parse_err;
+}
+
 void* parse_err(int err, const char* format, ...)
 {
 	char buff[512];
@@ -332,7 +337,7 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 {
 	token_t* start = current();
 	ast_expression_t* expr = sub_parse();
-	if (_parse_err || !expr)
+	if (parse_seen_err() || !expr)
 	{
 		ast_destroy_expression(expr);
 		return NULL;
@@ -359,7 +364,7 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 		expr->data.binary_op.lhs = cur_expr;
 		expr->data.binary_op.rhs = rhs_expr;
 	}
-	if (_parse_err || !expr)
+	if (parse_seen_err() || !expr)
 	{
 		ast_destroy_expression(expr);
 		return NULL;
@@ -374,7 +379,7 @@ ast_expression_t* parse_binary_expression(tok_kind* op_set, bin_parse_fn sub_par
 ast_expression_t* parse_identifier()
 {
 	expect_cur(tok_identifier);
-	if (_parse_err)
+	if (parse_seen_err())
 		return NULL;
 	//<factor> ::= <id>
 	ast_expression_t* expr = parse_alloc_expr();
@@ -794,7 +799,7 @@ ast_expression_t* parse_conditional_expression()
 		next_tok();
 		expr->data.condition.false_branch = parse_conditional_expression();
 	}
-	if (_parse_err || !expr)
+	if (parse_seen_err() || !expr)
 	{
 		ast_destroy_expression(expr);
 		return NULL;
@@ -841,7 +846,7 @@ ast_expression_t* parse_assignment_expression()
 		_cur_tok = start;
 		expr = parse_conditional_expression();
 	}
-	if (_parse_err || !expr)
+	if (parse_seen_err() || !expr)
 	{
 		ast_destroy_expression(expr);
 		return NULL;
@@ -894,7 +899,7 @@ ast_block_item_t* parse_block_item()
 		result->kind = blk_smnt;
 		result->data.smnt = parse_statement();
 	}
-	if (_parse_err)
+	if (parse_seen_err())
 		return NULL;
 	result->tokens.end = current();
 	return result;
@@ -940,7 +945,7 @@ ast_block_item_t* parse_block_list()
 	{
 		ast_block_item_t* blk = parse_block_item();
 
-		if (_parse_err)
+		if (parse_seen_err())
 			return NULL; //todo destroy
 
 		if (last)
@@ -972,9 +977,9 @@ ast_trans_unit_t* parse_translation_unit()
 	while (!current_is(tok_eof))
 	{
 		ast_decl_list_t decls = try_parse_decl_list();
-		if(!decls.first && !_parse_err)
+		if(!decls.first && !parse_seen_err())
 			parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
-		if (_parse_err)
+		if (parse_seen_err())
 			goto parse_failure;
 
 		if (current_is(tok_semi_colon))
@@ -987,7 +992,7 @@ ast_trans_unit_t* parse_translation_unit()
 			{	
 				//function definition must be the only decl
 				decls.first->data.func.blocks = parse_block_list();
-				if (_parse_err)
+				if (parse_seen_err())
 					goto parse_failure;
 				decls.first->tokens.end = current();
 			}

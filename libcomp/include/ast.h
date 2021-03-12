@@ -185,9 +185,10 @@ typedef enum
 typedef struct ast_struct_member
 {
 	token_range_t tokens;
-	struct ast_type_ref* type_ref;
-	char name[MAX_LITERAL_NAME]; //name is optional
-	uint32_t bit_size; //eg, the 1 in 'int p : 1'
+	
+	struct ast_declaration* decl;
+
+	uint32_t bit_size; //eg, the 1 in 'int p : 1' - todo
 
 	uint32_t offset; //alligned position within struct
 
@@ -319,10 +320,6 @@ typedef struct ast_declaration
 
 	//variable or function return type
 	ast_type_ref_t* type_ref;
-
-	//optional array size expression [...]
-	//ast_expression_t* array_sz;
-
 
 	//[10][20]...
 	ast_expression_list_t* array_dimentions;

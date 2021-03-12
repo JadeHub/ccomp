@@ -65,7 +65,7 @@ static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
 	ast_struct_member_t* member = user_type_spec->data.struct_members;
 	while (member)
 	{
-		sema_resolve_type_ref(member->type_ref);
+		sema_resolve_type_ref(member->decl->type_ref);
 		member = member->next;
 	}
 }
@@ -125,7 +125,7 @@ static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 	ast_struct_member_t* member = typeref->data.user_type_spec->data.struct_members;
 	while (member)
 	{
-		result += member->type_ref->spec->size;
+		result += member->decl->type_ref->spec->size;
 		member = member->next;
 	}
 	return result;

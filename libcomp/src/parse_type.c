@@ -188,44 +188,6 @@ static bool _is_type_spec(uint32_t flags, uint32_t type_flags)
 }
 
 /*
-<struct_decl> :: = <declaration_specifiers>[<id>][":" <int> ] ";"
-*/
-ast_struct_member_t* parse_struct_member()
-{
-	ast_struct_member_t* result = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
-	memset(result, 0, sizeof(ast_struct_member_t));
-	result->tokens.start = current();
-
-	ast_type_ref_t* type = try_parse_type_ref();
-	if (!type)
-	{
-		parse_err(ERR_SYNTAX, "expected declaration specification");
-		return NULL;
-	}
-
-	result->type_ref = type;
-
-	if (current_is(tok_identifier))
-	{
-		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
-		next_tok();
-	}
-
-	if (current_is(tok_colon))
-	{
-		next_tok();
-		expect_cur(tok_num_literal);
-		result->bit_size = int_val_as_uint32(&current()->data.int_val);
-		next_tok();
-	}
-
-	expect_cur(tok_semi_colon);
-	next_tok();
-	result->tokens.end = current();
-	return result;
-}
-
-/*
 <enum_specifier> :: = "enum" [<id>] ["{" { <id> [= <const_expr>] } "}"]
 */
 ast_user_type_spec_t* parse_enum_spec()
@@ -327,13 +289,48 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 		uint32_t offset = 0;
 		while (!current_is(tok_r_brace))
 		{
-			ast_struct_member_t* member = parse_struct_member();
+			/*
+			Parse a list of declarations and turn each into an ast_struct_member_t
+			
+			eg...
+			struct{
+				...
+				int a, b, *c;
+				...
+			};
+			*/
+
+			ast_decl_list_t decls = try_parse_decl_list();
+			if (!decls.first && !parse_seen_err())
+				parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
+
+			expect_cur(tok_semi_colon);
+			next_tok();
+
+			ast_declaration_t* decl = decls.first;
+
+			while (decl)
+			{
+				ast_struct_member_t* member = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
+				memset(member, 0, sizeof(ast_struct_member_t));
+				member->tokens = decl->tokens;
+				member->decl = decl;
+				member->offset = offset;
+
+				member->next = result->data.struct_members;
+				result->data.struct_members = member;
+				offset += member->decl->type_ref->spec->size;
+
+				decl = decl->next;
+			}
+
+			/*ast_struct_member_t* member = parse_struct_member();
 			if (!member)
 				return NULL;
 			member->offset = offset;
 			member->next = result->data.struct_members;
 			result->data.struct_members = member;
-			offset += member->type_ref->spec->size;
+			offset += member->type_ref->spec->size;*/
 		}
 		next_tok();
 	}

@@ -99,7 +99,7 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 			ast_type_name(user_type));
 	}
 
-	result.result_type = member->type_ref->spec;
+	result.result_type = member->decl->type_ref->spec;
 	return result;
 }
 

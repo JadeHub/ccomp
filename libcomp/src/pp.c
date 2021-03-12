@@ -519,16 +519,6 @@ static bool _process_define(token_t* def)
 	else
 	{
 		macro->tokens = _extract_till_eol(_pop_next());
-
-		/*macro->tokens.start = macro->tokens.end = _pop_next();
-		tok = _peek_next();
-		while (!(tok->flags & TF_START_LINE))
-		{
-			macro->tokens.end = _pop_next();
-			tok = _peek_next();
-		}
-		macro->tokens.end = _create_end_marker(macro->tokens.end);
-		*/
 	}
 
 	if (!tok_range_empty(&macro->tokens))

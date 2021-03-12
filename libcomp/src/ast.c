@@ -80,7 +80,7 @@ void ast_destroy_expression(ast_expression_t* expr)
 
 void ast_destroy_struct_member(ast_struct_member_t* member)
 {
-	ast_destroy_type_ref(member->type_ref);
+	ast_destroy_declaration(member->decl);
 	free(member);
 }
 
@@ -327,7 +327,7 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec
 	ast_struct_member_t* member = user_type_spec->data.struct_members;
 	while (member)
 	{
-		if (strcmp(member->name, name) == 0)
+		if (strcmp(member->decl->name, name) == 0)
 		{
 			//return member->offset;
 			return member;
@@ -341,7 +341,7 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member)
 {
 	if (member->bit_size > 0)
 		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
-	return member->type_ref->spec->size;
+	return member->decl->type_ref->spec->size;
 }
 
 uint32_t ast_user_type_size(ast_user_type_spec_t* spec)

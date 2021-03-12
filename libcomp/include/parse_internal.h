@@ -34,6 +34,7 @@ void parse_register_alias_name(const char* name); //typedef name
 //helper functions
 bool expect_cur(tok_kind k);
 void* parse_err(int err, const char* format, ...);
+bool parse_seen_err();
 
 extern token_t* _cur_tok;
 

@@ -416,7 +416,7 @@ void gen_member_access(ast_expression_t* expr)
 		expr->data.binary_op.rhs->data.identifier.name);
 	assert(member);
 
-	gen_annotate_start("member access '%s'", member->name);
+	gen_annotate_start("member access '%s'", member->decl->name);
 
 	gen_annotate("lhs");
 	gen_expression(expr->data.binary_op.lhs);
@@ -445,7 +445,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 		expr->data.binary_op.rhs->data.identifier.name);
 	assert(member);
 
-	gen_annotate_start("pointer member access '%s'", member->name);
+	gen_annotate_start("pointer member access '%s'", member->decl->name);
 
 	gen_annotate("lhs");
 	gen_expression(expr->data.binary_op.lhs);
