@@ -124,9 +124,9 @@ file_pos_t src_file_position(const char* pos)
 	result.col = 0;
 	result.line = 0;
 	uint32_t line = 0;
-	for (line = 0; line < file->line_count; line++)
+	for (line = 1; line < file->line_count; line++)
 	{
-		if (pos <= file->lines[line])
+		if (pos < file->lines[line])
 		{
 			if (line == 0)
 			{
@@ -135,7 +135,7 @@ file_pos_t src_file_position(const char* pos)
 			}
 			else
 			{
-				result.line = line + 1;
+				result.line = line;// +1;
 				result.col = (uint16_t)(pos - file->lines[line-1] + 1);
 			}
 			return result;

@@ -31,7 +31,24 @@ void ast_destroy_expression_data(ast_expression_t* expr)
 		ast_destroy_expression(expr->data.condition.false_branch);
 		break;
 	case expr_func_call:
-		//ast_destroy_expression(expr->data.func_call.);
+	{
+		ast_destroy_expression(expr->data.func_call.target);
+		ast_func_call_param_t* param = expr->data.func_call.first_param;
+		while (param)
+		{
+			ast_func_call_param_t* next = param->next;
+			ast_destroy_expression(param->expr);
+			free(param);
+			param = next;
+		}
+		break;
+	}
+	case expr_sizeof:
+		if (expr->data.sizeof_call.kind == sizeof_expr)
+			ast_destroy_expression(expr->data.sizeof_call.data.expr);
+		break;
+	case expr_cast:
+		ast_destroy_expression(expr->data.cast.expr);
 		break;
 	}
 

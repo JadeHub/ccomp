@@ -12,6 +12,7 @@ typedef enum
 
 typedef struct
 {
+	token_t* define;	//#define which introduced this macro
 	macro_kind kind;
 	token_range_t tokens;
 	token_t* fn_params;
@@ -19,7 +20,6 @@ typedef struct
 
 	/*Pointer hash set of macro_t*. macro is hidden from these toks*/
 	hash_table_t* hidden_toks;
-
 }macro_t;
 
 typedef struct expansion_context

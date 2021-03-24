@@ -325,8 +325,5 @@ __LIBC_BEGIN_H
 
 	PreProc(src.c_str());
 	PrintTokens();
-	ExpectTokTypes({ tok_int,
-		tok_identifier,
-		tok_semi_colon,
-		tok_eof });
+	ExpectTokTypes({ tok_eof });
 }

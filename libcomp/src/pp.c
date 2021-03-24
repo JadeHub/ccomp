@@ -474,7 +474,6 @@ static bool _process_fn_params(macro_t* macro)
 
 static bool _process_define(token_t* def)
 {
-	def;
 	token_t* identifier = _pop_next();
 
 	//must be a token
@@ -483,6 +482,7 @@ static bool _process_define(token_t* def)
 
 	macro_t* macro = (macro_t*)malloc(sizeof(macro_t));
 	memset(macro, 0, sizeof(macro_t));
+	macro->define = def;
 	macro->kind = macro_obj;
 	macro->hidden_toks = phs_create(64);
 	macro->name = identifier->data.str;
@@ -505,7 +505,7 @@ static bool _process_define(token_t* def)
 		//There shall be white-space between the identifier and the replacement list in the definition of an object-like macro.
 		if (!_leadingspace_or_startline(tok))
 		{
-			diag_err(tok, ERR_SYNTAX, "expected white space after macro name '%s'", macro->name);
+			diag_err(def, ERR_SYNTAX, "expected white space after macro name '%s'", macro->name);
 			free(macro);
 			return false;
 		}
@@ -556,9 +556,9 @@ static bool _process_define(token_t* def)
 			free(macro);
 			return true;
 		}
-		diag_err(tok, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s:%s", macro->name,
-			src_file_path(existing->tokens.start->loc),
-			diag_pos_str(existing->tokens.start));
+		diag_err(def, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s:%s", macro->name,
+			src_file_path(existing->define->loc),
+			diag_pos_str(existing->define));
 		free(macro);
 		return false;
 	}

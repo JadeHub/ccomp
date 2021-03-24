@@ -7,7 +7,7 @@ TEST_F(ValidationTest, fn_missing_r_brace)
 
 TEST_F(ValidationTest, fn_missing_r_paren)
 {
-	ExpectSyntaxErrors("int main( {return 7;}");
+	ExpectError("int main( {return 7;}", ERR_UNKNOWN_TYPE);
 }
 
 TEST_F(ValidationTest, fn_missing_semi)
