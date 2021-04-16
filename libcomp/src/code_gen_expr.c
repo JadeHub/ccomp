@@ -222,7 +222,7 @@ void gen_identifier(ast_expression_t* expr)
 			gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
 
 		//if we are processing an lval or we are referencing a user defined type load the address into eax
-		if (lval || expr->sema.result_type->kind == type_user || ast_is_array_decl(var->var_decl))
+		if (lval || expr->sema.result_type->kind == type_user || ast_is_array_decl(var->var_decl)) 
 		{
 			if (lval)
 				gen_annotate("loading address of lval into eax");
@@ -422,8 +422,11 @@ void gen_member_access(ast_expression_t* expr)
 	gen_expression(expr->data.binary_op.lhs);
 		
 	//assume eax contains a pointer
-	gen_annotate("add offset %d", member->offset);
-	gen_asm("addl $%d, %%eax", member->offset);
+	if (member->offset > 0)
+	{
+		gen_annotate("add offset %d", member->offset);
+		gen_asm("addl $%d, %%eax", member->offset);
+	}
 
 	if (!lval && expr->sema.result_type->kind != type_user)
 	{
@@ -483,7 +486,14 @@ void gen_array_subscript(ast_expression_t* expr)
 	
 	gen_annotate("lhs");
 
+	bool pl = lval;
+	lval = false;
+
 	gen_expression(expr->data.binary_op.lhs);
+	lval = pl;
+
+	//if this 
+
 	gen_annotate("push lhs pointer");
 	gen_asm("pushl %%eax");
 
@@ -629,7 +639,7 @@ void gen_func_call(ast_expression_t* expr)
 void gen_str_literal(ast_expression_t* expr)
 {
 	gen_annotate_start("expr_str_literal '%s'", expr->data.str_literal.value);
-	gen_asm("leal .%s, %%eax", expr->data.str_literal.label);
+	gen_asm("leal .%s, %%eax", expr->data.str_literal.sema.label);
 	gen_annotate_end();
 }
 

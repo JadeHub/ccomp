@@ -139,18 +139,31 @@ TEST_F(ParstDeclTest, array_type)
 	ExpectVarPtrDecl(0, "p", int32_type_spec);
 }
 
+TEST_F(ParstDeclTest, array_struct_member)
+{
+	ParseDecl(R"(
+	struct
+	{
+		int i[10];
+	}s;)");
+	
+	AssertValid();
+	ASSERT_EQ(1, count);
+	ast_declaration_t* decl = DeclNo(0);
+}
+
 TEST_F(ParstDeclTest, int_array_multidimention)
 {
 	//int p[][1] = { { 1 } };
 	//int p[] = {1, 2, 3};
 
-	typedef struct
+	/*typedef struct
 	{
 		int i;
 		int j;
 	}t;
 
-	int i[sizeof(t)];
+	int i[sizeof(t)];*/
 
 	ParseDecl("int p[5][10];");
 }

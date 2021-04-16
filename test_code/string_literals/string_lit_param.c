@@ -5,6 +5,7 @@ int fn(char* str)
 
 int main()
 {
+	char* s = "Test";
 	return fn("Test");
 }
 

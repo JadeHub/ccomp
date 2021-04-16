@@ -1,5 +1,7 @@
 #pragma once
 
+//diagnostics
+
 #include <stdint.h>
 #include <stdarg.h>
 
@@ -8,7 +10,7 @@
 #define ERR_FUNC_DUP_BODY 3			//Multiple definitions of the same function
 #define ERR_FUNC_DIFF_PARAMS 4		//Multiple declarations with different param lists
 #define ERR_DUP_VAR 5
-//#define ERR_UNKNOWN_VAR 6
+//6
 #define ERR_UNKNOWN_IDENTIFIER 7
 #define ERR_INVALID_PARAMS 8
 #define ERR_DUP_SYMBOL 9	//either function or global var
@@ -28,9 +30,30 @@
 
 struct token;
 
-typedef void (*diag_cb)(struct token* toc, uint32_t err, const char* msg, void* data);
+/*
+callback used to indicate errors
 
+tok - token at which error occured
+err - error constant from above
+msg - error text
+data - callback context data
+*/
+typedef void (*diag_cb)(struct token* tok, uint32_t err, const char* msg, void* data);
+
+/*
+set callback and context data
+*/
 void diag_set_handler(diag_cb, void* data);
+
+/*
+generate an error
+tok - token at which error occured
+err - error constant from above
+format, ... - error text
+*/
 void* diag_err(struct token* tok, uint32_t err, const char* format, ...);
-const char* diag_pos_str(struct token*);
+
+/*
+return a description for a token suitable for inserting into a error message
+*/
 const char* diag_tok_desc(struct token*);

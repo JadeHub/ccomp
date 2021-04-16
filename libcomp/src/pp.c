@@ -558,7 +558,7 @@ static bool _process_define(token_t* def)
 		}
 		diag_err(def, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s:%s", macro->name,
 			src_file_path(existing->define->loc),
-			diag_pos_str(existing->define));
+			src_file_pos_str(src_file_position(existing->define->loc)));
 		free(macro);
 		return false;
 	}
@@ -1284,6 +1284,7 @@ static bool _process_token(token_t* tok)
 
 token_range_t pre_proc_file(const char* src_dir, token_range_t* range)
 {
+	src_dir;
 	_begin_token_range_expansion(range);
 
 	token_t* tok = _pop_next();

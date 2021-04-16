@@ -230,7 +230,6 @@ expr_result_t sema_process_int_literal(ast_expression_t* expr)
 	{
 		expr->data.int_literal.val.is_signed = ast_type_is_signed_int(type);
 		result.result_type = type;
-		expr->data.int_literal.type = type;
 	}
 	else
 	{
@@ -246,7 +245,7 @@ static expr_result_t _process_str_literal(ast_expression_t* expr)
 	memset(&result, 0, sizeof(expr_result_t));
 
 	//set the label to use in asm
-	expr->data.str_literal.label = idm_add_string_literal(sema_id_map(), expr->data.str_literal.value);
+	expr->data.str_literal.sema.label = idm_add_string_literal(sema_id_map(), expr->data.str_literal.value);
 	result.result_type = ast_make_ptr_type(int8_type_spec);
 	return result;
 }

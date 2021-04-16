@@ -29,10 +29,6 @@ void* diag_err(token_t* tok, uint32_t err, const char* format, ...)
 	return NULL;
 }
 
-const char* diag_pos_str(token_t* tok)
-{
-	return src_file_pos_str(src_file_position(tok->loc));
-}
 
 static char _desc_buff[1024];
 

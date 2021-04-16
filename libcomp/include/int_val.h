@@ -1,15 +1,10 @@
 #pragma once
 
 #include "ast_op_kinds.h"
-#include "ast_type_spec.h"
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-
-#define IV_SIGNED		1
-#define IV_OVERFLOW		2
-#define IV_ERR		2
 
 typedef struct
 {

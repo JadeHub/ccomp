@@ -2,16 +2,6 @@
 
 class FnPtrSmntValidationTest : public ValidationTest {};
 
-void foo() {}
-void foo1() {}
-
-void fff()
-{
-	void (*fn)() = foo;
-	fn();
-	void (*fn1)() = fn;
-}
-
 TEST_F(FnPtrSmntValidationTest, assign_fn)
 {
 	std::string code = R"(

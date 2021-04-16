@@ -160,7 +160,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 	if (!decl) return;
 
 	ast_destroy_type_ref(decl->type_ref);
-	ast_destroy_expression_list(decl->array_dimentions);
+	ast_destroy_expression_list(decl->array_dimensions);
 	switch (decl->kind)
 	{
 	case decl_var:
@@ -244,7 +244,7 @@ void ast_destroy_statement(ast_statement_t* smnt)
 	free(smnt);
 }
 
-void ast_destroy_function_decl(ast_function_decl_t* fn)
+void ast_destroy_function_decl(ast_function_decl_data_t* fn)
 {
 	if (!fn) return;
 	/*ast_block_item_t* smnt = fn->blocks;
@@ -288,11 +288,6 @@ void ast_destory_translation_unit(ast_trans_unit_t* tl)
 	free(tl);
 }
 
-const char* ast_type_ref_name(ast_type_ref_t* ref)
-{ 
-	return ast_type_name(ref->spec); 
-}
-
 const char* ast_type_name(ast_type_spec_t* type)
 {
 	switch (type->kind)
@@ -317,20 +312,6 @@ const char* ast_type_name(ast_type_spec_t* type)
 		return "pointer"; //todo
 	}
 	return "unknown type";
-}
-
-const char* ast_declaration_type_name(ast_decl_type dt)
-{
-	switch (dt)
-	{
-	case decl_var:
-		return "variable";
-	case decl_func:
-		return "function";
-	case decl_type:
-		return "type";
-	}
-	return "unknown";
 }
 
 const char* ast_declaration_name(ast_declaration_t* decl)
@@ -358,6 +339,14 @@ uint32_t ast_struct_member_size(ast_struct_member_t* member)
 {
 	if (member->bit_size > 0)
 		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
+
+	//todo - improve
+
+	if (member->decl->array_dimensions)
+	{
+
+	}
+
 	return member->decl->type_ref->spec->size;
 }
 
@@ -380,13 +369,13 @@ uint32_t ast_user_type_size(ast_user_type_spec_t* spec)
 	return spec->kind == user_type_union ? max_member : total;
 }
 
-ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* ptr_type)
+ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* type)
 {
 	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
 	memset(result, 0, sizeof(ast_type_spec_t));
 	result->kind = type_ptr;
 	result->size = 4;
-	result->data.ptr_type = ptr_type;
+	result->data.ptr_type = type;
 	return result;
 }
 
@@ -414,11 +403,6 @@ ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn)
 {
 	assert(fn->kind == decl_func);
 	return fn->type_ref->spec->data.func_sig_spec->params;
-}
-
-uint32_t ast_decl_type_size(ast_declaration_t* decl)
-{
-	return decl->type_ref->spec->size;
 }
 
 bool ast_type_is_fn_ptr(ast_type_spec_t* type)
@@ -489,5 +473,95 @@ bool ast_is_assignment_op(op_kind op)
 
 bool ast_is_array_decl(ast_declaration_t* decl)
 {
-	return decl->array_dimentions != NULL;
+	return decl->array_dimensions != NULL;
+}
+
+
+
+const char* ast_op_name(op_kind k)
+{
+	switch (k)
+	{
+	case op_assign:
+		return "[=] assign";
+	case op_mul_assign:
+		return "[*=] mul assign";
+	case op_div_assign:
+		return "[/=] div assign";
+	case op_mod_assign:
+		return "[%=] mod assign";
+	case op_add_assign:
+		return "[+=] add assign";
+	case op_sub_assign:
+		return "[-=] sub assign";
+	case op_left_shift_assign:
+		return "[<<=] left shift assign";
+	case op_right_shift_assign:
+		return "[>>=] right shift assign";
+	case op_and_assign:
+		return "[&=] and assign";
+	case op_xor_assign:
+		return "[^=] xor assign";
+	case op_or_assign:
+		return "[|=] or assign";
+	case op_sub:
+		return "[-] Subtraction";
+	case op_negate:
+		return "[-] Negation";
+	case op_compliment:
+		return "[~] Compliment";
+	case op_not:
+		return "[!] Not";
+	case op_add:
+		return "[+] Addition";
+	case op_mul:
+		return "[*] Multiplication";
+	case op_div:
+		return "[/] Division";
+	case op_and:
+		return "[&&] And";
+	case op_or:
+		return "[||] Or";
+	case op_eq:
+		return "[==] Equal";
+	case op_neq:
+		return "[!=] Not equal";
+	case op_lessthan:
+		return "[<] Less than";
+	case op_lessthanequal:
+		return "[<=] Less than or equal";
+	case op_greaterthan:
+		return "[>] Greater than";
+	case op_greaterthanequal:
+		return "[>] Greater than or equal";
+	case op_shiftleft:
+		return "[<<] Shift left";
+	case op_shiftright:
+		return "[>>] Shift right";
+	case op_bitwise_and:
+		return "[&] Bitwise and";
+	case op_bitwise_or:
+		return "[|] Bitwise or";
+	case op_bitwise_xor:
+		return "[^] Bitwise xor";
+	case op_mod:
+		return "[%] Modulo";
+	case op_prefix_inc:
+		return "[++] Prefix inc";
+	case op_prefix_dec:
+		return "[-] Prefix dec";
+	case op_postfix_inc:
+		return "[++] Postfix inc";
+	case op_postfix_dec:
+		return "[--] Postfix inc";
+	case op_member_access:
+		return "[.] Member access";
+	case op_ptr_member_access:
+		return "[->] Pre member access";
+	case op_address_of:
+		return "[&] Address of";
+	case op_dereference:
+		return "[*] Defererence";
+	}
+	return "ERROR";
 }

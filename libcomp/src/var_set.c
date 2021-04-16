@@ -1,6 +1,5 @@
 #include "var_set.h"
 #include "diag.h"
-#include "abi.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,7 +76,7 @@ void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 			var->next = vars->vars;
 			vars->vars = var;
 
-			uint32_t param_sz = ast_decl_type_size(param->decl);
+			uint32_t param_sz = param->decl->type_ref->spec->size;
 			offset += param_sz < 4 ? 4 : param_sz;
 			param = param->next;
 		}

@@ -1,5 +1,8 @@
 #pragma once
 
+/*
+operators
+*/
 typedef enum
 {
 	op_unknown,

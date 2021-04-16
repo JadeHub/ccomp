@@ -27,7 +27,7 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
     data;
     fprintf(stderr, "%s(%s): Err %d: %s\n",
         src_file_path(tok->loc),
-        diag_pos_str(tok),
+        src_file_pos_str(src_file_position(tok->loc)),
         err, msg);    
     exit(1); 
 }

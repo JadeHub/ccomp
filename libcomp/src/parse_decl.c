@@ -150,8 +150,8 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			memset(array_sz, 0, sizeof(ast_expression_list_t));
 			array_sz->expr = array_sz_expr;
 
-			if (result->array_dimentions == NULL)
-				result->array_dimentions = array_sz; //first 
+			if (result->array_dimensions == NULL)
+				result->array_dimensions = array_sz; //first 
 			else
 				array_sz_list->next = array_sz;
 			array_sz_list = array_sz;

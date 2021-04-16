@@ -1,11 +1,7 @@
-int idx()
-{
-	return 3;
-}
 
 int main()
 {
-	char* test = "Hello";
-//	return test[idx()];
+	int test[5];
+	test[3] = 7;
 	return test[3];
 }

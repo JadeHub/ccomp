@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
+
 static inline bool _id_is_decl(identifier_t* id, const char* name)
 {
 	return (id->kind == id_decl &&
@@ -36,14 +38,13 @@ static const char* _alloc_label()
 
 const char* idm_add_string_literal(identfier_map_t* map, const char* literal)
 {
-	string_literal_t* sl = (string_literal_t*)sht_lookup(map->string_literals, literal);
-	if (!sl)
+	const char* lbl = (const char*)sht_lookup(map->string_literals, literal);
+	if (!lbl)
 	{
-		sl = (string_literal_t*)malloc(sizeof(string_literal_t));
-		sl->label = _alloc_label();
-		sht_insert(map->string_literals, literal, sl);
+		lbl = _alloc_label();
+		sht_insert(map->string_literals, literal, (void*)lbl);
 	}
-	return sl->label;
+	return lbl;
 }
 
 void idm_add_enum_val(identfier_map_t* map, const char* name, int_val_t val)
@@ -68,7 +69,7 @@ void idm_add_tag(identfier_map_t* map, ast_type_spec_t* type)
 	map->tags = tag;
 }
 
-void idm_add_id(identfier_map_t* map, ast_declaration_t* decl)
+void idm_add_decl(identfier_map_t* map, ast_declaration_t* decl)
 {
 	identifier_t* id = (identifier_t*)malloc(sizeof(identifier_t));
 	memset(id, 0, sizeof(identifier_t));
@@ -187,7 +188,7 @@ void idm_enter_function(identfier_map_t* map, ast_func_params_t* params)
 	ast_func_param_decl_t* param = params->first_param;
 	while (param)
 	{
-		idm_add_id(map, param->decl);
+		idm_add_decl(map, param->decl);
 		param = param->next;
 	}
 }

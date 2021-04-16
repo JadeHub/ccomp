@@ -1,6 +1,5 @@
 #include "code_gen.h"
 #include "source.h"
-#include "abi.h"
 
 #include "id_map.h"
 #include "std_types.h"
@@ -516,10 +515,10 @@ void gen_function(ast_declaration_t* fn)
 	gen_asm("push %%ebp");
 	gen_asm("movl %%esp, %%ebp");
 
-	if (fn->data.func.required_stack_size > 0)
+	if (fn->data.func.sema.required_stack_size > 0)
 	{
 		//align stack on 4 byte boundry
-		uint32_t sz = (fn->data.func.required_stack_size + 0x03) & ~0x03;
+		uint32_t sz = (fn->data.func.sema.required_stack_size + 0x03) & ~0x03;
 		gen_asm("subl $%d, %%esp", sz);
 	}
 
@@ -579,7 +578,7 @@ void gen_global_var(ast_declaration_t* decl)
 		gen_annotate("string literal initialisation");
 		gen_asm(".data"); //data section
 		gen_asm("_var_%s:", decl->name); //label
-		gen_asm(".long .%s", var_expr->data.str_literal.label); //label
+		gen_asm(".long .%s", var_expr->data.str_literal.sema.label); //label
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
 	}
@@ -624,7 +623,7 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data, bool annotati
 	sht_iterator_t it = sht_begin(tl->string_literals);
 	while (!sht_end(tl->string_literals, &it))
 	{
-		gen_string_literal(it.key, ((string_literal_t*)it.val)->label);
+		gen_string_literal(it.key, (const char*)it.val);
 		sht_next(tl->string_literals, &it);
 	}
 

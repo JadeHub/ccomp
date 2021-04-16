@@ -4,7 +4,6 @@
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
-#include "abi.h"
 
 #include "std_types.h"
 
@@ -360,7 +359,7 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 
 static size_t _process_array_alloc_size(ast_declaration_t* decl)
 {
-	ast_expression_list_t* array_sz = decl->array_dimentions;
+	ast_expression_list_t* array_sz = decl->array_dimensions;
 	size_t result = 0;
 
 	while (array_sz)
@@ -444,9 +443,8 @@ bool process_variable_declaration(ast_declaration_t* decl)
 		}
 	}
 
-	idm_add_id(_id_map, decl);
-	//_cur_func_ctx.decl->data.func.required_stack_size += abi_calc_var_decl_stack_size(decl);
-	_cur_func_ctx.decl->data.func.required_stack_size += decl->sema.alloc_size;
+	idm_add_decl(_id_map, decl);
+	_cur_func_ctx.decl->data.func.sema.required_stack_size += decl->sema.alloc_size;
 
 	return true;
 }
@@ -465,7 +463,7 @@ bool process_type_decl(ast_declaration_t* decl)
 				"typedef forces redefinition of %s", decl->name);
 		}
 
-		idm_add_id(_id_map, decl);
+		idm_add_decl(_id_map, decl);
 	}
 
 	return true;
@@ -843,7 +841,7 @@ proc_decl_result process_function_decl(ast_declaration_t* decl)
 	}
 	else
 	{
-		idm_add_id(_id_map, decl);
+		idm_add_decl(_id_map, decl);
 	}
 
 	return _is_fn_definition(decl) ? proc_decl_new_def : proc_decl_ignore;
@@ -907,7 +905,7 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 	{
 		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"global var '%s' uses incomplete type '%s'",
-			decl->name, ast_type_ref_name(decl->type_ref));
+			decl->name, ast_type_name(decl->type_ref->spec));
 		return proc_decl_error;
 	}
 
@@ -936,7 +934,7 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 		}
 	}
 
-	idm_add_id(_id_map, decl);
+	idm_add_decl(_id_map, decl);
 	return proc_decl_new_def;
 }
 

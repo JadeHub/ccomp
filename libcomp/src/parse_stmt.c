@@ -371,9 +371,6 @@ ast_statement_t* parse_statement()
 {
 	token_t* start = current();
 
-//	ast_statement_t* result = (ast_statement_t*)malloc(sizeof(ast_statement_t));
-	//memset(result, 0, sizeof(ast_statement_t));
-	//result->tokens.start = current();
 	if (current_is(tok_return))
 	{
 		return parse_return_statement();

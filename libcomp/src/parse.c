@@ -398,7 +398,6 @@ ast_expression_t* try_parse_literal()
 		ast_expression_t* expr = parse_alloc_expr();
 		expr->kind = expr_int_literal;
 		expr->data.int_literal.val = current()->data.int_val;
-		expr->data.int_literal.type = NULL;
 		next_tok();
 		return expr;
 	}
