@@ -335,12 +335,12 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec
 	return NULL;
 }
 
+//todo remove
 uint32_t ast_struct_member_size(ast_struct_member_t* member)
 {
 	if (member->bit_size > 0)
 		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
 
-	//todo - improve
 
 	if (member->decl->array_dimensions)
 	{
@@ -475,8 +475,6 @@ bool ast_is_array_decl(ast_declaration_t* decl)
 {
 	return decl->array_dimensions != NULL;
 }
-
-
 
 const char* ast_op_name(op_kind k)
 {

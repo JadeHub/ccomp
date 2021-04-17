@@ -115,19 +115,69 @@ static bool _user_type_is_definition(ast_user_type_spec_t* type)
 	return type->data.struct_members != NULL;
 }
 
+static size_t _calc_array_alloc_size(ast_declaration_t* decl)
+{
+	ast_expression_list_t* array_sz = decl->array_dimensions;
+	size_t result = 0;
+
+	while (array_sz)
+	{
+		ast_expression_t* expr = array_sz->expr;
+
+		if (!sema_is_const_int_expr(expr))
+		{
+			_report_err(expr->tokens.start, ERR_TYPE_INCOMPLETE,
+				"array size must be constant expression",
+				ast_declaration_name(decl));
+			return 0;
+
+		}
+		int_val_t expr_val = sema_fold_const_int_expr(expr);
+		if (!result)
+			result = expr_val.v.uint64 * decl->type_ref->spec->data.ptr_type->size;
+		else
+			result *= expr_val.v.uint64;
+		array_sz = array_sz->next;
+	}
+
+	if (result == 0)
+	{
+		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"array size unknown",
+			ast_declaration_name(decl));
+		return 0;
+	}
+	return result;
+}
+
+static uint32_t _calc_user_type_member_size(ast_struct_member_t* member)
+{
+	if (member->bit_size > 0)
+		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
+	if (member->decl->array_dimensions)
+		return (uint32_t)_calc_array_alloc_size(member->decl);
+	return member->decl->type_ref->spec->size;
+}
+
 static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 {
 	if (typeref->data.user_type_spec->kind == user_type_enum)
 		return 4;
 
-	uint32_t result = 0;
+	uint32_t total = 0;
+	uint32_t max_member = 0;
 	ast_struct_member_t* member = typeref->data.user_type_spec->data.struct_members;
 	while (member)
 	{
-		result += member->decl->type_ref->spec->size;
+		uint32_t size = _calc_user_type_member_size(member);
+		member->decl->sema.alloc_size = size;
+		total += size;
+		if (size > max_member)
+			max_member = size;
+
 		member = member->next;
 	}
-	return result;
+	return typeref->data.user_type_spec->kind == user_type_union ? max_member : total;
 }
 
 static void _add_user_type(ast_type_spec_t* typeref)
@@ -357,41 +407,6 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	return false;
 }
 
-static size_t _process_array_alloc_size(ast_declaration_t* decl)
-{
-	ast_expression_list_t* array_sz = decl->array_dimensions;
-	size_t result = 0;
-
-	while (array_sz)
-	{
-		ast_expression_t* expr = array_sz->expr;
-
-		if (!sema_is_const_int_expr(expr))
-		{
-			_report_err(expr->tokens.start, ERR_TYPE_INCOMPLETE,
-				"array size must be constant expression",
-				ast_declaration_name(decl));
-			return 0;
-			
-		}
-		int_val_t expr_val = sema_fold_const_int_expr(expr);
-		if(!result)
-			result = expr_val.v.uint64 * decl->type_ref->spec->data.ptr_type->size;
-		else
-			result *= expr_val.v.uint64;
-		array_sz = array_sz->next;
-	}
-
-	if (result == 0)
-	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"array size unknown",
-			ast_declaration_name(decl));
-		return 0;
-	}
-	return result;
-}
-
 bool process_variable_declaration(ast_declaration_t* decl)
 {
 	ast_declaration_t* existing = idm_find_block_decl(_id_map, decl->name);
@@ -411,7 +426,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 
 	if (ast_is_array_decl(decl))
 	{
-		decl->sema.alloc_size = _process_array_alloc_size(decl);
+		decl->sema.alloc_size = _calc_array_alloc_size(decl);
 		if (decl->sema.alloc_size == 0)
 			return false;
 	}

@@ -57,11 +57,11 @@ void gen_assignment(ast_expression_t* expr)
 	gen_asm("pop %%edx");
 
 	//if the target is a user defined type we assume eax and edx are pointers
-	if (expr->sema.result_type->kind == type_user)
+	if (expr->sema.result.type->kind == type_user)
 	{
 		gen_annotate("copy user defined type by value");
 		uint32_t offset = 0;
-		while (offset < expr->sema.result_type->size)
+		while (offset < expr->sema.result.type->size)
 		{
 			gen_asm("movl %d(%%eax), %%ecx", offset);
 			gen_asm("movl %%ecx, %d(%%edx)", offset);
@@ -206,7 +206,7 @@ void gen_identifier(ast_expression_t* expr)
 {
 	gen_annotate_start("identifier expression '%s'", expr->data.identifier.name);
 
-	if (expr->sema.result_type->kind == type_func_sig)
+	if (expr->sema.result.type->kind == type_func_sig)
 	{
 		gen_annotate("'%s' is a function pointer, load its address in eax", expr->data.identifier.name);;
 		gen_asm("movl $%s, %%eax", expr->data.identifier.name);
@@ -222,7 +222,7 @@ void gen_identifier(ast_expression_t* expr)
 			gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
 
 		//if we are processing an lval or we are referencing a user defined type load the address into eax
-		if (lval || expr->sema.result_type->kind == type_user || ast_is_array_decl(var->var_decl)) 
+		if (lval || expr->sema.result.type->kind == type_user || ast_is_array_decl(var->var_decl)) 
 		{
 			if (lval)
 				gen_annotate("loading address of lval into eax");
@@ -409,8 +409,8 @@ void gen_condition_expr(ast_expression_t* expr)
 
 void gen_member_access(ast_expression_t* expr)
 {
-	assert(expr->data.binary_op.lhs->sema.result_type->kind == type_user);
-	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result_type;
+	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_user);
+	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result.type;
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
 	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec,
 		expr->data.binary_op.rhs->data.identifier.name);
@@ -428,7 +428,7 @@ void gen_member_access(ast_expression_t* expr)
 		gen_asm("addl $%d, %%eax", member->offset);
 	}
 
-	if (!lval && expr->sema.result_type->kind != type_user)
+	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
 	{
 		gen_annotate("store member value in eax");
 		//we are not processing an lval and the member type is not a user type so move the value into eax
@@ -439,8 +439,8 @@ void gen_member_access(ast_expression_t* expr)
 
 void gen_ptr_member_access(ast_expression_t* expr)
 {
-	assert(expr->data.binary_op.lhs->sema.result_type->kind == type_ptr);
-	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result_type->data.ptr_type;
+	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_ptr);
+	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result.type->data.ptr_type;
 	assert(user_type->kind == type_user);
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
@@ -463,7 +463,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 	gen_annotate("add offset %d", member->offset);
 	gen_asm("addl $%d, %%eax", member->offset);
 
-	if (!lval && expr->sema.result_type->kind != type_user)
+	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
 	{
 		gen_annotate("store member value in eax");
 		//we are not processing an lval and the member type is not a user type so move the value into eax
@@ -474,7 +474,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 
 void gen_array_subscript(ast_expression_t* expr)
 {
-	assert(expr->data.binary_op.lhs->sema.result_type->kind == type_ptr);
+	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_ptr);
 
 	gen_annotate_start("array subscript");
 
@@ -486,31 +486,35 @@ void gen_array_subscript(ast_expression_t* expr)
 	
 	gen_annotate("lhs");
 
-	bool pl = lval;
-	lval = false;
-
 	gen_expression(expr->data.binary_op.lhs);
-	lval = pl;
 
-	//if this 
+	//lhs is not an array (it's a pointer) so we need to dereference it if we are tracking its address
+	if (lval && !expr->data.binary_op.lhs->sema.result.array)
+	{
+		gen_asm("movl (%%eax), %%eax");
+	}
 
 	gen_annotate("push lhs pointer");
 	gen_asm("pushl %%eax");
 
 	//index
 	gen_annotate("rhs");
+
+	bool prev_lval = lval;
+	lval = false;
 	gen_expression(expr->data.binary_op.rhs);
+	lval = prev_lval;
 	gen_annotate("mul by size of item in array");
-	gen_asm("imul $%d, %%eax", expr->sema.result_type->size);
+	gen_asm("imul $%d, %%eax", expr->sema.result.type->size);
 
 	gen_annotate("pop the address of rhs from the stack and add the rhs * size offset in eax");
 	gen_asm("popl %%ecx");
 	gen_asm("addl %%ecx, %%eax");
 
-	if (!lval && expr->sema.result_type->kind != type_user)
+	if (!lval && expr->sema.result.type->kind != type_user)
 	{
 		gen_annotate("store item value in eax");
-		//we are not processing an lval and the member type is not a user type so move the value into eax
+		//we are not processing an lval and the result is not a user type so move the value into eax
 		gen_asm("movl (%%eax), %%eax");
 	}
 
@@ -532,7 +536,7 @@ void gen_dereference(ast_expression_t* expr)
 	gen_annotate_start("dereference");
 	gen_expression(expr->data.unary_op.expression);
 
-	if (lval || expr->sema.result_type->kind != type_user)
+	if (lval || expr->sema.result.type->kind != type_user)
 	{
 		gen_asm("movl (%%eax), %%eax");
 	}
@@ -569,7 +573,7 @@ void gen_func_call(ast_expression_t* expr)
 	while (param)
 	{
 		gen_expression(param->expr);
-		ast_type_spec_t* param_type = param->expr->sema.result_type;
+		ast_type_spec_t* param_type = param->expr->sema.result.type;
 
 		if (param_type->size == 1)
 		{
@@ -777,7 +781,7 @@ void gen_unary_op(ast_expression_t* expr)
 /*
 Generate code for expr
 
-The value left in EAX will depend on the expression result type (expr->sema.result_type)
+The value left in EAX will depend on the expression result type (expr->sema.result.type)
 	-	for any pointer type the address will be placed in EAX
 	-	for user types greater than 4 bytes in length the address will be placed in EAX
 	-	for types <= 4 bytes the value will be placed in EAX

@@ -9,8 +9,9 @@ typedef struct
 int main()
 {
 	type_t t;
+	type_t* tp = &t;
 
-	int* p = t.mem;
+	int* p = tp->mem;
 
 	*p = 5;
 	return *p;

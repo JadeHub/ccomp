@@ -100,6 +100,7 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 	}
 
 	result.result_type = member->decl->type_ref->spec;
+	result.array = ast_is_array_decl(member->decl);
 	return result;
 }
 
@@ -111,6 +112,12 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	expr_result_t target_result = sema_process_expression(target);
 	if (target_result.failure)
 		return target_result;
+
+	if (target_result.array)
+	{
+		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+			"cannot assign to array type expression");
+	}
 
 	expr_result_t result = sema_process_expression(source);
 	if (result.failure)
@@ -268,6 +275,7 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 					ast_declaration_name(decl));
 			}
 			result.result_type = decl->type_ref->spec;
+			result.array = ast_is_array_decl(decl);
 			return result;
 		}
 		else if (decl->kind == decl_func)
@@ -509,6 +517,9 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		break;
 	}
 	if (!result.failure)
-		expr->sema.result_type = result.result_type;
+	{
+		expr->sema.result.type = result.result_type;
+		expr->sema.result.array = result.array;
+	}
 	return result;
 }

@@ -185,10 +185,14 @@ typedef struct ast_expression
 	}data;
 
 	struct {
-		/*
-		* expression result type
-		*/
-		struct ast_type_spec* result_type;
+		struct {
+			
+			/*
+			* expression result type
+			*/
+			struct ast_type_spec* type;
+			bool array;
+		}result;
 	}sema;
 
 }ast_expression_t;
@@ -687,11 +691,6 @@ bool ast_type_is_int(ast_type_spec_t* type);
 returns true if the given type spec is an enum
 */
 bool ast_type_is_enum(ast_type_spec_t* type);
-
-/*
-returns the total number of elements allocated by an array declaration
-*/
-//size_t ast_calc_array_decl_elem_size(ast_declaration_t* decl);
 
 void ast_destroy_decl_list(ast_decl_list_t decl_list);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);

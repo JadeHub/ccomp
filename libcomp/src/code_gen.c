@@ -155,11 +155,11 @@ void gen_var_decl(ast_declaration_t* decl)
 
 		gen_annotate("assignment");
 		//if the target is a user defined type we assume eax and edx are pointers
-		if (expr->sema.result_type->kind == type_user)
+		if (expr->sema.result.type->kind == type_user)
 		{
 			int32_t dest_off = var->bsp_offset;
 			uint32_t offset = 0;
-			while (offset < expr->sema.result_type->size)
+			while (offset < expr->sema.result.type->size)
 			{
 				gen_asm("movl %d(%%eax), %%ecx", offset);
 				gen_asm("movl %%ecx, %d(%%ebp)", dest_off);
@@ -510,7 +510,6 @@ void gen_function(ast_declaration_t* fn)
 	gen_asm(".globl %s", fn->name);
 	gen_asm("%s:", fn->name);
 
-	//function prologue
 	gen_annotate("prologue");
 	gen_asm("push %%ebp");
 	gen_asm("movl %%esp, %%ebp");
