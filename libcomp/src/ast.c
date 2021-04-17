@@ -335,40 +335,6 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec
 	return NULL;
 }
 
-//todo remove
-uint32_t ast_struct_member_size(ast_struct_member_t* member)
-{
-	if (member->bit_size > 0)
-		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
-
-
-	if (member->decl->array_dimensions)
-	{
-
-	}
-
-	return member->decl->type_ref->spec->size;
-}
-
-uint32_t ast_user_type_size(ast_user_type_spec_t* spec)
-{
-	if (spec->kind == user_type_enum)
-		return 4;
-	uint32_t total = 0;
-	uint32_t max_member = 0;
-
-	ast_struct_member_t* member = spec->data.struct_members;
-	while (member)
-	{
-		uint32_t size = ast_struct_member_size(member);
-		total += size;
-		if (size > max_member)
-			max_member = size;
-		member = member->next;
-	}
-	return spec->kind == user_type_union ? max_member : total;
-}
-
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* type)
 {
 	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));

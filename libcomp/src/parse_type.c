@@ -568,8 +568,7 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 		type_spec = _alloc_type_spec();
 		type_spec->kind = type_user;
 		type_spec->data.user_type_spec = user_type;
-		//the size value will be updated in sema stage to reflect array sizes which requires constant folding. Todo - set this only in at sema stage
-		type_spec->size = ast_user_type_size(user_type);
+		type_spec->size = 0; //size set at sema stage
 	}
 	else if (type_type == tt_alias)
 	{

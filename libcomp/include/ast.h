@@ -329,7 +329,6 @@ typedef struct ast_type_spec
 		*/
 		struct ast_type_spec* ptr_type;
 	}data;
-
 }ast_type_spec_t;
 
 //Storage class flags
@@ -641,11 +640,6 @@ const char* ast_type_name(ast_type_spec_t* type);
 find a user type member by name
 */
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
-
-/*
-returns the size required to store the user type
-*/
-uint32_t ast_user_type_size(ast_user_type_spec_t*);
 
 /*
 returns a type spec which represents a pointer to given type

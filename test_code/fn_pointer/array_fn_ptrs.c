@@ -16,7 +16,5 @@ int main()
 
 	p[0] = fn;
 	p[1] = fn2;
-
-	fn_t f = p[1];
-	return f(2);
+	return p[1](2);
 }
