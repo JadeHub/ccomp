@@ -21,16 +21,6 @@ str_buff_t* sb_create(size_t sz)
 	return result;
 }
 
-//create a string buffer containing the supplied param
-str_buff_t* sb_attach(char* buff, size_t sz)
-{
-	str_buff_t* result = (str_buff_t*)malloc(sizeof(str_buff_t));
-	result->sz = sz;
-	result->len = strlen(buff);
-	result->buff = buff;
-	return result;
-}
-
 char* sb_release(str_buff_t* sb)
 {
 	if (!sb)

@@ -75,8 +75,6 @@ typedef struct
 	*/
 	hash_table_t* defs;
 
-	//token_range_t input;
-
 	/* result list*/
 	token_range_t result;
 

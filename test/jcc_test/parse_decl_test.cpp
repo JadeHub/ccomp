@@ -9,14 +9,14 @@ extern "C"
 class ParstDeclTest : public CompilerTest
 {
 public:
-	void ParseDecl(const std::string& code)
+	void ParseDecl(const std::string& code, decl_parse_context context = dpc_normal)
 	{
 		SetSource(code);
 		Lex();
 
 		parse_init(mTokens);
 
-		decls = try_parse_decl_list();
+		decls = try_parse_decl_list(context);
 		ast_declaration_t* decl = decls.first;
 
 		while (decl)
@@ -139,31 +139,15 @@ TEST_F(ParstDeclTest, array_type)
 	ExpectVarPtrDecl(0, "p", int32_type_spec);
 }
 
-TEST_F(ParstDeclTest, array_struct_member)
+TEST_F(ParstDeclTest, array_struct_bitsize)
 {
 	ParseDecl(R"(
 	struct
 	{
-		int i[10];
+		int flag : 1;
 	}s;)");
 	
 	AssertValid();
 	ASSERT_EQ(1, count);
 	ast_declaration_t* decl = DeclNo(0);
-}
-
-TEST_F(ParstDeclTest, int_array_multidimention)
-{
-	//int p[][1] = { { 1 } };
-	//int p[] = {1, 2, 3};
-
-	/*typedef struct
-	{
-		int i;
-		int j;
-	}t;
-
-	int i[sizeof(t)];*/
-
-	ParseDecl("int p[5][10];");
 }

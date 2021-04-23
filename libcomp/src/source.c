@@ -111,18 +111,19 @@ source_file_t* _get_file_for_pos(const char* pos)
 	return NULL;
 }
 
-const char* src_file_path(const char* pos)
+file_pos_t src_get_pos_info(const char* pos)
 {
-	source_file_t* file = _get_file_for_pos(pos);
-	return file ? file->path : NULL;
-}
-
-file_pos_t src_file_position(const char* pos)
-{
-	source_file_t* file = _get_file_for_pos(pos);
 	file_pos_t result;
 	result.col = 0;
 	result.line = 0;
+	result.path = NULL;
+
+	source_file_t* file = _get_file_for_pos(pos);
+	if (!file)
+		return result;
+
+	result.path = file->path;
+
 	uint32_t line = 0;
 	for (line = 1; line < file->line_count; line++)
 	{
@@ -135,8 +136,8 @@ file_pos_t src_file_position(const char* pos)
 			}
 			else
 			{
-				result.line = line;// +1;
-				result.col = (uint16_t)(pos - file->lines[line-1] + 1);
+				result.line = line;
+				result.col = (uint16_t)(pos - file->lines[line - 1] + 1);
 			}
 			return result;
 		}
@@ -145,7 +146,7 @@ file_pos_t src_file_position(const char* pos)
 	if (pos <= file->range.end)
 	{
 		result.line = file->line_count;
-		result.col = (uint16_t)(pos - file->lines[result.line-1] + 1);
+		result.col = (uint16_t)(pos - file->lines[result.line - 1] + 1);
 	}
 
 	return result;
@@ -161,35 +162,12 @@ static source_file_t* _init_source(source_range_t src)
 	return file;
 }
 
-const char* src_file_pos_str(file_pos_t pos)
-{
-	static char _buff[32];
-	sprintf(_buff, "Ln: %d Ch: %d", pos.line, pos.col);
-	return _buff;
-}
-
 static bool _is_white_space(const char c)
 {
 	return c == ' ' ||
 		c == '\t' ||
 		c == '\n' ||
 		c == '\r';
-}
-
-char* src_extract(const char* start, const char* end)
-{
-	size_t len = end - start;
-	char* result = (char*)malloc(len + 1);
-	strncpy(result, start, len);
-	result[len] = '\0';
-
-	while (len > 0 && _is_white_space(result[len - 1]))
-	{
-		result[len - 1] = '\0';
-		len--;
-	}	
-
-	return result;
 }
 
 bool src_is_valid_range(source_range_t* src)
@@ -250,8 +228,7 @@ source_range_t* src_load_file(const char* path, const char* file_name)
 
 void src_add_header_path(const char* path)
 {
-	int i;
-	for (i = 0; i < MAX_INCLUDE_DIRS; i++)
+	for (int i = 0; i < MAX_INCLUDE_DIRS; i++)
 	{
 		if (!_include_dirs[i])
 		{

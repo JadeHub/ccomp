@@ -240,9 +240,11 @@ typedef struct ast_struct_member
 	*/
 	struct ast_declaration* decl;
 
-	uint32_t bit_size; //eg, the 1 in 'int p : 1' - todo
-
-	uint32_t offset; //alligned position within struct - todo
+	struct
+	{
+		uint32_t bit_size; //eg, the 1 in 'int p : 1' - todo
+		uint32_t offset; //alligned position within struct - todo
+	}sema;
 
 	struct ast_struct_member* next;
 }ast_struct_member_t;
@@ -358,6 +360,11 @@ typedef struct ast_var_decl
 	initialisation expression
 	*/
 	ast_expression_t* init_expr;
+
+	/*
+	bit size expression for struct members
+	*/
+	ast_expression_t* bit_sz;
 }ast_var_decl_data_t;
 
 /*
@@ -501,10 +508,10 @@ for loop statement data
 */
 typedef struct
 {
-	ast_decl_list_t decls; //for(int i = 0;...
+	ast_decl_list_t decls; //for(int i = 0;...;...)
 
-	ast_expression_t* init; //for(i = 0;...
-	ast_expression_t* condition; //for(...;i<10;...
+	ast_expression_t* init; //for(i = 0;...;...)
+	ast_expression_t* condition; //for(...;i<10;...)
 	ast_expression_t* post; //for(...;...;i++)
 	struct ast_statement* statement;
 }ast_for_smnt_data_t;
@@ -531,7 +538,7 @@ typedef struct
 }ast_switch_smnt_data_t;
 
 /*
-label statement case data
+label statement data
 */
 typedef struct
 {

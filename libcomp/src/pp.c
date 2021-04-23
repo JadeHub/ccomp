@@ -96,7 +96,7 @@ static token_t* _pop_next()
 
 	if (tok->flags & TF_START_LINE)
 	{
-		ir->line_num = src_file_position(tok->loc).line;
+		ir->line_num = src_get_pos_info(tok->loc).line;
 	}
 
 	if (ir->next)
@@ -148,8 +148,9 @@ static input_range_t* _begin_token_range_expansion(token_range_t* range)
 	ir->current = ir->tokens->start;
 	ir->next = _context->input_stack;
 
-	ir->path = src_file_path(range->start->loc);
-	ir->line_num = src_file_position(range->start->loc).line;
+	file_pos_t fp = src_get_pos_info(range->start->loc);
+	ir->path = fp.path;
+	ir->line_num = fp.line;
 
 	_context->input_stack = ir;
 	return ir;
@@ -556,9 +557,12 @@ static bool _process_define(token_t* def)
 			free(macro);
 			return true;
 		}
-		diag_err(def, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s:%s", macro->name,
-			src_file_path(existing->define->loc),
-			src_file_pos_str(src_file_position(existing->define->loc)));
+
+		file_pos_t exist_fp = src_get_pos_info(existing->define->loc);
+
+		diag_err(def, ERR_SYNTAX, "redefinition of macro '%s'. Previously defined at: %s(Ln: %d Ch: %d)", macro->name,
+			exist_fp.path ? exist_fp.path : "unknown",
+			exist_fp.line, exist_fp.col);
 		free(macro);
 		return false;
 	}
@@ -573,7 +577,7 @@ static bool _process_pragma(token_t* tok)
 
 	if (tok->kind == tok_identifier && strcmp(tok->data.str, "once") == 0)
 	{
-		const char* path = src_file_path(tok->loc);
+		const char* path = src_get_pos_info(tok->loc).path;
 		assert(path);
 		sht_insert(_context->praga_once_paths, path, (void*)1);
 		return true;
@@ -714,7 +718,7 @@ static bool _process_include(token_t* tok)
 	sb_destroy(path_buff);
 
 	//check if previously #pragma once'd
-	const char* inc_path = src_file_path(sr->ptr);
+	const char* inc_path = src_get_pos_info(sr->ptr).path;
 	assert(inc_path);
 	if (sht_lookup(_context->praga_once_paths, inc_path))
 		return true;
@@ -860,7 +864,7 @@ static token_t* _stringize_range(token_range_t* range)
 		{
 			str_buff_t* sl_buff = sb_create(128);
 
-			tok_spelling_append(tok->loc, tok->len, sl_buff);
+			tok_spelling_extract(tok->loc, tok->len, sl_buff);
 
 			char* c = sl_buff->buff;
 
@@ -877,7 +881,7 @@ static token_t* _stringize_range(token_range_t* range)
 			break;
 		}
 		default:
-			tok_spelling_append(tok->loc, tok->len, sb);
+			tok_spelling_extract(tok->loc, tok->len, sb);
 			break;
 		}
 
@@ -1142,8 +1146,8 @@ static token_t* _paste_tokens(token_t* lhs, token_t* rhs)
 
 	str_buff_t* sb = sb_create(64);
 
-	tok_spelling_append(lhs->loc, lhs->len, sb);
-	tok_spelling_append(rhs->loc, rhs->len, sb);
+	tok_spelling_extract(lhs->loc, lhs->len, sb);
+	tok_spelling_extract(rhs->loc, rhs->len, sb);
 
 	token_t* tok = _lex_single_tok(sb);
 

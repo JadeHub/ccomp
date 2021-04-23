@@ -152,8 +152,8 @@ static size_t _calc_array_alloc_size(ast_declaration_t* decl)
 
 static uint32_t _calc_user_type_member_size(ast_struct_member_t* member)
 {
-	if (member->bit_size > 0)
-		return (member->bit_size / 8) + (member->bit_size % 8 ? 1 : 0);
+	if (member->sema.bit_size > 0)
+		return (member->sema.bit_size / 8) + (member->sema.bit_size % 8 ? 1 : 0);
 	if (member->decl->array_dimensions)
 		return (uint32_t)_calc_array_alloc_size(member->decl);
 	return member->decl->type_ref->spec->size;
@@ -169,9 +169,17 @@ static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 	ast_struct_member_t* member = typeref->data.user_type_spec->data.struct_members;
 	while (member)
 	{
+		if (member->decl->data.var.bit_sz)
+		{
+			member->sema.bit_size = (uint32_t)sema_fold_const_int_expr(member->decl->data.var.bit_sz).v.uint64;
+		}
+
 		uint32_t size = _calc_user_type_member_size(member);
 		member->decl->sema.alloc_size = size;
-		total += size;
+
+		member->sema.offset = total;
+		if (typeref->data.user_type_spec->kind == user_type_struct)
+			total += size; //unions will have offset = 0 for all
 		if (size > max_member)
 			max_member = size;
 

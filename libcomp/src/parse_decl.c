@@ -4,7 +4,7 @@
 #include <string.h>
 #include <assert.h>
 
-ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags);
+ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context);
 
 /*
 <array_decl> ::= "[" [ <constant-exp> ] "]"
@@ -60,7 +60,7 @@ ast_func_params_t* parse_function_parameters()
 		ast_type_spec_t* type_spec = try_parse_type_spec(&type_flags);
 		if (!type_spec)
 			return parse_err(ERR_UNKNOWN_TYPE, "Expected parameter type, found %s", tok_kind_spelling(current()->kind));
-		ast_declaration_t* decl = parse_declarator(type_spec, type_flags);
+		ast_declaration_t* decl = parse_declarator(type_spec, type_flags, dpc_param);
 		if (!decl)
 			return parse_err(ERR_UNKNOWN_TYPE, "Error parsing declaration");
 
@@ -104,7 +104,7 @@ ast_func_params_t* parse_function_parameters()
 	return params;
 }
 
-ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags)
+ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context)
 {
 	parse_type_ref_result_t type_ref_parse = parse_type_ref(type_spec, type_flags);
 	ast_type_ref_t* type_ref = type_ref_parse.type;
@@ -133,7 +133,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 
 	if (strlen(result->name) && current_is(tok_l_paren))
 	{
-		//function			
+		//function
 		result->kind = decl_func;
 		ast_func_params_t* params = parse_function_parameters();
 		result->type_ref->spec = ast_make_func_sig_type(result->type_ref->spec, params);
@@ -162,20 +162,24 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			array_sz_expr = opt_parse_array_spec();
 		}
 
-		/*
-		// '[...]'
-		result->array_sz = opt_parse_array_spec();
-		if (result->array_sz)
+		if (context == dpc_struct)
 		{
-			//array implies ptr type
-			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
+			//bit size is permitted
+			if (current_is(tok_colon))
+			{
+				next_tok();
+				result->data.var.bit_sz = parse_constant_expression();
+			}
 		}
-		*/
 
-		if (current_is(tok_equal))
+		if (context == dpc_normal)
 		{
-			next_tok();
-			result->data.var.init_expr = parse_expression();
+			//initialiser is permitted
+			if (current_is(tok_equal))
+			{
+				next_tok();
+				result->data.var.init_expr = parse_expression();
+			}
 		}
 
 		if (type_ref->flags & TF_SC_TYPEDEF)
@@ -210,7 +214,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 	return result;
 }
 
-ast_decl_list_t try_parse_decl_list()
+ast_decl_list_t try_parse_decl_list(decl_parse_context context)
 {
 	uint32_t type_flags = 0;
 	ast_decl_list_t decl_list = { NULL, NULL };
@@ -220,7 +224,7 @@ ast_decl_list_t try_parse_decl_list()
 
 	while (!current_is(tok_eof))
 	{		
-		ast_declaration_t* decl = parse_declarator(type_spec, type_flags);
+		ast_declaration_t* decl = parse_declarator(type_spec, type_flags, context);
 		if (!decl)
 			goto _err_ret;
 

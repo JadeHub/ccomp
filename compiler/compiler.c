@@ -25,9 +25,12 @@ void asm_print(const char* line, bool lf, void* data)
 void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
 {
     data;
-    fprintf(stderr, "%s(%s): Err %d: %s\n",
-        src_file_path(tok->loc),
-        src_file_pos_str(src_file_position(tok->loc)),
+
+    file_pos_t fp = src_get_pos_info(tok->loc);
+
+    fprintf(stderr, "%s(Ln: %d Ch: %d): Err %d: %s\n",
+        fp.path ? fp.path : "unknown",
+        fp.line, fp.col,
         err, msg);    
     exit(1); 
 }

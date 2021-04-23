@@ -879,7 +879,7 @@ ast_block_item_t* parse_block_item()
 	memset(result, 0, sizeof(ast_block_item_t));
 	result->tokens.start = current();
 
-	ast_decl_list_t decls = try_parse_decl_list();
+	ast_decl_list_t decls = try_parse_decl_list(dpc_normal);
 	if (decls.first)
 	{
 		if (!current_is(tok_semi_colon))
@@ -975,7 +975,7 @@ ast_trans_unit_t* parse_translation_unit()
 	
 	while (!current_is(tok_eof))
 	{
-		ast_decl_list_t decls = try_parse_decl_list();
+		ast_decl_list_t decls = try_parse_decl_list(dpc_normal);
 		if(!decls.first && !parse_seen_err())
 			parse_err(ERR_SYNTAX, "expected declaration, found %s", diag_tok_desc(current()));
 		if (parse_seen_err())
@@ -1011,8 +1011,6 @@ ast_trans_unit_t* parse_translation_unit()
 			result->decls.last->next = decls.first;
 			result->decls.last = decls.last;
 		}
-
-		//_add_decl_to_tl(result, decls.first);
 	}
 
 	result->tokens.end = current();

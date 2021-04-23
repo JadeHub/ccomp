@@ -3,7 +3,14 @@
 #include "token.h"
 #include "ast.h"
 
-ast_decl_list_t try_parse_decl_list();
+typedef enum
+{
+	dpc_normal, //parsing a normal declararion list
+	dpc_struct, //parsing a struct member declaration (permits bit size - 'int x : 1;', disallows initialiser
+	dpc_param //parsing a function parameter declaration (no initialiser is allowed)
+}decl_parse_context;
+
+ast_decl_list_t try_parse_decl_list(decl_parse_context context);
 
 ast_statement_t* parse_statement();
 ast_expression_t* parse_expression();

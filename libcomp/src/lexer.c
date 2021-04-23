@@ -380,7 +380,7 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 	result->len = pos - result->loc;
 
 	str_buff_t* sb = sb_create(64);
-	tok_spelling_append(result->loc, result->len, sb);
+	tok_spelling_extract(result->loc, result->len, sb);
 
 	//Keywords
 	if (strcmp(sb->buff, "int") == 0)
@@ -466,7 +466,7 @@ static void _lex_pre_proc_directive(source_range_t* sr, const char* pos, token_t
 	result->len = pos - result->loc;
 
 	str_buff_t* sb = sb_create(64);
-	tok_spelling_append(result->loc + 1, result->len - 1, sb);
+	tok_spelling_extract(result->loc + 1, result->len - 1, sb);
 
 	if (result->len == 1)
 		result->kind = tok_pp_null;

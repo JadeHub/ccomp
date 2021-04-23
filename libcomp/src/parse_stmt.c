@@ -196,7 +196,7 @@ ast_statement_t* parse_for_statement()
 	parse_on_enter_block();
 
 	//initialisation
-	data->decls = try_parse_decl_list();
+	data->decls = try_parse_decl_list(dpc_normal);
 	if (data->decls.first)
 	{
 		expect_cur(tok_semi_colon);

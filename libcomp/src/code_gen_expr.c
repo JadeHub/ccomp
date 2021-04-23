@@ -422,10 +422,10 @@ void gen_member_access(ast_expression_t* expr)
 	gen_expression(expr->data.binary_op.lhs);
 		
 	//assume eax contains a pointer
-	if (member->offset > 0)
+	if (member->sema.offset > 0)
 	{
-		gen_annotate("add offset %d", member->offset);
-		gen_asm("addl $%d, %%eax", member->offset);
+		gen_annotate("add offset %d", member->sema.offset);
+		gen_asm("addl $%d, %%eax", member->sema.offset);
 	}
 
 	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
@@ -460,8 +460,8 @@ void gen_ptr_member_access(ast_expression_t* expr)
 	}
 	
 	//assume eax contains a pointer
-	gen_annotate("add offset %d", member->offset);
-	gen_asm("addl $%d, %%eax", member->offset);
+	gen_annotate("add offset %d", member->sema.offset);
+	gen_asm("addl $%d, %%eax", member->sema.offset);
 
 	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
 	{

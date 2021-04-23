@@ -48,7 +48,7 @@ void tok_printf(token_t* tok);
 
 size_t tok_spelling_len(token_t* tok);
 void tok_spelling_cpy(token_t* tok, char* dest, size_t len);
-void tok_spelling_append(const char* src_loc, size_t src_len, str_buff_t* result);
+void tok_spelling_extract(const char* src_loc, size_t src_len, str_buff_t* result);
 void tok_destory(token_t* tok);
 bool tok_equals(token_t* lhs, token_t* rhs);
 token_t* tok_duplicate(token_t* tok);

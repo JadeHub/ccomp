@@ -220,11 +220,12 @@ size_t tok_spelling_len(token_t* tok)
 	return len;
 }
 
-void tok_spelling_append(const char* src_loc, size_t src_len, str_buff_t* result)
+void tok_spelling_extract(const char* src_loc, size_t src_len, str_buff_t* result)
 {
 	const char* src = src_loc;
 	while (src < src_loc + src_len)
 	{
+		//handle line continuation
 		if (*src == '\\')
 		{
 			if (src[1] == '\n')
@@ -238,8 +239,7 @@ void tok_spelling_append(const char* src_loc, size_t src_len, str_buff_t* result
 				continue;
 			}
 		}
-		sb_append_ch(result, *src);
-		
+		sb_append_ch(result, *src);		
 		src++;
 	}
 }
@@ -252,11 +252,10 @@ void tok_spelling_cpy(token_t* tok, char* dest, size_t dest_len)
 	}
 	else
 	{
-		dest[0] = '\0';
-		str_buff_t* sb = sb_attach(dest, dest_len);
-
-		tok_spelling_append(tok->loc, tok->len, sb);
-		sb_release(sb);
+		str_buff_t* sb = sb_create(dest_len);
+		tok_spelling_extract(tok->loc, tok->len, sb);
+		strncpy(dest, sb_str(sb), dest_len);
+		sb_destroy(sb);
 	}
 }
 
@@ -337,11 +336,8 @@ void tok_printf(token_t* tok)
 		printf(" ");
 
 	str_buff_t* sb = sb_create(128);
-
-	tok_spelling_append(tok->loc, tok->len, sb);
-
+	tok_spelling_extract(tok->loc, tok->len, sb);
 	printf("%s", sb->buff);
-
 	sb_destroy(sb);
 }
 

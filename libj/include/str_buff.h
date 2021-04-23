@@ -13,9 +13,6 @@ typedef struct
 //create an empty string buffer of size
 str_buff_t* sb_create(size_t sz);
 
-//create a string buffer containing the supplied param
-str_buff_t* sb_attach(char* buff, size_t sz);
-
 //append str and return internal buffer
 char* sb_append(str_buff_t* sb, const char* str);
 
