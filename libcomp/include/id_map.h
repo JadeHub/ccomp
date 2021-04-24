@@ -18,27 +18,13 @@ typedef enum
 	id_decl,
 
 	/*
-	a constant value - used to represent enum members
-	*/
-	id_const,
-
-	/*
 	internal marker to seperate code blocks
 	*/
 	id_marker
 }id_kind;
 
 /*
-enum member constant value
-*/
-typedef struct
-{
-	const char* name;
-	int_val_t val;
-}enum_val_t;
-
-/*
-an identifier stack item - either a named declaration or a named enum item value
+an identifier stack item - either a named declaration
 */
 typedef struct identifier
 {
@@ -46,7 +32,6 @@ typedef struct identifier
 	union
 	{
 		ast_declaration_t* decl;
-		enum_val_t enum_val;
 	}data;
 	struct identifier* next;
 }identifier_t;
@@ -107,11 +92,6 @@ add a tag into the map, does not check for duplicates
 void idm_add_tag(identfier_map_t* map, ast_type_spec_t* typeref);
 
 /*
-add a enum item val into the map, does not check for duplicates
-*/
-void idm_add_enum_val(identfier_map_t* map, const char* name, int_val_t val);
-
-/*
 update the declaration, used when we encounter a definition after encountering the declaration
 */
 ast_declaration_t* idm_update_decl(identfier_map_t* map, ast_declaration_t* decl);
@@ -125,11 +105,6 @@ ast_declaration_t* idm_find_decl(identfier_map_t* map, const char* name);
 search the map for a declaration in the current code block
 */
 ast_declaration_t* idm_find_block_decl(identfier_map_t* map, const char* name);
-
-/*
-search the map for an enum member
-*/
-int_val_t* idm_find_enum_val(identfier_map_t* map, const char* name);
 
 /*
 search the map for a tag

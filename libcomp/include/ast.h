@@ -418,6 +418,15 @@ typedef enum
 	decl_type
 }ast_decl_kind;
 
+static inline const char* ast_decl_kind_name(ast_decl_kind k)
+{
+	if (k == decl_var)
+		return "variable";
+	else if (k == decl_func)
+		return "function";
+	return "user type";
+}
+
 /*
 A declaration
 */

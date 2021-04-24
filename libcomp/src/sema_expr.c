@@ -276,6 +276,20 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 			}
 			result.result_type = decl->type_ref->spec;
 			result.array = ast_is_array_decl(decl);
+
+
+			if (decl->data.var.init_expr && 
+				decl->data.var.init_expr->kind == expr_int_literal &&
+				decl->type_ref->flags & TF_QUAL_CONST)
+			{
+				//expression references a constant variable (likely an enum value), convert the var reference expression into an int literal expression
+
+				ast_destroy_expression_data(expr);
+				expr->kind = expr_int_literal;
+				expr->data.int_literal = decl->data.var.init_expr->data.int_literal;
+				return sema_process_expression(expr);
+			}
+
 			return result;
 		}
 		else if (decl->kind == decl_func)
@@ -287,14 +301,14 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 	}
 
 	//enum value?
-	int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.identifier.name);
+	/*int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.identifier.name);
 	if (enum_val)
 	{
 		ast_destroy_expression_data(expr);
 		expr->kind = expr_int_literal;
 		expr->data.int_literal.val = *enum_val;
 		return sema_process_expression(expr);
-	}
+	}*/
 	
 	return _report_err(expr, ERR_UNKNOWN_IDENTIFIER,
 		"identifier '%s' not defined",

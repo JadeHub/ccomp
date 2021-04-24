@@ -58,15 +58,17 @@ static bool _report_err(token_t* tok, int err, const char* format, ...)
 	return false;
 }
 
-static void _resolve_struct_member_types(ast_user_type_spec_t* user_type_spec)
+static bool _process_struct_member_types(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind != user_type_enum);
 	ast_struct_member_t* member = user_type_spec->data.struct_members;
 	while (member)
 	{
+		//duplicate names?
 		sema_resolve_type_ref(member->decl->type_ref);
 		member = member->next;
 	}
+	return true;
 }
 
 static bool process_expression(ast_expression_t* expr)
@@ -79,10 +81,50 @@ static bool process_expression(ast_expression_t* expr)
 	return !result.failure;
 }
 
+static ast_declaration_t* _create_enum_item_decl(ast_enum_member_t* member, int_val_t default_val)
+{
+	ast_expression_t* value;
+	if (member->value)
+	{
+		if (!sema_is_const_int_expr(member->value))
+		{
+			_report_err(member->value->tokens.start, ERR_INITIALISER_NOT_CONST,
+				"enum member initialised with non-const integer expression");
+			return NULL;
+		}
+		sema_fold_const_int_expr(member->value);
+		value = member->value;
+	}
+	else
+	{
+		value = (ast_expression_t*)malloc(sizeof(ast_expression_t));
+		memset(value, 0, sizeof(ast_expression_t));
+		value->tokens = member->tokens; //?
+		value->kind = expr_int_literal;
+		value->data.int_literal.val = default_val;
+		
+	}
+	//create a declaration representing the enumerator
+	ast_declaration_t* decl = (ast_declaration_t*)malloc(sizeof(ast_declaration_t));
+	memset(decl, 0, sizeof(ast_declaration_t));
+	decl->tokens = member->tokens;
+	decl->kind = decl_var;
+	strncpy(decl->name, member->name, MAX_LITERAL_NAME);
+	//type is int32
+	decl->type_ref = (ast_type_ref_t*)malloc(sizeof(ast_type_ref_t));
+	decl->type_ref->tokens = member->tokens; //?
+	decl->type_ref->spec = int32_type_spec;
+	decl->type_ref->flags = TF_QUAL_CONST;
+	//const int init expression
+	decl->data.var.init_expr = value;
+
+	return decl;
+}
+
 /*
 Create asl_declaration_t objects for each item in the enum
 */
-static bool _register_enum_constants(ast_user_type_spec_t* user_type_spec)
+static bool _process_enum_constants(ast_user_type_spec_t* user_type_spec)
 {
 	assert(user_type_spec->kind == user_type_enum);
 	ast_enum_member_t* member = user_type_spec->data.enum_members;
@@ -90,20 +132,23 @@ static bool _register_enum_constants(ast_user_type_spec_t* user_type_spec)
 	
 	while (member)
 	{
-		if (member->value)
+		ast_declaration_t* exist = idm_find_decl(_id_map, member->name);
+		if (exist)
 		{
-			if (!sema_is_const_int_expr(member->value))
-			{
-				//err
-				return false;
-			}
-			next_val = sema_fold_const_int_expr(member->value);
+			_report_err(member->tokens.start, ERR_DUP_SYMBOL,
+				"duplicate enumerator %s, previously defined as %s", member->name, ast_decl_kind_name(exist->kind));
+			return false;
 		}
 
-		idm_add_enum_val(_id_map, member->name, next_val);
+		ast_declaration_t* decl = _create_enum_item_decl(member, next_val);
 
+		if (!decl)
+			return false;
+
+		idm_add_decl(_id_map, decl);
+
+		next_val = int_val_inc(decl->data.var.init_expr->data.int_literal.val);
 		member = member->next;
-		next_val = int_val_inc(next_val);
 	}
 	return true;
 }
@@ -188,14 +233,19 @@ static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
 	return typeref->data.user_type_spec->kind == user_type_union ? max_member : total;
 }
 
-static void _add_user_type(ast_type_spec_t* typeref)
+static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 {
-	if (typeref->data.user_type_spec->kind == user_type_enum)
-		_register_enum_constants(typeref->data.user_type_spec);
+	bool valid;
+	if (spec->data.user_type_spec->kind == user_type_enum)
+		valid = _process_enum_constants(spec->data.user_type_spec);
 	else
-		_resolve_struct_member_types(typeref->data.user_type_spec);
-	typeref->size = _calc_user_type_size(typeref);
-	idm_add_tag(_id_map, typeref);
+		valid = _process_struct_member_types(spec->data.user_type_spec);
+
+	if (!valid)
+		return NULL;
+	spec->size = _calc_user_type_size(spec);
+	idm_add_tag(_id_map, spec);
+	return spec;
 }
 
 ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
@@ -245,8 +295,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		//ignore anonymous types
 		if (strlen(spec->data.user_type_spec->name) == 0)
 		{
-			_add_user_type(spec);
-			return spec;
+			return _process_user_type(spec);
 		}
 
 		ast_type_spec_t* exist = idm_find_block_tag(_id_map, spec->data.user_type_spec->name);
@@ -279,14 +328,14 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 			{
 				exist->data.user_type_spec->data.enum_members = spec->data.user_type_spec->data.enum_members;
 				spec->data.user_type_spec->data.enum_members = NULL;
-				_register_enum_constants(exist->data.user_type_spec);
+				_process_enum_constants(exist->data.user_type_spec);
 			}
 			else
 			{
 				//update definition
 				exist->data.user_type_spec->data.struct_members = spec->data.user_type_spec->data.struct_members;
 				spec->data.user_type_spec->data.struct_members = NULL;
-				_resolve_struct_member_types(exist->data.user_type_spec);
+				_process_struct_member_types(exist->data.user_type_spec);
 			}
 			exist->size = _calc_user_type_size(exist);
 			ast_destroy_type_spec(spec);
@@ -294,7 +343,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		}
 		else
 		{
-			_add_user_type(spec);
+			spec = _process_user_type(spec);
 		}
 	}
 	else
@@ -317,12 +366,12 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		}
 		else
 		{
-			_add_user_type(spec);
+			spec = _process_user_type(spec);
 		}
 	}
 
 	//treat enums as int32_t
-	if (ast_type_is_enum(spec))
+	if (spec && ast_type_is_enum(spec))
 		return int32_type_spec;
 
 	return spec;
@@ -953,7 +1002,7 @@ proc_decl_result process_global_variable_declaration(ast_declaration_t* decl)
 		else if (decl->data.var.init_expr->kind != expr_str_literal)
 		{
 			return _report_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"global var '%s' initialised with non-const expression", decl->name);
+				"global var '%s' initialised with non-const integer expression", decl->name);
 		}
 	}
 

@@ -70,7 +70,22 @@ TEST_F(EnumValidationTest, err_redefine)
 	ExpectError(code, ERR_DUP_TYPE_DEF);
 }
 
-TEST_F(EnumValidationTest, err_redefine_struct)
+TEST_F(EnumValidationTest, err_redefine_struct_as_enum)
+{
+	std::string code = R"(
+	struct foo;
+
+	enum foo
+	{
+		foo1,
+		foo2
+	};
+	)";
+
+	ExpectError(code, ERR_DUP_TYPE_DEF);
+}
+
+TEST_F(EnumValidationTest, err_redefine_as_struct)
 {
 	std::string code = R"(	
 	enum foo
@@ -83,6 +98,38 @@ TEST_F(EnumValidationTest, err_redefine_struct)
 	)";
 
 	ExpectError(code, ERR_DUP_TYPE_DEF);
+}
+
+TEST_F(EnumValidationTest, redefine_item_as_struct)
+{
+	//structs and enum members exist in different namespaces
+	std::string code = R"(
+	enum foo
+	{
+		dup
+	};
+
+	struct dup;
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(EnumValidationTest, err_redefine_item)
+{
+	std::string code = R"(	
+	enum foo
+	{
+		dup
+	};
+
+	enum foo2
+	{
+		dup
+	};
+	)";
+
+	ExpectError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(EnumValidationTest, var)
