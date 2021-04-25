@@ -588,7 +588,7 @@ void gen_global_var(ast_declaration_t* decl)
 		gen_asm(".bss"); //bss section
 		gen_asm(".align 4");
 		gen_asm("_var_%s:", decl->name); //label
-		gen_asm(".zero %d", decl->type_ref->spec->size); //data length		
+		gen_asm(".zero %d", decl->sema.alloc_size); //data length
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
 	}

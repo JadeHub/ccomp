@@ -132,6 +132,19 @@ TEST_F(EnumValidationTest, err_redefine_item)
 	ExpectError(code, ERR_DUP_SYMBOL);
 }
 
+TEST_F(EnumValidationTest, err_dup_item)
+{
+	std::string code = R"(	
+	enum foo
+	{
+		dup,
+		dup
+	};
+	)";
+
+	ExpectError(code, ERR_DUP_SYMBOL);
+}
+
 TEST_F(EnumValidationTest, var)
 {
 	std::string code = R"(	

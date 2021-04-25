@@ -286,7 +286,8 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 	if (current_is(tok_l_brace))
 	{
 		next_tok();
-		uint32_t offset = 0;
+		//uint32_t offset = 0;
+		ast_struct_member_t* last_member = NULL;
 		while (!current_is(tok_r_brace))
 		{
 			/*
@@ -315,12 +316,16 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 				memset(member, 0, sizeof(ast_struct_member_t));
 				member->tokens = decl->tokens;
 				member->decl = decl;
-				member->sema.offset = offset;
 
-				member->next = result->data.struct_members;
-				result->data.struct_members = member;
-				offset += member->decl->type_ref->spec->size;
-
+				if (last_member == NULL)
+				{
+					result->data.struct_members = member;
+				}
+				else
+				{
+					last_member->next = member;
+				}
+				last_member = member;
 				decl = decl->next;
 			}
 		}

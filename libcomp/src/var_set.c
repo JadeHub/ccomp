@@ -149,9 +149,9 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 	var = _make_stack_var(vars->bsp_offset - sz, decl->name);
 	var->kind = var_stack;
 	var->var_decl = decl;
-		
+
 	vars->bsp_offset -= (sz + 0x01) & ~0x01;
-		
+
 	// add to start of list
 	var->next = vars->vars;
 	vars->vars = var;

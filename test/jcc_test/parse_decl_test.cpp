@@ -139,15 +139,3 @@ TEST_F(ParstDeclTest, array_type)
 	ExpectVarPtrDecl(0, "p", int32_type_spec);
 }
 
-TEST_F(ParstDeclTest, array_struct_bitsize)
-{
-	ParseDecl(R"(
-	struct
-	{
-		int flag : 1;
-	}s;)");
-	
-	AssertValid();
-	ASSERT_EQ(1, count);
-	ast_declaration_t* decl = DeclNo(0);
-}

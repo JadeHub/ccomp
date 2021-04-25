@@ -327,7 +327,6 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec
 	{
 		if (strcmp(member->decl->name, name) == 0)
 		{
-			//return member->offset;
 			return member;
 		}
 		member = member->next;

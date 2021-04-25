@@ -23,5 +23,6 @@ typedef struct
 	
 }valid_trans_unit_t;
 
+void sema_init();
 valid_trans_unit_t* sem_analyse(ast_trans_unit_t*);
 void tl_destroy(valid_trans_unit_t*);

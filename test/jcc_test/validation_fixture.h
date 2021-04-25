@@ -13,8 +13,12 @@ extern "C"
 #include <libcomp/include/lexer.h>
 #include <libcomp/include/parse.h>
 #include <libcomp/include/sema.h>
+#include <libcomp/include/sema_internal.h>
 #include <libcomp/include/pp.h>
 #include <libcomp/include/pp_internal.h>
+#include <libcomp/include/abi.h>
+#include <libcomp/include/parse_internal.h>
+#include <libcomp/include/std_types.h>
 }
 
 using namespace ::testing;

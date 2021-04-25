@@ -707,7 +707,7 @@ static bool _process_include(token_t* tok)
 
 	const char* cur_path = path_dirname(_context->input_stack->path);
 	source_range_t* sr = src_load_header(cur_path, sb_str(path_buff), inc_kind);
-	free(cur_path);
+	free((void*)cur_path);
 	if (!src_is_valid_range(sr))
 	{
 		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", sb_str(path_buff));

@@ -242,8 +242,8 @@ typedef struct ast_struct_member
 
 	struct
 	{
-		uint32_t bit_size; //eg, the 1 in 'int p : 1' - todo
-		uint32_t offset; //alligned position within struct - todo
+		size_t bit_size; //eg, the 1 in 'int p : 1' - todo
+		size_t offset; //alligned position within struct - todo
 	}sema;
 
 	struct ast_struct_member* next;
@@ -457,6 +457,11 @@ typedef struct ast_declaration
 		size to be allocated on heap - eg type_ref->size * array_dimensions
 		*/
 		size_t alloc_size;
+
+		/*
+		Total number of items to be allocated as an array. ie 30 for 'int [10][3]'
+		*/
+		size_t total_array_count;
 	}sema;
 
 }ast_declaration_t;

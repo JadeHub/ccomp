@@ -4,6 +4,7 @@
 #include "diag.h"
 #include "var_set.h"
 #include "id_map.h"
+#include "abi.h"
 
 #include "std_types.h"
 
@@ -58,19 +59,6 @@ static bool _report_err(token_t* tok, int err, const char* format, ...)
 	return false;
 }
 
-static bool _process_struct_member_types(ast_user_type_spec_t* user_type_spec)
-{
-	assert(user_type_spec->kind != user_type_enum);
-	ast_struct_member_t* member = user_type_spec->data.struct_members;
-	while (member)
-	{
-		//duplicate names?
-		sema_resolve_type_ref(member->decl->type_ref);
-		member = member->next;
-	}
-	return true;
-}
-
 static bool process_expression(ast_expression_t* expr)
 {
 	if (!expr)
@@ -81,6 +69,116 @@ static bool process_expression(ast_expression_t* expr)
 	return !result.failure;
 }
 
+static bool _process_array_dimentions(ast_declaration_t* decl)
+{
+	ast_expression_list_t* array_sz = decl->array_dimensions;
+	size_t total = 0;
+
+	while (array_sz)
+	{
+		ast_expression_t* expr = array_sz->expr;
+
+		if (!sema_is_const_int_expr(expr))
+		{
+			_report_err(expr->tokens.start, ERR_INITIALISER_NOT_CONST,
+				"array size must be a constant integer expression",
+				ast_declaration_name(decl));
+			return false;
+		}
+		int_val_t expr_val = sema_fold_const_int_expr(expr);
+		if (total == 0)
+			total = expr_val.v.uint64;
+		else
+			total *= expr_val.v.uint64;
+		array_sz = array_sz->next;
+	}
+	decl->sema.total_array_count = total;
+	decl->sema.alloc_size = total * decl->type_ref->spec->data.ptr_type->size;
+	return true;
+}
+
+static bool _is_member_name_unique(ast_user_type_spec_t* user_type_spec, ast_struct_member_t* unique)
+{
+	ast_struct_member_t* member = user_type_spec->data.struct_members;
+	while (member)
+	{
+		if (member != unique && strcmp(member->decl->name, unique->decl->name) == 0)
+			return false;
+		member = member->next;
+	}
+	return true;
+}
+
+static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
+{
+	assert(user_type_spec->kind != user_type_enum);
+	ast_struct_member_t* member = user_type_spec->data.struct_members;
+	while (member)
+	{
+		if (strlen(member->decl->name) > 0 && !_is_member_name_unique(user_type_spec, member))
+		{
+			return _report_err(member->tokens.start, ERR_DUP_SYMBOL,
+				"duplicate %s member %s",
+				user_type_kind_name(user_type_spec->kind),
+				member->decl->name);
+		}
+
+		if (!sema_resolve_type_ref(member->decl->type_ref) || member->decl->type_ref->spec->size == 0)
+		{
+			return _report_err(member->tokens.start, ERR_TYPE_INCOMPLETE,
+				"%s member %s is of incomplete type",
+				user_type_kind_name(user_type_spec->kind),
+				member->decl->name);
+		}
+
+		if (ast_is_array_decl(member->decl))
+		{
+			if (!_process_array_dimentions(member->decl))
+				return false;
+		}
+
+		if (member->decl->data.var.bit_sz)
+		{
+			if (!ast_type_is_int(member->decl->type_ref->spec))
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
+					"type not valid for bit field");
+			}
+
+			if (!sema_is_const_int_expr(member->decl->data.var.bit_sz))
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_INITIALISER_NOT_CONST,
+					"bit field size must be a constant integer expression");
+			}
+
+			int_val_t val = sema_fold_const_int_expr(member->decl->data.var.bit_sz);
+
+			if (val.v.uint64 > 32)
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
+					"bit field size exceeds 32 bits");
+			}
+
+			if (val.v.int64 < 0)
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
+					"bit field size must be positive");
+			}
+
+			if (val.v.uint64 == 0 && strlen(member->decl->name) > 0)
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
+					"field with bit field size 0 must be anonymous");
+			}
+
+			member->sema.bit_size = (size_t)val.v.uint64;
+		}
+
+		member = member->next;
+	}
+	return true;
+}
+
 static ast_declaration_t* _create_enum_item_decl(ast_enum_member_t* member, int_val_t default_val)
 {
 	ast_expression_t* value;
@@ -89,7 +187,7 @@ static ast_declaration_t* _create_enum_item_decl(ast_enum_member_t* member, int_
 		if (!sema_is_const_int_expr(member->value))
 		{
 			_report_err(member->value->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"enum member initialised with non-const integer expression");
+				"enum member value must be a constant integer expression");
 			return NULL;
 		}
 		sema_fold_const_int_expr(member->value);
@@ -160,90 +258,20 @@ static bool _user_type_is_definition(ast_user_type_spec_t* type)
 	return type->data.struct_members != NULL;
 }
 
-static size_t _calc_array_alloc_size(ast_declaration_t* decl)
-{
-	ast_expression_list_t* array_sz = decl->array_dimensions;
-	size_t result = 0;
-
-	while (array_sz)
-	{
-		ast_expression_t* expr = array_sz->expr;
-
-		if (!sema_is_const_int_expr(expr))
-		{
-			_report_err(expr->tokens.start, ERR_TYPE_INCOMPLETE,
-				"array size must be constant expression",
-				ast_declaration_name(decl));
-			return 0;
-
-		}
-		int_val_t expr_val = sema_fold_const_int_expr(expr);
-		if (!result)
-			result = expr_val.v.uint64 * decl->type_ref->spec->data.ptr_type->size;
-		else
-			result *= expr_val.v.uint64;
-		array_sz = array_sz->next;
-	}
-
-	if (result == 0)
-	{
-		_report_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"array size unknown",
-			ast_declaration_name(decl));
-		return 0;
-	}
-	return result;
-}
-
-static uint32_t _calc_user_type_member_size(ast_struct_member_t* member)
-{
-	if (member->sema.bit_size > 0)
-		return (member->sema.bit_size / 8) + (member->sema.bit_size % 8 ? 1 : 0);
-	if (member->decl->array_dimensions)
-		return (uint32_t)_calc_array_alloc_size(member->decl);
-	return member->decl->type_ref->spec->size;
-}
-
-static uint32_t _calc_user_type_size(ast_type_spec_t* typeref)
-{
-	if (typeref->data.user_type_spec->kind == user_type_enum)
-		return 4;
-
-	uint32_t total = 0;
-	uint32_t max_member = 0;
-	ast_struct_member_t* member = typeref->data.user_type_spec->data.struct_members;
-	while (member)
-	{
-		if (member->decl->data.var.bit_sz)
-		{
-			member->sema.bit_size = (uint32_t)sema_fold_const_int_expr(member->decl->data.var.bit_sz).v.uint64;
-		}
-
-		uint32_t size = _calc_user_type_member_size(member);
-		member->decl->sema.alloc_size = size;
-
-		member->sema.offset = total;
-		if (typeref->data.user_type_spec->kind == user_type_struct)
-			total += size; //unions will have offset = 0 for all
-		if (size > max_member)
-			max_member = size;
-
-		member = member->next;
-	}
-	return typeref->data.user_type_spec->kind == user_type_union ? max_member : total;
-}
-
 static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 {
 	bool valid;
 	if (spec->data.user_type_spec->kind == user_type_enum)
 		valid = _process_enum_constants(spec->data.user_type_spec);
 	else
-		valid = _process_struct_member_types(spec->data.user_type_spec);
+		valid = _process_struct_members(spec->data.user_type_spec);
 
 	if (!valid)
 		return NULL;
-	spec->size = _calc_user_type_size(spec);
+
+	//dont calc size for declarations
+	if(spec->data.user_type_spec->data.struct_members)
+		spec->size = abi_calc_user_type_layout(spec);
 	idm_add_tag(_id_map, spec);
 	return spec;
 }
@@ -335,9 +363,9 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 				//update definition
 				exist->data.user_type_spec->data.struct_members = spec->data.user_type_spec->data.struct_members;
 				spec->data.user_type_spec->data.struct_members = NULL;
-				_process_struct_member_types(exist->data.user_type_spec);
+				_process_struct_members(exist->data.user_type_spec);
 			}
-			exist->size = _calc_user_type_size(exist);
+			exist->size = abi_calc_user_type_layout(exist);
 			ast_destroy_type_spec(spec);
 			spec = exist;
 		}
@@ -483,7 +511,8 @@ bool process_variable_declaration(ast_declaration_t* decl)
 
 	if (ast_is_array_decl(decl))
 	{
-		decl->sema.alloc_size = _calc_array_alloc_size(decl);
+		//decl->sema.alloc_size = _calc_array_alloc_size(decl);
+		_process_array_dimentions(decl);
 		if (decl->sema.alloc_size == 0)
 			return false;
 	}
@@ -1028,11 +1057,15 @@ static void _add_var_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
 	tl->var_decls = tl_decl;
 }
 
-valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
+void sema_init()
 {
 	types_init();
 	_id_map = idm_create();
+}
 
+valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
+{
+	sema_init();
 	_cur_func_ctx.decl = NULL;
 	_cur_func_ctx.labels = NULL;
 
@@ -1081,7 +1114,7 @@ valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
 		decl = next;
 	}
 	idm_destroy(_id_map);
-	_id_map = NULL;	
+	_id_map = NULL;
 	return tl;
 }
 

@@ -335,3 +335,120 @@ TEST_F(StructValidationTest, err_typedef_struct_dup)
 
 	ExpectError(code, ERR_DUP_TYPE_DEF);
 }
+
+TEST_F(StructValidationTest, err_duplicate_member_name)
+{
+	std::string code = R"(
+	struct a
+	{
+		int member;
+		int member;
+	};
+
+	)";
+
+	ExpectError(code, ERR_DUP_SYMBOL);
+}
+
+TEST_F(StructValidationTest, err_member_incomplete_type)
+{
+	std::string code = R"(
+	struct B;
+	struct A
+	{
+		struct B b;
+	};
+
+	)";
+
+	ExpectError(code, ERR_TYPE_INCOMPLETE);
+}
+
+TEST_F(StructValidationTest, err_member_non_const_bitsize)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		int i : p;
+	};
+
+	)";
+
+	ExpectError(code, ERR_INITIALISER_NOT_CONST);
+}
+
+TEST_F(StructValidationTest, err_member_bitsize_too_large)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		int i : 33;
+	};
+
+	)";
+
+	ExpectError(code, ERR_UNSUPPORTED);
+}
+
+TEST_F(StructValidationTest, err_member_bitsize_negative)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		int i : -1;
+	};
+
+	)";
+
+	ExpectError(code, ERR_UNSUPPORTED);
+}
+
+TEST_F(StructValidationTest, err_member_bitsize_invalid_type)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		char* i : 1;
+	};
+
+	)";
+
+	ExpectError(code, ERR_UNSUPPORTED);
+}
+
+TEST_F(StructValidationTest, err_member_bitsize_zero_named)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		int i : 0;
+	};
+
+	)";
+
+	ExpectError(code, ERR_UNSUPPORTED);
+}
+
+TEST_F(StructValidationTest, member_bit_sizes)
+{
+	std::string code = R"(
+	
+	struct A
+	{
+		int i : 1;
+		int j : 5;
+		int : 32 - (5 + 1);
+		int x : 30;
+		int : 1;
+		int y : 1;
+	};
+
+	)";
+
+	ExpectNoError(code);
+}
