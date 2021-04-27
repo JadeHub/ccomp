@@ -94,4 +94,5 @@ for path in paths:
 
 if total_failures > 0:
     print(f'{bcolors.FAIL}{total_failures}/{total_cases} TOTAL FAILURES{bcolors.ENDC}')
-    
+else:
+    print(f'{bcolors.OKGREEN}{total_cases} PASSED{bcolors.ENDC}')

@@ -235,9 +235,9 @@ TEST_F(EnumValidationTest, enum_member)
 TEST_F(EnumValidationTest, enum_param)
 {
 	std::string code = R"(	
-	enum foo {foo1,	foo2};
+	typedef enum {foo1,	foo2} foo ;
 
-	int bar(enum foo f)
+	int bar(foo f)
 	{	
 		return f;
 	}	

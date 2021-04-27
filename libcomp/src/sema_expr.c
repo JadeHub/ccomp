@@ -101,6 +101,7 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 
 	result.result_type = member->decl->type_ref->spec;
 	result.array = ast_is_array_decl(member->decl);
+	result.member = member;
 	return result;
 }
 
@@ -149,6 +150,7 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	}
 	else if (!sema_can_convert_type(target_result.result_type, result.result_type))
 	{
+		sema_can_convert_type(target_result.result_type, result.result_type);
 		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 			"assignment to incompatible type. expected %s",
 			ast_type_name(target_result.result_type));
@@ -207,6 +209,11 @@ static expr_result_t _process_unary_op(ast_expression_t* expr)
 	{
 	case op_address_of:
 	{
+		if (result.member && ast_is_bit_field_member(result.member))
+		{
+			return _report_err(expr, ERR_INCOMPATIBLE_TYPE, "address of operator: cannot take address of bit field member");
+		}
+
 		ast_type_spec_t* ptr_type = ast_make_ptr_type(result.result_type);
 		result.result_type = ptr_type;
 		break;

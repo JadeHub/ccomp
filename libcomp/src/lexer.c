@@ -415,6 +415,8 @@ static void _lex_identifier(source_range_t* sr, const char* pos, token_t* result
 		result->kind = tok_auto;
 	else if (strcmp(sb->buff, "register") == 0)
 		result->kind = tok_register;
+	else if (strcmp(sb->buff, "inline") == 0)
+		result->kind = tok_inline;
 	else if (strcmp(sb->buff, "return") == 0)
 		result->kind = tok_return;
 	else if (strcmp(sb->buff, "if") == 0)

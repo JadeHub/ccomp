@@ -2,6 +2,8 @@
 
 #include "ast.h"
 
+//calculate struct layout according to the System V ABI for i386
+
 /*
 Set the offset for each member and the alignment for the user type
 */

@@ -20,6 +20,7 @@ typedef struct
 	bool failure;
 	ast_type_spec_t* result_type; //can be replaced with ast_expression_t::sema::result_type
 	bool array; //result was an array of result_type
+	ast_struct_member_t* member; //result was a struct member access (this is used to implement the rule which prevents taking the address of a bit field member
 }expr_result_t;
 
 expr_result_t sema_process_expression(ast_expression_t* expr);

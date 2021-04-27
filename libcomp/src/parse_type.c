@@ -145,6 +145,7 @@ static bool _is_storage_class_specifier(token_t* tok)
 	case tok_static:
 	case tok_auto:
 	case tok_register:
+	case tok_inline:
 		return true;
 	};
 	return false;
@@ -517,18 +518,24 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 		}
 		else if (_is_storage_class_specifier(current()))
 		{
-			//allow one of, extern, static, typedef, auto , register (auto and register are ignored)
-			if (storage_class_specs)
-				return parse_err(ERR_SYNTAX, "multiple storage class specifiers are not permitted");
-			storage_class_specs = true;
+			if (current_is(tok_inline))
+			{
+				flags |= TF_SC_INLINE;
+			}
+			else
+			{
+				//allow one of, extern, static, typedef, auto , register (auto and register are ignored)
+				if (storage_class_specs)
+					return parse_err(ERR_SYNTAX, "multiple storage class specifiers are not permitted");
+				storage_class_specs = true;
 
-			if (current_is(tok_extern))
-				flags |= TF_SC_EXTERN;
-			else if (current_is(tok_static))
-				flags |= TF_SC_STATIC;
-			else if (current_is(tok_typedef))
-				flags |= TF_SC_TYPEDEF;
-
+				if (current_is(tok_extern))
+					flags |= TF_SC_EXTERN;
+				else if (current_is(tok_static))
+					flags |= TF_SC_STATIC;
+				else if (current_is(tok_typedef))
+					flags |= TF_SC_TYPEDEF;
+			}
 			next_tok();
 		}
 		else if (_is_type_qualifier(current()))

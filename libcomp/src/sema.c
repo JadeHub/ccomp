@@ -71,6 +71,12 @@ static bool process_expression(ast_expression_t* expr)
 
 static bool _process_array_dimentions(ast_declaration_t* decl)
 {
+	if (!ast_is_array_decl(decl))
+	{
+		decl->sema.alloc_size = decl->type_ref->spec->size;
+		return true;
+	}
+
 	ast_expression_list_t* array_sz = decl->array_dimensions;
 	size_t total = 0;
 
@@ -131,14 +137,17 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 				member->decl->name);
 		}
 
-		if (ast_is_array_decl(member->decl))
-		{
-			if (!_process_array_dimentions(member->decl))
-				return false;
-		}
+		if (!_process_array_dimentions(member->decl))
+			return false;
 
-		if (member->decl->data.var.bit_sz)
+		if (ast_is_bit_field_member(member))
 		{
+			if (ast_is_array_decl(member->decl))
+			{
+				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
+					"bit field cannt be declared as an array");
+			}
+
 			if (!ast_type_is_int(member->decl->type_ref->spec))
 			{
 				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
@@ -260,6 +269,9 @@ static bool _user_type_is_definition(ast_user_type_spec_t* type)
 
 static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 {
+	//add early as we may have members of our own type
+	idm_add_tag(_id_map, spec);
+
 	bool valid;
 	if (spec->data.user_type_spec->kind == user_type_enum)
 		valid = _process_enum_constants(spec->data.user_type_spec);
@@ -272,7 +284,7 @@ static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 	//dont calc size for declarations
 	if(spec->data.user_type_spec->data.struct_members)
 		spec->size = abi_calc_user_type_layout(spec);
-	idm_add_tag(_id_map, spec);
+	
 	return spec;
 }
 
@@ -292,7 +304,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 			return NULL;
 		}
 
-		spec = decl->type_ref->spec;
+		return decl->type_ref->spec;
 	}
 
 	if (spec->kind == type_ptr)
@@ -509,7 +521,10 @@ bool process_variable_declaration(ast_declaration_t* decl)
 			ast_declaration_name(decl));
 	}
 
-	if (ast_is_array_decl(decl))
+	_process_array_dimentions(decl);
+	if (decl->sema.alloc_size == 0)
+		return false;
+	/*if (ast_is_array_decl(decl))
 	{
 		//decl->sema.alloc_size = _calc_array_alloc_size(decl);
 		_process_array_dimentions(decl);
@@ -519,7 +534,7 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	else
 	{
 		decl->sema.alloc_size = decl->type_ref->spec->size;
-	}
+	}*/
 
 	if (decl->data.var.init_expr)
 	{

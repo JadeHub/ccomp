@@ -337,9 +337,10 @@ typedef struct ast_type_spec
 #define TF_SC_EXTERN		1
 #define TF_SC_STATIC		2
 #define TF_SC_TYPEDEF		4
+#define TF_SC_INLINE		8
 
 //Type qualifier flags
-#define TF_QUAL_CONST		8
+#define TF_QUAL_CONST		16
 
 /*
 a reference to a type specification including type qual and storage class information
@@ -706,6 +707,11 @@ bool ast_type_is_int(ast_type_spec_t* type);
 returns true if the given type spec is an enum
 */
 bool ast_type_is_enum(ast_type_spec_t* type);
+
+/*
+returns true if the given struct member is a bit field
+*/
+bool ast_is_bit_field_member(ast_struct_member_t* member);
 
 void ast_destroy_decl_list(ast_decl_list_t decl_list);
 void ast_destory_translation_unit(ast_trans_unit_t* tl);

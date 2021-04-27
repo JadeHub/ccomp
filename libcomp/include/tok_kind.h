@@ -95,6 +95,7 @@ typedef enum
 	tok_static,
 	tok_auto,
 	tok_register,
+	tok_inline,
 
 	// preprocessor directives
 	tok_pp_null, //# \n

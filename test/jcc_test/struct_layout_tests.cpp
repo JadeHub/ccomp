@@ -174,7 +174,16 @@ TEST_F(StructAlignTest, int_array)
 	EXPECT_EQ(40, sz);
 }
 
-struct
+TEST_F(StructAlignTest, struct_array)
 {
-	int vals[10];
-}t_1;
+	ParseStructDecl(R"(
+	struct
+	{
+		struct {char c; short s;} m[10];
+		
+	};)");
+
+	size_t sz = abi_calc_user_type_layout(result);
+	EXPECT_EQ(40, sz);
+}
+

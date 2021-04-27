@@ -416,6 +416,11 @@ bool ast_type_is_enum(ast_type_spec_t* type)
 	return type->kind == type_user && type->data.user_type_spec->kind == user_type_enum;
 }
 
+bool ast_is_bit_field_member(ast_struct_member_t* member)
+{
+	return member->decl->data.var.bit_sz != NULL;
+}
+
 bool ast_is_assignment_op(op_kind op)
 {
 	switch (op)

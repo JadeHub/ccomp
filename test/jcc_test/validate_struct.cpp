@@ -452,3 +452,36 @@ TEST_F(StructValidationTest, member_bit_sizes)
 
 	ExpectNoError(code);
 }
+
+TEST_F(StructValidationTest, err_address_of_bit_field)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A { int i : 1;} a;
+		int* p = &a.i;
+	}
+
+	)";
+
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+}
+
+TEST_F(StructValidationTest, typedef_struct_self)
+{
+	std::string code = R"(
+	
+	//typedef struct A{struct A* ptr;} a_t;
+	struct A{struct A* ptr;};
+
+	void fn()
+	{
+		struct A a1, a2;
+		a1.ptr = &a2;
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
