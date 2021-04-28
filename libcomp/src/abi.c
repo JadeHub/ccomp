@@ -30,18 +30,6 @@ static size_t _member_alloc_size(ast_struct_member_t* member)
 	return member->decl->type_ref->spec->size;
 }
 
-static size_t _count_adjacent_bit_fields(ast_struct_member_t* member)
-{
-	size_t result = 0;
-
-	while (member && ast_is_bit_field_member(member))
-	{
-		result += member->sema.bit_size;
-		member = member->next;
-	}
-	return result;
-}
-
 size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 {
 	if (ast_type_is_enum(spec))
@@ -55,29 +43,40 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 
 	while (member)
 	{
-		/*if (ast_is_bit_field_member(member))
+		if (ast_is_bit_field_member(member))
 		{
-			size_t sz = _count_adjacent_bit_fields(member);
+			//the field type dictates the alignment and the max number of bits
+			size_t align = member->decl->type_ref->spec->size;
+			assert(align);
+			size_t max_bits = member->decl->type_ref->spec->size * 8;
+			size_t pad = (align - (offset % align)) % align;
+			offset += pad;
 
-			ast_struct_member_t* bit_field = member;
-			size_t bits = 0;
-			while(bit_field && ast_is_bit_field_member(bit_field))
+			size_t bit_sz = 0;
+			do
 			{
-				bits += bit_field->sema.bit_size;
-				bit_field = bit_field->next;
-			}
-			member = bit_field;
-			continue;
-		}*/
+				//the member starts at offset
+				member->sema.offset = offset;
+				//the field is offset by bit_sz bits
+				member->sema.bit_field.offset = bit_sz;
 
-		size_t align = abi_get_type_alignment(member->decl->type_ref->spec);
-		assert(align);
-		//calculate the padding required to correctly align the member
-		size_t pad = (align - (offset % align)) % align;
-		member->sema.offset = offset + pad;
+				bit_sz += member->sema.bit_field.size;
+				member = member->next;
+			} while (bit_sz <= max_bits && member && ast_is_bit_field_member(member));
 
-		offset = member->sema.offset + _member_alloc_size(member);
-		member = member->next;
+			offset += align; //align is also the size of the field
+		}
+		else
+		{
+			size_t align = abi_get_type_alignment(member->decl->type_ref->spec);
+			assert(align);
+			//calculate the padding required to correctly align the member
+			size_t pad = (align - (offset % align)) % align;
+			member->sema.offset = offset + pad;
+
+			offset = member->sema.offset + _member_alloc_size(member);
+			member = member->next;
+		}
 	}
 
 	//calculate tail padding

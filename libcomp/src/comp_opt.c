@@ -29,6 +29,10 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 				{
 					result.annotate_asm = true;
 				}
+				else if (*pos == 'd')
+				{
+					result.dump_type_info = true;
+				}
 				else if (*pos == 'o')
 				{
 					if (++idx == argc)

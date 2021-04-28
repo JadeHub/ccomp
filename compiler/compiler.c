@@ -11,8 +11,11 @@
 #include <libcomp/include/code_gen.h>
 #include <libcomp/include/sema.h>
 #include "libcomp/include/comp_opt.h"
+#include <libcomp/include/abi.h>
 
 #include <libj/include/platform.h>
+
+static comp_opt_t options;
 
 void asm_print(const char* line, bool lf, void* data)
 {
@@ -101,11 +104,51 @@ bool load_config(const char* path)
     return true;
 }
 
+void on_observe_user_type_def(ast_type_spec_t* spec)
+{
+    if (options.dump_type_info && spec->data.user_type_spec->kind != user_type_enum)
+    {
+        printf("User type %s\n", spec->data.user_type_spec->name);
+        ast_struct_member_t* member = spec->data.user_type_spec->data.struct_members;
+        while (member)
+        {
+            char* type_desc = ast_decl_type_describe(member->decl);
+
+            if (ast_is_bit_field_member(member))
+            {
+                printf("\t Offset %3ld (bits %2ld:%2ld) Member %-32s %s:%ld\n", 
+                    member->sema.offset,
+                    member->sema.bit_field.offset,
+                    member->sema.bit_field.offset + member->sema.bit_field.size,
+                    member->decl->name,
+                    type_desc,
+                    member->sema.bit_field.size);
+            }
+            else
+            {
+                printf("\t Offset %3ld (len %3ld)    Member %-32s %s\n",
+                    member->sema.offset,
+                    member->decl->sema.alloc_size,
+                    member->decl->name,
+                    type_desc);
+            }
+            free(type_desc);
+            member = member->next;
+        }
+        printf("\t sizeof %2ld align %2ld\n", spec->size, abi_get_type_alignment(spec));
+    }
+}
+
+bool run_code_gen()
+{
+    return !options.dump_type_info;
+}
+
 int main(int argc, char* argv[])
 {
     diag_set_handler(&diag_err_print, NULL);
 
-    comp_opt_t options = parse_command_line(argc, argv);
+    options = parse_command_line(argc, argv);
 
     if (!options.valid)
     {
@@ -132,18 +175,19 @@ int main(int argc, char* argv[])
     if (options.config_path && !load_config(options.config_path))
         return -1;
 
-    lex_init();
-
+    //load file
     source_range_t* sr = src_load_file(src_dir, src_file);
     free((void*)src_file);
-    
     if (!sr)
         return -1;
-    
+
+    //lex
+    lex_init();
     token_range_t range = lex_source(sr);
     if (!range.start)
         return -1;
 
+    //pre proc
     pre_proc_init();
     token_range_t preproced = pre_proc_file(src_dir, &range);
     pre_proc_deinit();
@@ -154,17 +198,25 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    //parse
     parse_init(preproced.start);
     ast_trans_unit_t* ast = parse_translation_unit();
-    valid_trans_unit_t* tl = sem_analyse(ast);
+
+    //semantic analysis
+    sema_observer_t so = { &on_observe_user_type_def };
+    sema_init(so);
+    valid_trans_unit_t* tl = sema_analyse(ast);
     if (!tl)
     {
         printf("Failed to validate\n");
         return -1;
     }
-    code_gen(tl, &asm_print, NULL, options.annotate_asm);
-    tl_destroy(tl);
+
+    //code generation
+    if(run_code_gen())
+        code_gen(tl, &asm_print, NULL, options.annotate_asm);
     
+    tl_destroy(tl);
     src_deinit();
     return 0;
 }

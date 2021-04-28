@@ -314,6 +314,84 @@ const char* ast_type_name(ast_type_spec_t* type)
 	return "unknown type";
 }
 
+void ast_type_spec_desc(str_buff_t* sb, ast_type_spec_t* spec)
+{
+	switch (spec->kind)
+	{
+	case type_void:
+		sb_append(sb, "void");
+		break;
+	case type_int8:
+		sb_append(sb, "int8");
+		break;
+	case type_uint8:
+		sb_append(sb, "uint8");
+		break;
+	case type_int16:
+		sb_append(sb, "int16");
+		break;
+	case type_uint16:
+		sb_append(sb, "uint16");
+		break;
+	case type_int32:
+		sb_append(sb, "int32");
+		break;
+	case type_uint32:
+		sb_append(sb, "uint32");
+		break;
+	case type_user:
+		sb_append(sb, ast_user_type_kind_name(spec->data.user_type_spec->kind));
+		sb_append(sb, " ");
+		sb_append(sb, spec->data.user_type_spec->name);
+		break;
+	case type_ptr:
+		ast_type_spec_desc(sb, spec->data.ptr_type);
+		sb_append_ch(sb, '*');
+		break;
+	}
+}
+
+void ast_type_ref_desc(str_buff_t* sb, ast_type_ref_t* type_ref)
+{
+	if (type_ref->flags & TF_SC_TYPEDEF)
+		sb_append(sb, "typedef ");
+	if (type_ref->flags & TF_SC_EXTERN)
+		sb_append(sb, "extern ");
+	if (type_ref->flags & TF_SC_STATIC)
+		sb_append(sb, "static ");
+	if (type_ref->flags & TF_SC_INLINE)
+		sb_append(sb, "inline ");
+	if (type_ref->flags & TF_QUAL_CONST)
+		sb_append(sb, "const ");
+
+//	ast_type_spec_desc(sb, type_ref->spec);
+}
+
+char* ast_decl_type_describe(ast_declaration_t* decl)
+{
+	str_buff_t* sb = sb_create(128);
+
+	if (ast_is_array_decl(decl))
+	{
+		ast_type_ref_desc(sb, decl->type_ref);
+		//ignore the implied pointer for arrays
+		ast_type_spec_desc(sb, decl->type_ref->spec->data.ptr_type);
+
+		sb_append_ch(sb, '[');
+		sb_append_int(sb, decl->sema.total_array_count, 10);
+		sb_append_ch(sb, ']');
+	}
+	else if(decl->kind == decl_var || decl->kind == decl_type)
+	{
+		ast_type_ref_desc(sb, decl->type_ref);
+		ast_type_spec_desc(sb, decl->type_ref->spec);
+
+		
+	}
+
+	return sb_release(sb);
+}
+
 const char* ast_declaration_name(ast_declaration_t* decl)
 {
 	return decl->name;

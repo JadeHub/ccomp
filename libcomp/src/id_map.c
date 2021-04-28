@@ -189,7 +189,7 @@ void idm_enter_block(identfier_map_t* map)
 
 void idm_leave_block(identfier_map_t* map)
 {
-	identifier_t* id = map->identifiers;	
+	identifier_t* id = map->identifiers;
 	// remove all identifiers up to and including the most recent block marker
 	while (id)
 	{

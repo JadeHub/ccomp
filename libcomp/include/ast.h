@@ -242,7 +242,15 @@ typedef struct ast_struct_member
 
 	struct
 	{
-		size_t bit_size; //eg, the 1 in 'int p : 1' - todo
+		/*
+		If the member is a bit field these values will be set
+		*/
+		struct
+		{
+			size_t size;	//size in bits
+			size_t offset;	//offset from start of member in bits
+		}bit_field;
+
 		size_t offset; //alligned position within struct - todo
 	}sema;
 
@@ -270,7 +278,7 @@ typedef enum
 /*
 returns the textual name for user type kind
 */
-static inline const char* user_type_kind_name(user_type_kind k)
+static inline const char* ast_user_type_kind_name(user_type_kind k)
 {
 	if (k == user_type_struct)
 		return "struct";
@@ -652,6 +660,12 @@ const char* ast_op_name(op_kind);
 returns the declaration's name
 */
 const char* ast_declaration_name(ast_declaration_t* decl);
+
+/*
+Describe the type of a declaration
+Caller to free returned pointer
+*/
+char* ast_decl_type_describe(ast_declaration_t* decl);
 
 /*
 returns the type name

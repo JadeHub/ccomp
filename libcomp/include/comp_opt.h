@@ -41,6 +41,11 @@ typedef struct
 	*/
 	char* config_path;
 
+	/*
+	* dump type info
+	*/
+	bool dump_type_info;
+
 }comp_opt_t;
 
 /*

@@ -23,6 +23,13 @@ typedef struct
 	
 }valid_trans_unit_t;
 
-void sema_init();
-valid_trans_unit_t* sem_analyse(ast_trans_unit_t*);
+typedef void (*sema_user_type_def_cb)(ast_type_spec_t* spec);
+
+typedef struct
+{
+	sema_user_type_def_cb user_type_def_cb;
+}sema_observer_t;
+
+void sema_init(sema_observer_t);
+valid_trans_unit_t* sema_analyse(ast_trans_unit_t*);
 void tl_destroy(valid_trans_unit_t*);

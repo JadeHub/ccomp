@@ -58,6 +58,13 @@ class CompilerTest : public TestWithErrorHandling
 {
 public:
 
+	CompilerTest()
+	{
+		sema_observer_t observer{ NULL };
+		sema_init(observer);
+		lex_init();
+	}
+
 	void SetSource(const std::string& src)
 	{
 		mSrc = src;
@@ -80,7 +87,7 @@ public:
 
 	void Validate()
 	{
-		mTL = sem_analyse(mAst);
+		mTL = sema_analyse(mAst);
 	}
 
 	std::string mSrc;
@@ -95,6 +102,8 @@ public:
 	ValidationTest()
 	{
 		lex_init();
+		sema_observer_t observer{ NULL };
+		sema_init(observer);
 	}
 
 	virtual ~ValidationTest()
@@ -117,7 +126,8 @@ public:
 	{
 		if (ast)
 		{
-			tl = sem_analyse(ast);
+			
+			tl = sema_analyse(ast);
 		}
 	}
 

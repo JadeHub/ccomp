@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 static identfier_map_t* _id_map;
+static sema_observer_t _observer;
 
 identfier_map_t* sema_id_map()
 {
@@ -125,7 +126,7 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 		{
 			return _report_err(member->tokens.start, ERR_DUP_SYMBOL,
 				"duplicate %s member %s",
-				user_type_kind_name(user_type_spec->kind),
+				ast_user_type_kind_name(user_type_spec->kind),
 				member->decl->name);
 		}
 
@@ -133,7 +134,7 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 		{
 			return _report_err(member->tokens.start, ERR_TYPE_INCOMPLETE,
 				"%s member %s is of incomplete type",
-				user_type_kind_name(user_type_spec->kind),
+				ast_user_type_kind_name(user_type_spec->kind),
 				member->decl->name);
 		}
 
@@ -180,7 +181,8 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 					"field with bit field size 0 must be anonymous");
 			}
 
-			member->sema.bit_size = (size_t)val.v.uint64;
+			member->sema.bit_field.size = (size_t)val.v.uint64;
+			member->sema.bit_field.offset = 0;
 		}
 
 		member = member->next;
@@ -270,7 +272,7 @@ static bool _user_type_is_definition(ast_user_type_spec_t* type)
 static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 {
 	//add early as we may have members of our own type
-	idm_add_tag(_id_map, spec);
+	idm_add_tag(_id_map, spec); //todo - what about anonymous structs?
 
 	bool valid;
 	if (spec->data.user_type_spec->kind == user_type_enum)
@@ -348,9 +350,9 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
-					user_type_kind_name(exist->data.user_type_spec->kind),
+					ast_user_type_kind_name(exist->data.user_type_spec->kind),
 					spec->data.user_type_spec->name,
-					user_type_kind_name(spec->data.user_type_spec->kind));
+					ast_user_type_kind_name(spec->data.user_type_spec->kind));
 				return NULL;
 			}
 
@@ -359,7 +361,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 				//multiple definitions
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s'",
-					user_type_kind_name(spec->data.user_type_spec->kind),
+					ast_user_type_kind_name(spec->data.user_type_spec->kind),
 					spec->data.user_type_spec->name);
 				return NULL;
 			}
@@ -385,6 +387,9 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		{
 			spec = _process_user_type(spec);
 		}
+
+		if (_observer.user_type_def_cb)
+			_observer.user_type_def_cb(spec);
 	}
 	else
 	{
@@ -396,9 +401,9 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 			{
 				_report_err(loc, ERR_DUP_TYPE_DEF,
 					"redefinition of %s '%s' changes type to %s",
-					user_type_kind_name(exist->data.user_type_spec->kind),
+					ast_user_type_kind_name(exist->data.user_type_spec->kind),
 					spec->data.user_type_spec->name,
-					user_type_kind_name(spec->data.user_type_spec->kind));
+					ast_user_type_kind_name(spec->data.user_type_spec->kind));
 				return NULL;
 			}
 			ast_destroy_type_spec(spec);
@@ -1072,15 +1077,15 @@ static void _add_var_decl(valid_trans_unit_t* tl, ast_declaration_t* fn)
 	tl->var_decls = tl_decl;
 }
 
-void sema_init()
+void sema_init(sema_observer_t observer)
 {
 	types_init();
 	_id_map = idm_create();
+	_observer = observer;
 }
 
-valid_trans_unit_t* sem_analyse(ast_trans_unit_t* ast)
+valid_trans_unit_t* sema_analyse(ast_trans_unit_t* ast)
 {
-	sema_init();
 	_cur_func_ctx.decl = NULL;
 	_cur_func_ctx.labels = NULL;
 
