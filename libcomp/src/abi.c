@@ -95,7 +95,6 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 			} while (member && ast_is_bit_field_member(member));
 
 			offset += (bit_sz / 8) + (bit_sz % 8 ? 1 : 0); //align; //align is also the size of the field
-			//offset += align; //align is also the size of the field
 		}
 		else
 		{
