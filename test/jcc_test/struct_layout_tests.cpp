@@ -225,6 +225,57 @@ TEST_F(StructAlignTest, bit_field_int)
 	EXPECT_EQ(16, Member("i3")->sema.bit_field.size);
 }
 
+TEST_F(StructAlignTest, bit_field_int_zero_len)
+{
+	ParseStructDecl(R"(
+	struct
+	{
+		int i1 : 1;
+		int i2 : 1;
+		int : 0;
+		//i3 should be placed in the next int
+		int i3 : 16;
+		
+	};)");
+
+	size_t sz = result->size;
+	EXPECT_EQ(8, sz);
+	EXPECT_EQ(4, abi_get_type_alignment(result));
+	EXPECT_EQ(0, MemberOffset("i1"));
+	EXPECT_EQ(0, MemberOffset("i2"));
+	EXPECT_EQ(4, MemberOffset("i3"));
+
+	EXPECT_EQ(0, Member("i1")->sema.bit_field.offset);
+	EXPECT_EQ(1, Member("i1")->sema.bit_field.size);
+
+	EXPECT_EQ(1, Member("i2")->sema.bit_field.offset);
+	EXPECT_EQ(1, Member("i2")->sema.bit_field.size);
+
+	EXPECT_EQ(0, Member("i3")->sema.bit_field.offset);
+	EXPECT_EQ(16, Member("i3")->sema.bit_field.size);
+}
+
+TEST_F(StructAlignTest, bit_field_int_zero_len_initial)
+{
+	ParseStructDecl(R"(
+	struct
+	{
+		int i1;
+		int : 0;
+		int i2 : 1;
+		
+	};)");
+
+	size_t sz = result->size;
+	EXPECT_EQ(8, sz);
+	EXPECT_EQ(4, abi_get_type_alignment(result));
+	EXPECT_EQ(0, MemberOffset("i1"));
+	EXPECT_EQ(4, MemberOffset("i2"));
+
+	EXPECT_EQ(0, Member("i2")->sema.bit_field.offset);
+	EXPECT_EQ(1, Member("i2")->sema.bit_field.size);
+}
+
 TEST_F(StructAlignTest, bit_field_short)
 {
 	ParseStructDecl(R"(
@@ -305,4 +356,29 @@ TEST_F(StructAlignTest, bit_field_mix)
 
 	EXPECT_EQ(3, Member("y")->sema.bit_field.offset);
 	EXPECT_EQ(1, Member("y")->sema.bit_field.size);
+}
+
+TEST_F(StructAlignTest, bit_field_example1)
+{
+	ParseStructDecl(R"(
+	struct A
+	{
+		short s : 9;
+		int i : 9;
+		char c;
+} ;)");
+
+	size_t sz = result->size;
+	EXPECT_EQ(4, sz);
+	EXPECT_EQ(4, abi_get_type_alignment(result));
+
+	EXPECT_EQ(0, MemberOffset("s"));
+	EXPECT_EQ(0, MemberOffset("i"));
+	EXPECT_EQ(3, MemberOffset("c"));
+
+	EXPECT_EQ(0, Member("s")->sema.bit_field.offset);
+	EXPECT_EQ(9, Member("s")->sema.bit_field.size);
+
+	EXPECT_EQ(9, Member("i")->sema.bit_field.offset);
+	EXPECT_EQ(9, Member("i")->sema.bit_field.size);
 }

@@ -45,10 +45,32 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 	{
 		if (ast_is_bit_field_member(member))
 		{
+			/*
+			This does not match the abi used by clang and gcc
+			There is some minimal info and examples here https://refspecs.linuxfoundation.org/elf/abi386-4.pdf
+			but I have not managed to replicate the required algorithm
+
+			One odd case to investigate:
+			This packs the s and i together into 3 bytes
+			struct { short s : 9; int i : 9; char c; } ;
+
+			Adding the initial char causes clang to add padding between s
+			struct { char p; short s : 9; int i : 9; char c; } ; packs the s and i together into 3 bytes
+
+			This command can be used to see how clang organises structs
+			clang -cc1 -triple i386-pc-linux-gnu -fdump-record-layouts test.c
+			*/
+
+			if (member->sema.bit_field.size == 0)
+			{
+				//anonymous zero length field, stop packing this field
+				member = member->next;
+				continue;
+			}
+
 			//the field type dictates the alignment and the max number of bits
 			size_t align = member->decl->type_ref->spec->size;
 			assert(align);
-			size_t max_bits = member->decl->type_ref->spec->size * 8;
 			size_t pad = (align - (offset % align)) % align;
 			offset += pad;
 
@@ -57,14 +79,23 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 			{
 				//the member starts at offset
 				member->sema.offset = offset;
+
+				if (member->sema.bit_field.size == 0)
+				{
+					//anonymous zero length field, stop packing this field
+					member = member->next;
+					break;
+				}
+
 				//the field is offset by bit_sz bits
 				member->sema.bit_field.offset = bit_sz;
 
 				bit_sz += member->sema.bit_field.size;
 				member = member->next;
-			} while (bit_sz <= max_bits && member && ast_is_bit_field_member(member));
+			} while (member && ast_is_bit_field_member(member));
 
-			offset += align; //align is also the size of the field
+			offset += (bit_sz / 8) + (bit_sz % 8 ? 1 : 0); //align; //align is also the size of the field
+			//offset += align; //align is also the size of the field
 		}
 		else
 		{
