@@ -67,7 +67,7 @@ TEST_F(FnCallValidationTest, err_incorrect_param_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_incorrect_param_type2)
@@ -81,7 +81,7 @@ TEST_F(FnCallValidationTest, err_incorrect_param_type2)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, param_fn_call)
@@ -109,7 +109,7 @@ TEST_F(FnCallValidationTest, err_param_fn_call)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_too_few_params)

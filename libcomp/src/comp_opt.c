@@ -61,7 +61,11 @@ comp_opt_t parse_command_line(int argc, char* argv[])
 	}
 
 	//Display version is always valid, otherwise require an input file
-	result.valid = result.input_path != NULL || result.display_version;
+	//result.valid = result.input_path != NULL || result.display_version;
+
+	if (result.input_path != NULL || result.display_version)
+		result.valid = true;
+
 	return result;
 
 _err_ret:

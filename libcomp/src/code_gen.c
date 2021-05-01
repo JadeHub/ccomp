@@ -119,6 +119,26 @@ static const char* _sized_mov(ast_type_spec_t* type)
 	return "";
 }
 
+static void _gen_mov_a_to_stack(size_t sz, int offset)
+{
+	if (sz == 1)
+	{
+		gen_asm("movb %%al, %d(%%ebp)", offset);
+	}
+	else if (sz == 2)
+	{
+		gen_asm("movw %%ax, %d(%%ebp)", offset);
+	}
+	else if (sz == 4)
+	{
+		gen_asm("movl %%eax, %d(%%ebp)", offset);
+	}
+	else
+	{
+		assert(false);
+	}
+}
+
 static const char* _promoting_mov_instr(ast_type_spec_t* type)
 {
 	if (type->size == 4)
@@ -140,6 +160,36 @@ ast_type_spec_t* _get_func_sig_ret_type(ast_type_ref_t* func_sig)
 	return func_sig->spec->data.func_sig_spec->ret_type;
 }
 
+void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* user_type, ast_expr_struct_init_t* expr)
+{
+	gen_annotate_start("struct init expression");
+	ast_struct_member_t* member = user_type->data.struct_members;
+	ast_expression_list_t* expr_it = expr->exprs;
+	while (member)
+	{
+		gen_annotate("init member %s", member->decl->name);
+
+		if (ast_type_is_struct_union(member->decl->type_ref->spec) && expr_it->expr->kind == expr_struct_init)
+		{
+			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset, member->decl->type_ref->spec->data.user_type_spec, &expr_it->expr->data.struct_init);
+		}
+		else
+		{
+			gen_expression(expr_it->expr);
+
+			_gen_mov_a_to_stack(member->decl->type_ref->spec->size, bsp_offset + (int32_t)member->sema.offset);
+
+			//gen_asm("movl %%eax, %d(%%ebp)", bsp_offset + member->sema.offset);
+		}
+
+		if (user_type->kind == user_type_union)
+			break; //only init the first member for unions
+
+		member = member->next;
+		expr_it = expr_it->next;
+	}
+	gen_annotate_end();
+}
 
 void gen_var_decl(ast_declaration_t* decl)
 {
@@ -148,28 +198,37 @@ void gen_var_decl(ast_declaration_t* decl)
 	gen_annotate_start("local variable '%s' at stack %d", decl->name, var->bsp_offset);
 	if (decl->data.var.init_expr)
 	{
-		ast_expression_t* expr = decl->data.var.init_expr;
-		
-		gen_annotate("init expression");
-		gen_expression(expr);
-
-		gen_annotate("assignment");
-		//if the target is a user defined type we assume eax and edx are pointers
-		if (expr->sema.result.type->kind == type_user)
+		if (decl->data.var.init_expr->kind == expr_struct_init)
 		{
-			int32_t dest_off = var->bsp_offset;
-			uint32_t offset = 0;
-			while (offset < expr->sema.result.type->size)
-			{
-				gen_asm("movl %d(%%eax), %%ecx", offset);
-				gen_asm("movl %%ecx, %d(%%ebp)", dest_off);
-				offset += 4;
-				dest_off += 4;
-			}
+			gen_struct_union_init(var->bsp_offset, decl->type_ref->spec->data.user_type_spec, &decl->data.var.init_expr->data.struct_init);
 		}
 		else
 		{
-			gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+			ast_expression_t* expr = decl->data.var.init_expr;
+
+			gen_annotate("init expression");
+			gen_expression(expr);
+
+			gen_annotate("assignment");
+			//if the target is a user defined type we assume eax and edx are pointers
+			if (expr->sema.result.type->kind == type_user)
+			{
+				int32_t dest_off = var->bsp_offset;
+				uint32_t offset = 0;
+				while (offset < expr->sema.result.type->size)
+				{
+					gen_asm("movl %d(%%eax), %%ecx", offset);
+					gen_asm("movl %%ecx, %d(%%ebp)", dest_off);
+					offset += 4;
+					dest_off += 4;
+				}
+			}
+			else
+			{
+				_gen_mov_a_to_stack(decl->type_ref->spec->size, var->bsp_offset);
+
+				//gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
+			}
 		}
 	}
 	else

@@ -472,13 +472,68 @@ TEST_F(StructValidationTest, typedef_struct_self)
 {
 	std::string code = R"(
 	
-	//typedef struct A{struct A* ptr;} a_t;
-	struct A{struct A* ptr;};
+	typedef struct A{struct A* ptr;} a_t;
 
 	void fn()
 	{
-		struct A a1, a2;
+		a_t a1, a2;
 		a1.ptr = &a2;
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, struct_init)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A {int i; int j;} v = {1, 2};
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, err_struct_init_to_few)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A {int i; int j;} v = {1};
+	}
+
+	)";
+
+	ExpectError(code, ERR_SYNTAX);
+}
+
+TEST_F(StructValidationTest, err_struct_init_to_many)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A {int i; int j;} v = {1, 2, 3};
+	}
+
+	)";
+
+	ExpectError(code, ERR_SYNTAX);
+}
+
+TEST_F(StructValidationTest, nested_struct_init)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A {int i; struct {char c1; char c2;} n; int j;} v = {1, {'a', 'b'}, 2};
 	}
 
 	)";

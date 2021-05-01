@@ -27,6 +27,7 @@
 #define ERR_UNKNOWN_SRC_FILE 19
 #define ERR_INITIALISER_NOT_CONST 20
 #define ERR_VALUE_OVERFLOW 21
+#define ERR_UNKNOWN 22 //compiler error
 
 struct token;
 

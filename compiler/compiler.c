@@ -14,6 +14,7 @@
 #include <libcomp/include/abi.h>
 
 #include <libj/include/platform.h>
+#include <libj/include/str_buff.h>
 
 static comp_opt_t options;
 
@@ -112,7 +113,8 @@ void on_observe_user_type_def(ast_type_spec_t* spec)
         ast_struct_member_t* member = spec->data.user_type_spec->data.struct_members;
         while (member)
         {
-            char* type_desc = ast_decl_type_describe(member->decl);
+            str_buff_t* type_name = sb_create(128);
+            ast_decl_type_describe(type_name, member->decl);
 
             if (ast_is_bit_field_member(member))
             {
@@ -121,7 +123,7 @@ void on_observe_user_type_def(ast_type_spec_t* spec)
                     member->sema.bit_field.offset,
                     member->sema.bit_field.offset + member->sema.bit_field.size,
                     member->decl->name,
-                    type_desc,
+                    sb_str(type_name),
                     member->sema.bit_field.size);
             }
             else
@@ -130,9 +132,9 @@ void on_observe_user_type_def(ast_type_spec_t* spec)
                     member->sema.offset,
                     member->decl->sema.alloc_size,
                     member->decl->name,
-                    type_desc);
+                    sb_str(type_name));
             }
-            free(type_desc);
+            sb_destroy(type_name);
             member = member->next;
         }
         printf("\t sizeof %2ld align %2ld\n", spec->size, abi_get_type_alignment(spec));
@@ -152,8 +154,8 @@ int main(int argc, char* argv[])
 
     if (!options.valid)
     {
-        puts("invalid parameters");
-        return 0;
+        fprintf(stderr, "invalid parameters\n");
+        return -1;
     }
 
     if (options.display_version)
@@ -163,6 +165,12 @@ int main(int argc, char* argv[])
     }
 
     const char* path = path_resolve(options.input_path);
+    if (!path)
+    {
+        fprintf(stderr, "unknown file: %s\n", options.input_path);
+        return -1;
+    }
+
     const char* src_dir = path_dirname(path);
     const char* src_file = path_filename(path);
     free((void*)path);
@@ -207,10 +215,7 @@ int main(int argc, char* argv[])
     sema_init(so);
     valid_trans_unit_t* tl = sema_analyse(ast);
     if (!tl)
-    {
-        printf("Failed to validate\n");
         return -1;
-    }
 
     //code generation
     if(run_code_gen())

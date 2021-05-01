@@ -6,6 +6,54 @@
 
 ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context);
 
+ast_expression_t* parse_struct_union_init_expression()
+{
+	if (!expect_cur(tok_l_brace))
+		return NULL;
+
+	ast_expression_t* result = parse_alloc_expr();
+	result->kind = expr_struct_init;
+	next_tok();
+
+	ast_expression_list_t* last_expr = NULL;
+	while (!current_is(tok_r_brace))
+	{
+		//todo parse designator
+		ast_expression_list_t* member_init_expr = (ast_expression_list_t*)malloc(sizeof(ast_expression_list_t));
+		memset(member_init_expr, 0, sizeof(ast_expression_list_t));
+
+		if (current_is(tok_l_brace))
+		{
+			//nested struct
+			member_init_expr->expr = parse_struct_union_init_expression();
+		}
+		else
+		{
+			member_init_expr->expr = parse_constant_expression();
+		}
+		if (!member_init_expr->expr)
+		{
+			free(member_init_expr);
+			ast_destroy_expression(result);
+			return NULL;
+		}
+
+		if (result->data.struct_init.exprs == NULL)
+			result->data.struct_init.exprs = member_init_expr;
+		else
+			last_expr->next = member_init_expr;
+		last_expr = member_init_expr;
+
+
+		if (current_is(tok_comma))
+			next_tok();
+	}
+	next_tok();
+
+	result->tokens.end = current();
+	return result;
+}
+
 /*
 <array_decl> ::= "[" [ <constant-exp> ] "]"
 
@@ -178,7 +226,15 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			if (current_is(tok_equal))
 			{
 				next_tok();
-				result->data.var.init_expr = parse_expression();
+
+				if (ast_type_is_struct_union(type_ref->spec) && current_is(tok_l_brace))
+				{
+					result->data.var.init_expr = parse_struct_union_init_expression();
+				}
+				else
+				{
+					result->data.var.init_expr = parse_expression();
+				}
 			}
 		}
 

@@ -25,6 +25,7 @@ typedef struct
 
 expr_result_t sema_process_expression(ast_expression_t* expr);
 expr_result_t sema_process_int_literal(ast_expression_t* expr);
+expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, ast_type_spec_t* spec);
 
 identfier_map_t* sema_id_map();
 bool sema_resolve_type_ref(ast_type_ref_t* ref);

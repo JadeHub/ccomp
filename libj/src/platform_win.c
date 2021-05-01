@@ -2,19 +2,27 @@
 
 #ifdef PLATFORM_WIN
 
-#include <windows.h>
-
+#include <stdbool.h>
 #include <stdlib.h>
 
+#include <windows.h>
 #include <fileapi.h>
+
+static bool _file_exists(const char* path)
+{
+	DWORD attrib = GetFileAttributes(path);
+
+	return (attrib != INVALID_FILE_ATTRIBUTES &&
+		!(attrib & FILE_ATTRIBUTE_DIRECTORY));
+}
 
 const char* path_resolve(const char* path)
 {
 	char* buff = (char*)malloc(MAX_PATH + 1);
-	if (GetFullPathNameA(path, MAX_PATH + 1, buff, NULL) == 0)
+	if (GetFullPathNameA(path, MAX_PATH + 1, buff, NULL) == 0 || !_file_exists(buff))
 	{
 		free(buff);
-		buff = NULL;
+		return NULL;
 	}
 	return path_convert_slashes(buff);
 }

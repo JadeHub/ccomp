@@ -498,7 +498,13 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 
 	//are they pointing at convertable types?
 	if (target->kind == type_ptr && type->kind == type_ptr)
+	{
+		//any pointer can be converted to void*
+		if (target->data.ptr_type->kind == type_void)
+			return true;
+
 		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
+	}
 
 	//are the compatible functionn sigs (?)
 	if (target->kind == type_func_sig && type->kind == type_func_sig)
@@ -529,21 +535,19 @@ bool process_variable_declaration(ast_declaration_t* decl)
 	_process_array_dimentions(decl);
 	if (decl->sema.alloc_size == 0)
 		return false;
-	/*if (ast_is_array_decl(decl))
-	{
-		//decl->sema.alloc_size = _calc_array_alloc_size(decl);
-		_process_array_dimentions(decl);
-		if (decl->sema.alloc_size == 0)
-			return false;
-	}
-	else
-	{
-		decl->sema.alloc_size = decl->type_ref->spec->size;
-	}*/
 
 	if (decl->data.var.init_expr)
 	{
-		expr_result_t result = sema_process_expression(decl->data.var.init_expr);
+		expr_result_t result;
+		
+		if (ast_type_is_struct_union(decl->type_ref->spec) && decl->data.var.init_expr->kind == expr_struct_init)
+		{
+			result = sema_process_struct_union_init_expression(decl->data.var.init_expr, decl->type_ref->spec);
+		}
+		else
+		{
+			result = sema_process_expression(decl->data.var.init_expr);
+		}
 		if (result.failure)
 			return false;
 

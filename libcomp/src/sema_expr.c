@@ -2,6 +2,8 @@
 #include "std_types.h"
 #include "diag.h"
 
+#include <libj/include/str_buff.h>
+
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,6 +22,107 @@ static expr_result_t _report_err(ast_expression_t* expr, int err, const char* fo
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 	result.failure = true;
+	return result;
+}
+
+static expr_result_t _report_type_conversion_error(ast_expression_t* expr, ast_type_spec_t* expected, ast_type_spec_t* actual, const char* format, ...)
+{
+	str_buff_t* sb = sb_create(128);
+
+	sb_append(sb, "incompatible type in ");
+
+	char buff[256];
+
+	va_list args;
+	va_start(args, format);
+	vsnprintf(buff, 256, format, args);
+	va_end(args);
+
+	sb_append(sb, buff);
+	sb_append(sb, " expected '");
+	ast_type_spec_desc(sb, expected);
+	sb_append(sb, "' found '");
+	ast_type_spec_desc(sb, actual);
+	sb_append_ch(sb, '\'');
+
+	expr_result_t result = _report_err(expr, ERR_INCOMPATIBLE_TYPE, sb_str(sb));
+	sb_destroy(sb);
+	return result;
+
+	/*char* expected_name = ast_decl_type_describe(expected, sb);
+	char* actual_name = ast_decl_type_describe(actual);
+
+	char buff[256];
+
+	va_list args;
+	va_start(args, format);
+	vsnprintf(buff, 256, format, args);
+	va_end(args);
+
+	expr_result_t result = _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+		"incompatible type in %s. expected '%s', found '%s'",
+		buff, expected_name, actual_name);
+		*/
+
+
+	/*return _report_err(call_param->expr, ERR_INVALID_PARAMS,
+		"conflicting type in param %d of call to function '%s'. Expected '%s'",
+		p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));
+
+	return _report_err(init_expr->expr,
+		ERR_INCOMPATIBLE_TYPE,
+		"assignment to incompatible type. expected %s",
+		ast_type_name(member->decl->type_ref->spec));
+
+	return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+		"assignment to incompatible type. expected %s",
+		ast_type_name(target_result.result_type));*/
+}
+
+expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, ast_type_spec_t* spec)
+{
+	expr_result_t result;
+	memset(&result, 0, sizeof(expr_result_t));
+
+	ast_struct_member_t* member = spec->data.user_type_spec->data.struct_members;
+	ast_expression_list_t* init_expr = expr->data.struct_init.exprs;
+
+	while (member)
+	{
+		if (init_expr == NULL)
+			return _report_err(expr, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
+
+		expr_result_t init_result;
+
+		if (init_expr->expr->kind == expr_struct_init)
+			init_result = sema_process_struct_union_init_expression(init_expr->expr, member->decl->type_ref->spec);
+		else
+			init_result = sema_process_expression(init_expr->expr);
+
+		if (init_result.failure)
+		{
+			result.failure = true;
+			return result;
+		}
+
+		if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
+		{
+			return _report_type_conversion_error(init_expr->expr, member->decl->type_ref->spec, init_result.result_type, "initialisation of member %s", member->decl->name);
+
+			/*return _report_err(init_expr->expr,
+				ERR_INCOMPATIBLE_TYPE,
+				"assignment to incompatible type. expected %s",
+				ast_type_name(member->decl->type_ref->spec));*/
+		}
+
+		member = member->next;
+		init_expr = init_expr->next;
+	}
+
+	if (init_expr)
+		return _report_err(expr, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
+
+	result.result_type = spec;
 	return result;
 }
 
@@ -150,10 +253,13 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	}
 	else if (!sema_can_convert_type(target_result.result_type, result.result_type))
 	{
-		sema_can_convert_type(target_result.result_type, result.result_type);
-		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
+		//sema_can_convert_type(target_result.result_type, result.result_type);
+
+		return _report_type_conversion_error(expr, target_result.result_type, result.result_type, "assignment");
+
+		/*return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 			"assignment to incompatible type. expected %s",
-			ast_type_name(target_result.result_type));
+			ast_type_name(target_result.result_type));*/
 	}
 
 	return target_result;
@@ -407,9 +513,12 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 
 		if (!sema_can_convert_type(param_decl->decl->type_ref->spec, param_result.result_type))
 		{
-			return _report_err(call_param->expr, ERR_INVALID_PARAMS,
+			return _report_type_conversion_error(expr, param_decl->decl->type_ref->spec, param_result.result_type,
+				"param %d of call to function '%s'", p_count, fn_name);
+
+			/*return _report_err(call_param->expr, ERR_INVALID_PARAMS,
 				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));
+				p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));*/
 		}
 
 		param_decl = param_decl->next;
@@ -535,6 +644,10 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		break;
 	case expr_cast:
 		result = _process_cast(expr);
+		break;
+	case expr_struct_init:
+		result.failure = true;
+		_report_err(expr, ERR_SYNTAX, "Invalid struct / union initialisation");
 		break;
 	}
 	if (!result.failure)

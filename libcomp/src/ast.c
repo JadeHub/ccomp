@@ -367,10 +367,8 @@ void ast_type_ref_desc(str_buff_t* sb, ast_type_ref_t* type_ref)
 //	ast_type_spec_desc(sb, type_ref->spec);
 }
 
-char* ast_decl_type_describe(ast_declaration_t* decl)
+void ast_decl_type_describe(str_buff_t* sb, ast_declaration_t* decl)
 {
-	str_buff_t* sb = sb_create(128);
-
 	if (ast_is_array_decl(decl))
 	{
 		ast_type_ref_desc(sb, decl->type_ref);
@@ -381,15 +379,11 @@ char* ast_decl_type_describe(ast_declaration_t* decl)
 		sb_append_int(sb, decl->sema.total_array_count, 10);
 		sb_append_ch(sb, ']');
 	}
-	else if(decl->kind == decl_var || decl->kind == decl_type)
+	else if (decl->kind == decl_var || decl->kind == decl_type)
 	{
 		ast_type_ref_desc(sb, decl->type_ref);
 		ast_type_spec_desc(sb, decl->type_ref->spec);
-
-		
 	}
-
-	return sb_release(sb);
 }
 
 const char* ast_declaration_name(ast_declaration_t* decl)
@@ -492,6 +486,11 @@ bool ast_type_is_int(ast_type_spec_t* spec)
 bool ast_type_is_enum(ast_type_spec_t* type)
 {
 	return type->kind == type_user && type->data.user_type_spec->kind == user_type_enum;
+}
+
+bool ast_type_is_struct_union(ast_type_spec_t* type)
+{
+	return type->kind == type_user && type->data.user_type_spec->kind != user_type_enum;
 }
 
 bool ast_is_bit_field_member(ast_struct_member_t* member)

@@ -1,5 +1,7 @@
 #include "code_gen.h"
 
+#include "diag.h"
+
 #include <stdbool.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -803,6 +805,9 @@ void gen_expression(ast_expression_t* expr)
 		gen_unary_op(expr);
 	else if (expr->kind == expr_binary_op)
 		gen_binary_op(expr);
-	else if(expr->kind != expr_null)
+	else if (expr->kind != expr_null && expr->kind != expr_cast)
+	{
+		diag_err(expr->tokens.start, ERR_UNKNOWN, "Compiler error. unexpected %s expression", ast_expr_kind_name(expr->kind));
 		assert(false);
+	}
 }

@@ -150,6 +150,15 @@ typedef struct
 	struct ast_type_ref* type_ref;
 }ast_expr_cast_data_t;
 
+/*
+struct/union inintilisation
+the '{1, 2}' in 'struct { int i, j;} val = {1, 2};'
+*/
+typedef struct
+{
+	struct ast_expression_list* exprs;
+}ast_expr_struct_init_t;
+
 typedef enum
 {
 	expr_unary_op,
@@ -161,8 +170,39 @@ typedef enum
 	expr_func_call,
 	expr_sizeof,
 	expr_cast,
+	expr_struct_init,
 	expr_null
 }expression_kind;
+
+static inline const char* ast_expr_kind_name(expression_kind k)
+{
+	switch (k)
+	{
+	case expr_unary_op:
+		return "unary op";
+	case expr_binary_op:
+		return "binary op";
+	case expr_int_literal:
+		return "int literal";
+	case expr_str_literal:
+		return "string literal";
+	case expr_identifier:
+		return "identifier";
+	case expr_condition:
+		return "condition";
+	case expr_func_call:
+		return "function call";
+	case expr_sizeof:
+		return "sizeof";
+	case expr_cast:
+		return "cast";
+	case expr_struct_init:
+		return "struct initialiser";
+	case expr_null:
+		return "null";
+	}
+	return "";
+}
 
 /*
 expression data
@@ -182,6 +222,7 @@ typedef struct ast_expression
 		ast_expr_func_call_t func_call;
 		ast_sizeof_call_t sizeof_call;
 		ast_expr_cast_data_t cast;
+		ast_expr_struct_init_t struct_init;
 	}data;
 
 	struct {
@@ -370,6 +411,7 @@ typedef struct ast_var_decl
 	*/
 	ast_expression_t* init_expr;
 
+	
 	/*
 	bit size expression for struct members
 	*/
@@ -663,9 +705,10 @@ const char* ast_declaration_name(ast_declaration_t* decl);
 
 /*
 Describe the type of a declaration
-Caller to free returned pointer
 */
-char* ast_decl_type_describe(ast_declaration_t* decl);
+void ast_decl_type_describe(str_buff_t* sb, ast_declaration_t* decl);
+
+void ast_type_spec_desc(str_buff_t* sb, ast_type_spec_t* spec);
 
 /*
 returns the type name
@@ -721,6 +764,11 @@ bool ast_type_is_int(ast_type_spec_t* type);
 returns true if the given type spec is an enum
 */
 bool ast_type_is_enum(ast_type_spec_t* type);
+
+/*
+returns true if the given type spec is a struct or union
+*/
+bool ast_type_is_struct_union(ast_type_spec_t* type);
 
 /*
 returns true if the given struct member is a bit field

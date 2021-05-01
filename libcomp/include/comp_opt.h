@@ -51,4 +51,4 @@ typedef struct
 /*
 parse the command line
 */
-comp_opt_t parse_command_line(int argc,	char* argv[]);
+comp_opt_t parse_command_line(int argc, char* argv[]);
