@@ -25,7 +25,7 @@ static expr_result_t _report_err(ast_expression_t* expr, int err, const char* fo
 	return result;
 }
 
-static expr_result_t _report_type_conversion_error(ast_expression_t* expr, ast_type_spec_t* expected, ast_type_spec_t* actual, const char* format, ...)
+expr_result_t semasema_report_type_conversion_error(ast_expression_t* expr, ast_type_spec_t* expected, ast_type_spec_t* actual, const char* format, ...)
 {
 	str_buff_t* sb = sb_create(128);
 
@@ -48,35 +48,6 @@ static expr_result_t _report_type_conversion_error(ast_expression_t* expr, ast_t
 	expr_result_t result = _report_err(expr, ERR_INCOMPATIBLE_TYPE, sb_str(sb));
 	sb_destroy(sb);
 	return result;
-
-	/*char* expected_name = ast_decl_type_describe(expected, sb);
-	char* actual_name = ast_decl_type_describe(actual);
-
-	char buff[256];
-
-	va_list args;
-	va_start(args, format);
-	vsnprintf(buff, 256, format, args);
-	va_end(args);
-
-	expr_result_t result = _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-		"incompatible type in %s. expected '%s', found '%s'",
-		buff, expected_name, actual_name);
-		*/
-
-
-	/*return _report_err(call_param->expr, ERR_INVALID_PARAMS,
-		"conflicting type in param %d of call to function '%s'. Expected '%s'",
-		p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));
-
-	return _report_err(init_expr->expr,
-		ERR_INCOMPATIBLE_TYPE,
-		"assignment to incompatible type. expected %s",
-		ast_type_name(member->decl->type_ref->spec));
-
-	return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-		"assignment to incompatible type. expected %s",
-		ast_type_name(target_result.result_type));*/
 }
 
 expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, ast_type_spec_t* spec)
@@ -107,12 +78,8 @@ expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, 
 
 		if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
 		{
-			return _report_type_conversion_error(init_expr->expr, member->decl->type_ref->spec, init_result.result_type, "initialisation of member %s", member->decl->name);
-
-			/*return _report_err(init_expr->expr,
-				ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(member->decl->type_ref->spec));*/
+			return sema_report_type_conversion_error(init_expr->expr, member->decl->type_ref->spec, init_result.result_type,
+				"initialisation of member %s", member->decl->name);
 		}
 
 		member = member->next;
@@ -255,7 +222,7 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	{
 		//sema_can_convert_type(target_result.result_type, result.result_type);
 
-		return _report_type_conversion_error(expr, target_result.result_type, result.result_type, "assignment");
+		return sema_report_type_conversion_error(expr, target_result.result_type, result.result_type, "assignment");
 
 		/*return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 			"assignment to incompatible type. expected %s",
@@ -513,12 +480,8 @@ static expr_result_t _process_func_call(ast_expression_t* expr)
 
 		if (!sema_can_convert_type(param_decl->decl->type_ref->spec, param_result.result_type))
 		{
-			return _report_type_conversion_error(expr, param_decl->decl->type_ref->spec, param_result.result_type,
+			return sema_report_type_conversion_error(expr, param_decl->decl->type_ref->spec, param_result.result_type,
 				"param %d of call to function '%s'", p_count, fn_name);
-
-			/*return _report_err(call_param->expr, ERR_INVALID_PARAMS,
-				"conflicting type in param %d of call to function '%s'. Expected '%s'",
-				p_count, fn_name, ast_type_name(param_decl->decl->type_ref->spec));*/
 		}
 
 		param_decl = param_decl->next;

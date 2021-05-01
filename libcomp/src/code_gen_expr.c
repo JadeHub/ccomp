@@ -556,7 +556,7 @@ void gen_func_call(ast_expression_t* expr)
 	ast_func_sig_type_spec_t* sig = target_fn_type->data.func_sig_spec;
 	assert(sig);
 
-	uint32_t pushed = 0;
+	size_t pushed = 0;
 	if (sig->ret_type->size > 4)
 	{
 		gen_annotate("allocate space for return value > 4 bytes in length");
@@ -598,7 +598,7 @@ void gen_func_call(ast_expression_t* expr)
 		{
 			//address is in eax
 
-			uint32_t offset = param_type->size - 4;
+			size_t offset = param_type->size - 4;
 			size_t sz = param_type->size;
 			while (sz > 0)
 			{

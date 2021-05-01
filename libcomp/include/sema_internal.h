@@ -6,12 +6,6 @@
 
 #include <stdbool.h>
 
-typedef struct
-{
-	uint32_t err;
-	char* message;
-}sema_diag_t;
-
 /*
 Result of analysing an expression
 */
@@ -27,12 +21,51 @@ expr_result_t sema_process_expression(ast_expression_t* expr);
 expr_result_t sema_process_int_literal(ast_expression_t* expr);
 expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, ast_type_spec_t* spec);
 
+/*
+Result of analysing a definition
+*/
+typedef enum
+{
+	proc_decl_new_def,
+	proc_decl_ignore,
+	proc_decl_error
+}proc_decl_result;
+
+proc_decl_result process_global_variable_declaration(ast_declaration_t* decl);
+
+expr_result_t sema_report_type_conversion_error(ast_expression_t* expr, ast_type_spec_t* expected, ast_type_spec_t* actual, const char* format, ...);
+
+/*
+Details of function currently being analysed
+*/
+typedef struct
+{
+	ast_declaration_t* decl;
+
+	//set of goto statements found in the function
+	hash_table_t* goto_smnts;
+
+	//set of strings used as labels
+	hash_table_t* labels;
+}func_context_t;
+
+func_context_t* sema_get_cur_fn_ctx();
+
 identfier_map_t* sema_id_map();
 bool sema_resolve_type_ref(ast_type_ref_t* ref);
+ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start);
 bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type);
 bool sema_is_same_type(ast_type_spec_t* lhs, ast_type_spec_t* rhs);
+bool sema_is_same_func_sig(ast_func_sig_type_spec_t* lhs, ast_func_sig_type_spec_t* rhs);
 bool sema_is_const_int_expr(ast_expression_t* expr);
 int_val_t sema_fold_const_int_expr(ast_expression_t* expr);
 bool process_sizeof_expr(ast_expression_t* expr);
 ast_type_spec_t* int_val_smallest_size(int_val_t* val);
 bool int_val_will_fit(int_val_t* val, ast_type_spec_t* type);
+bool sema_process_array_dimentions(ast_declaration_t* decl);
+
+//decl
+proc_decl_result sema_process_function_decl(ast_declaration_t* decl);
+bool sema_process_type_decl(ast_declaration_t* decl);
+bool sema_process_variable_declaration(ast_declaration_t* decl);
+proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* decl);

@@ -178,8 +178,6 @@ void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* user_type, 
 			gen_expression(expr_it->expr);
 
 			_gen_mov_a_to_stack(member->decl->type_ref->spec->size, bsp_offset + (int32_t)member->sema.offset);
-
-			//gen_asm("movl %%eax, %d(%%ebp)", bsp_offset + member->sema.offset);
 		}
 
 		if (user_type->kind == user_type_union)

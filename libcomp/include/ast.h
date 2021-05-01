@@ -368,7 +368,7 @@ either a built in type, a user defined type, a function pointer, a pointer to on
 typedef struct ast_type_spec
 {
 	type_kind kind;
-	uint32_t size;
+	size_t size;
 
 	union
 	{

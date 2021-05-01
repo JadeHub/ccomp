@@ -533,7 +533,12 @@ TEST_F(StructValidationTest, nested_struct_init)
 	
 	void fn()
 	{
-		struct A {int i; struct {char c1; char c2;} n; int j;} v = {1, {'a', 'b'}, 2};
+		struct A
+		{
+			int i;
+			struct {char c1; char c2;} n;
+			int j;
+		} v = {1, {'a', 'b'}, 2};
 	}
 
 	)";

@@ -13,6 +13,7 @@ bool sema_is_const_int_expr(ast_expression_t* expr)
 	case expr_str_literal:
 	case expr_null:
 	case expr_cast:
+	case expr_struct_init:
 		return false;
 	case expr_unary_op:
 		switch (expr->data.unary_op.operation)
