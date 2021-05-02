@@ -5,9 +5,66 @@
 #include <string.h>
 #include <assert.h>
 
+static bool _process_global_var_init(ast_declaration_t* decl)
+{
+	if (decl->data.var.init_expr)
+	{
+		if (ast_type_is_struct_union(decl->type_ref->spec) && decl->data.var.init_expr->kind == expr_struct_init)
+		{
+			decl->data.var.init_expr->data.struct_init.sema.user_type = decl->type_ref->spec;
+			if(sema_process_expression(decl->data.var.init_expr).failure)
+				return false;
+		}
+		else
+		{
+			if (sema_process_expression(decl->data.var.init_expr).failure)
+				return false;
+
+			ast_type_spec_t* var_type = decl->type_ref->spec;
+
+			if (decl->data.var.init_expr->kind == expr_int_literal)
+			{
+				if (!int_val_will_fit(&decl->data.var.init_expr->data.int_literal.val, var_type))
+				{
+					//sema_report_type_conversion_error(decl->data.var.init_expr, &decl->data.var.init_expr->data.int_literal.val, var_type, "assignment");
+					diag_err(decl->data.var.init_expr->tokens.start,
+						ERR_INCOMPATIBLE_TYPE,
+						"assignment to incompatible type. expected %s",
+						ast_type_name(var_type));
+					return false;
+				}
+			}
+			else if (decl->data.var.init_expr->kind == expr_str_literal)
+			{
+
+			}
+			else
+			{
+				diag_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
+					"global var '%s' initialised with non-const integer expression", decl->name);
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* decl)
 {
+	if (!sema_resolve_type_ref(decl->type_ref))
+		return proc_decl_error;
+
+	if( decl->type_ref->spec->size == 0)
+	{
+		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"global var '%s' uses incomplete type '%s'",
+			decl->name, ast_type_name(decl->type_ref->spec));
+		return proc_decl_error;
+	}
+
+	ast_type_spec_t* type = decl->type_ref->spec;
 	ast_declaration_t* exist = idm_find_decl(sema_id_map(), decl->name);
+
 	if (exist && exist->kind == decl_func)
 	{
 		diag_err(decl->tokens.start, ERR_DUP_SYMBOL,
@@ -16,16 +73,9 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 		return proc_decl_error;
 	}
 
-	if (!sema_resolve_type_ref(decl->type_ref))
-	{
-		return proc_decl_error;
-	}
-
-	ast_type_spec_t* type = decl->type_ref->spec;
-
 	if (exist && exist->kind == decl_var)
 	{
-		//multiple declarations are allowed		
+		//multiple declarations are allowed
 		if (!type || !sema_is_same_type(exist->type_ref->spec, type))
 		{
 			//different types
@@ -49,45 +99,17 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 			//update definition
 			exist->data.var.init_expr = decl->data.var.init_expr;
 			decl->data.var.init_expr = NULL;
-			sema_process_expression(exist->data.var.init_expr); //?
+			if(!_process_global_var_init(decl))
+				return proc_decl_error;
 		}
 		return proc_decl_ignore;
 	}
 
-	if (type->size == 0)
-	{
-		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"global var '%s' uses incomplete type '%s'",
-			decl->name, ast_type_name(decl->type_ref->spec));
+	if (!sema_process_array_dimentions(decl) || decl->sema.alloc_size == 0)
 		return proc_decl_error;
-	}
 
-	if (decl->data.var.init_expr)
-	{
-		if (sema_process_expression(decl->data.var.init_expr).failure)
-			return false;
-
-		ast_type_spec_t* var_type = decl->type_ref->spec;
-
-		if (decl->data.var.init_expr->kind == expr_int_literal)
-		{
-			if (!int_val_will_fit(&decl->data.var.init_expr->data.int_literal.val, var_type))
-			{
-				//sema_report_type_conversion_error(decl->data.var.init_expr, &decl->data.var.init_expr->data.int_literal.val, var_type, "assignment");
-				diag_err(decl->data.var.init_expr->tokens.start,
-					ERR_INCOMPATIBLE_TYPE,
-					"assignment to incompatible type. expected %s",
-					ast_type_name(var_type));
-				return proc_decl_error;
-			}
-		}
-		else if (decl->data.var.init_expr->kind != expr_str_literal)
-		{
-			diag_err(decl->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"global var '%s' initialised with non-const integer expression", decl->name);
-			return proc_decl_error;
-		}
-	}
+	if (!_process_global_var_init(decl))
+		return proc_decl_error;
 
 	idm_add_decl(sema_id_map(), decl);
 	return proc_decl_new_def;
@@ -99,7 +121,7 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 	if (existing && existing->kind == decl_var)
 	{
 		diag_err(decl->tokens.start, ERR_DUP_VAR,
-			"variable %s already declared at",
+			"variable '%s' already declared at",
 			ast_declaration_name(decl));
 		return false;
 	}
@@ -107,7 +129,7 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 	if (!sema_resolve_type_ref(decl->type_ref) || decl->type_ref->spec->size == 0)
 	{
 		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"var %s is of incomplete type",
+			"var '%s' is of incomplete type",
 			ast_declaration_name(decl));
 		return false;
 	}
@@ -122,14 +144,20 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 	{
 		expr_result_t result;
 
-		if (ast_type_is_struct_union(decl->type_ref->spec) && decl->data.var.init_expr->kind == expr_struct_init)
+		if (decl->data.var.init_expr->kind == expr_struct_init)
 		{
-			result = sema_process_struct_union_init_expression(decl->data.var.init_expr, decl->type_ref->spec);
+			if (!ast_type_is_struct_union(decl->type_ref->spec))
+			{
+				diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+					"struct / union initialiser cannot be used with non-user type",
+					ast_declaration_name(decl));
+				return false;
+			}
+			decl->data.var.init_expr->data.struct_init.sema.user_type = decl->type_ref->spec;
 		}
-		else
-		{
-			result = sema_process_expression(decl->data.var.init_expr);
-		}
+
+		result = sema_process_expression(decl->data.var.init_expr);
+		
 		if (result.failure)
 			return false;
 

@@ -150,13 +150,30 @@ typedef struct
 	struct ast_type_ref* type_ref;
 }ast_expr_cast_data_t;
 
+typedef struct ast_struct_member_init
+{
+	struct ast_expression* expr;
+	struct ast_struct_member_init* next;
+
+	struct
+	{
+		struct ast_struct_member* member;
+	}sema;
+
+}ast_struct_member_init_t;
+
 /*
 struct/union inintilisation
 the '{1, 2}' in 'struct { int i, j;} val = {1, 2};'
 */
 typedef struct
 {
-	struct ast_expression_list* exprs;
+	ast_struct_member_init_t* member_inits;
+
+	struct
+	{
+		struct ast_type_spec* user_type;
+	}sema;
 }ast_expr_struct_init_t;
 
 typedef enum

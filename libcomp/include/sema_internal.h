@@ -19,7 +19,7 @@ typedef struct
 
 expr_result_t sema_process_expression(ast_expression_t* expr);
 expr_result_t sema_process_int_literal(ast_expression_t* expr);
-expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr, ast_type_spec_t* spec);
+expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr);
 
 /*
 Result of analysing a definition
@@ -31,7 +31,7 @@ typedef enum
 	proc_decl_error
 }proc_decl_result;
 
-proc_decl_result process_global_variable_declaration(ast_declaration_t* decl);
+proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* decl);
 
 expr_result_t sema_report_type_conversion_error(ast_expression_t* expr, ast_type_spec_t* expected, ast_type_spec_t* actual, const char* format, ...);
 
@@ -68,4 +68,3 @@ bool sema_process_array_dimentions(ast_declaration_t* decl);
 proc_decl_result sema_process_function_decl(ast_declaration_t* decl);
 bool sema_process_type_decl(ast_declaration_t* decl);
 bool sema_process_variable_declaration(ast_declaration_t* decl);
-proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* decl);

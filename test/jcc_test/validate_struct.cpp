@@ -499,6 +499,17 @@ TEST_F(StructValidationTest, struct_init)
 	ExpectNoError(code);
 }
 
+TEST_F(StructValidationTest, global_struct_init)
+{
+	std::string code = R"(
+	
+	struct A {int i; int j;} v = {1, 2};
+
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(StructValidationTest, err_struct_init_to_few)
 {
 	std::string code = R"(

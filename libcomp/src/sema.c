@@ -31,7 +31,7 @@ func_context_t* sema_get_cur_fn_ctx()
 	return &_cur_func_ctx;
 }
 
-proc_decl_result process_function_decl(ast_declaration_t* decl);
+proc_decl_result sema_process_function_decl(ast_declaration_t* decl);
 bool process_statement(ast_statement_t* smnt);
 
 static bool _report_err(token_t* tok, int err, const char* format, ...)
@@ -512,7 +512,7 @@ bool process_declaration(ast_declaration_t* decl)
 	case decl_var:
 		return sema_process_variable_declaration(decl);
 	case decl_func:
-		return process_function_decl(decl) != proc_decl_error;
+		return sema_process_function_decl(decl) != proc_decl_error;
 	case decl_type:
 		return sema_process_type_decl(decl);
 	}
@@ -806,7 +806,7 @@ valid_trans_unit_t* sema_analyse(ast_trans_unit_t* ast)
 		ast_declaration_t* next = decl->next;
 		if (decl->kind == decl_var)
 		{
-			proc_decl_result result = process_global_variable_declaration(decl);
+			proc_decl_result result = sema_process_global_variable_declaration(decl);
 
 			if (result == proc_decl_error)
 				return NULL;

@@ -16,7 +16,7 @@ TEST_F(GlobalVarsValidationTest, err_dup_definition)
 {
 	std::string code = R"(
 	int foo = 4;
-	int foo = 5;	)";
+	int foo = 5;)";
 
 	ExpectError(code, ERR_DUP_SYMBOL);
 }
@@ -25,7 +25,7 @@ TEST_F(GlobalVarsValidationTest, err_change_type)
 {
 	std::string code = R"(
 	int foo = 4;
-	void foo;	)";
+	short foo;	)";
 
 	ExpectError(code, ERR_DUP_SYMBOL);
 }
@@ -62,6 +62,24 @@ TEST_F(GlobalVarsValidationTest, struct_referenced)
 	std::string code = R"(
 	struct B{int b;} foo;
 	struct B foo1;
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(GlobalVarsValidationTest, struct_init)
+{
+	std::string code = R"(
+	struct B{int b; char* s; char c;} foo = {1200, "hello", 15};
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(GlobalVarsValidationTest, pointer_init)
+{
+	std::string code = R"(
+	char* s = "Hello";
 	)";
 
 	ExpectNoError(code);

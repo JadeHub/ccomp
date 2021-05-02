@@ -15,34 +15,34 @@ ast_expression_t* parse_struct_union_init_expression()
 	result->kind = expr_struct_init;
 	next_tok();
 
-	ast_expression_list_t* last_expr = NULL;
+	ast_struct_member_init_t* last_member_init = NULL;
 	while (!current_is(tok_r_brace))
 	{
 		//todo parse designator
-		ast_expression_list_t* member_init_expr = (ast_expression_list_t*)malloc(sizeof(ast_expression_list_t));
-		memset(member_init_expr, 0, sizeof(ast_expression_list_t));
+		ast_struct_member_init_t* member_init = (ast_struct_member_init_t*)malloc(sizeof(ast_struct_member_init_t));
+		memset(member_init, 0, sizeof(ast_struct_member_init_t));
 
 		if (current_is(tok_l_brace))
 		{
 			//nested struct
-			member_init_expr->expr = parse_struct_union_init_expression();
+			member_init->expr = parse_struct_union_init_expression();
 		}
 		else
 		{
-			member_init_expr->expr = parse_constant_expression();
+			member_init->expr = parse_constant_expression();
 		}
-		if (!member_init_expr->expr)
+		if (!member_init->expr)
 		{
-			free(member_init_expr);
+			free(member_init);
 			ast_destroy_expression(result);
 			return NULL;
 		}
 
-		if (result->data.struct_init.exprs == NULL)
-			result->data.struct_init.exprs = member_init_expr;
+		if (result->data.struct_init.member_inits == NULL)
+			result->data.struct_init.member_inits = member_init;
 		else
-			last_expr->next = member_init_expr;
-		last_expr = member_init_expr;
+			last_member_init->next = member_init;
+		last_member_init = member_init;
 
 
 		if (current_is(tok_comma))

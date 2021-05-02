@@ -163,20 +163,19 @@ ast_type_spec_t* _get_func_sig_ret_type(ast_type_ref_t* func_sig)
 void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* user_type, ast_expr_struct_init_t* expr)
 {
 	gen_annotate_start("struct init expression");
-	ast_struct_member_t* member = user_type->data.struct_members;
-	ast_expression_list_t* expr_it = expr->exprs;
-	while (member)
+	ast_struct_member_init_t* member_init = expr->member_inits;
+	while (member_init)
 	{
+		ast_struct_member_t* member = member_init->sema.member;
 		gen_annotate("init member %s", member->decl->name);
 
-		if (ast_type_is_struct_union(member->decl->type_ref->spec) && expr_it->expr->kind == expr_struct_init)
+		if (ast_type_is_struct_union(member->decl->type_ref->spec) && member_init->expr->kind == expr_struct_init)
 		{
-			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset, member->decl->type_ref->spec->data.user_type_spec, &expr_it->expr->data.struct_init);
+			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset, member->decl->type_ref->spec->data.user_type_spec, &member_init->expr->data.struct_init);
 		}
 		else
 		{
-			gen_expression(expr_it->expr);
-
+			gen_expression(member_init->expr);
 			_gen_mov_a_to_stack(member->decl->type_ref->spec->size, bsp_offset + (int32_t)member->sema.offset);
 		}
 
@@ -184,7 +183,7 @@ void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* user_type, 
 			break; //only init the first member for unions
 
 		member = member->next;
-		expr_it = expr_it->next;
+		member_init = member_init->next;
 	}
 	gen_annotate_end();
 }
@@ -602,39 +601,75 @@ void gen_function(ast_declaration_t* fn)
 	_cur_fun = NULL;
 }
 
+void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
+{
+	if (expr->kind == expr_int_literal)
+	{
+		assert(int_val_required_width(&expr->data.int_literal.val) <= 32);
+		if (decl->type_ref->spec->size == 1)
+			gen_asm(".byte %d", int_val_as_int32(&expr->data.int_literal.val));
+		else if (decl->type_ref->spec->size == 2)
+			gen_asm(".value %d", int_val_as_int32(&expr->data.int_literal.val));
+		else if (decl->type_ref->spec->size == 4)
+		{
+			if (expr->data.int_literal.val.is_signed)
+				gen_asm(".long %d", int_val_as_int32(&expr->data.int_literal.val)); //data and init value
+			else
+				gen_asm(".long %d", int_val_as_uint32(&expr->data.int_literal.val)); //data and init value*/
+		}
+	}
+	else if (expr->kind == expr_str_literal)
+	{
+		gen_asm(".long .%s", expr->data.str_literal.sema.label); //label
+	}
+	else if (expr->kind == expr_struct_init)
+	{
+		ast_struct_member_init_t* member_init = expr->data.struct_init.member_inits;
+		size_t offset = 0;
+		while (member_init)
+		{
+			ast_struct_member_t* member = member_init->sema.member;
+			if (offset != member->sema.offset)
+			{
+				//padding
+				gen_asm(".zero %d", member->sema.offset - offset);
+				offset = member->sema.offset;
+			}
+
+			gen_global_var_init(member_init->expr, member->decl);
+
+			offset += member->decl->type_ref->spec->size;
+
+			//tail padding?
+
+			member_init = member_init->next;
+		}
+
+		if (offset != expr->sema.result.type->size)
+		{
+			//padding
+			gen_asm(".zero %d", expr->sema.result.type->size - offset);
+		}
+	}
+}
+
 void gen_global_var(ast_declaration_t* decl)
 {
 	gen_annotate_start("global variable '%s'", decl->name);
 
-	gen_asm(".globl _var_%s", decl->name); //export symbol
+	var_data_t* var = var_decl_global_var(_var_set, decl);
+
+	gen_asm(".globl %s", var->global_name); //export symbol
 	ast_expression_t* var_expr = decl->data.var.init_expr;
-	if (var_expr && var_expr->kind == expr_int_literal && int_val_as_uint32(&var_expr->data.int_literal.val) != 0)
+	if (var_expr)
 	{
-		gen_annotate("int literal initialisation");
+		gen_annotate("initialisation");
 		//initialised var goes in .data section
 		gen_asm(".data"); //data section
 		gen_asm(".align 4");
-		gen_asm("_var_%s:", decl->name); //label
+		gen_asm("%s:", var->global_name); //label
+		gen_global_var_init(var_expr, decl);
 
-		if (int_val_required_width(&var_expr->data.int_literal.val) <= 32)
-		{
-			if (var_expr->data.int_literal.val.is_signed)
-				gen_asm(".long %d", int_val_as_int32(&var_expr->data.int_literal.val)); //data and init value
-			else
-				gen_asm(".long %d", int_val_as_uint32(&var_expr->data.int_literal.val)); //data and init value
-		}
-		else
-			assert(false);
-
-		gen_asm(".text"); //back to text section
-		gen_asm("\n");
-	}
-	else if (var_expr && var_expr->kind == expr_str_literal)
-	{
-		gen_annotate("string literal initialisation");
-		gen_asm(".data"); //data section
-		gen_asm("_var_%s:", decl->name); //label
-		gen_asm(".long .%s", var_expr->data.str_literal.sema.label); //label
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
 	}
@@ -644,7 +679,7 @@ void gen_global_var(ast_declaration_t* decl)
 		//0 or uninitialised var goes in .BSS section
 		gen_asm(".bss"); //bss section
 		gen_asm(".align 4");
-		gen_asm("_var_%s:", decl->name); //label
+		gen_asm("%s:", var->global_name); //label
 		gen_asm(".zero %d", decl->sema.alloc_size); //data length
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
@@ -657,6 +692,7 @@ void gen_string_literal(const char* value, const char* label)
 	gen_annotate_start("string literal");
 	gen_asm(".%s:", label);
 	gen_asm(".string \"%s\"", value);
+	gen_asm("\n");
 	gen_annotate_end();
 }
 
@@ -671,7 +707,7 @@ void code_gen(valid_trans_unit_t* tl, write_asm_cb cb, void* data, bool annotati
 	tl_decl_t* var_decl = tl->var_decls;
 	while (var_decl)
 	{
-		var_decl_global_var(_var_set, var_decl->decl);
+		
 		gen_global_var(var_decl->decl);
 		var_decl = var_decl->next;
 	}
