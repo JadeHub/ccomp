@@ -160,7 +160,7 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 	if (!decl) return;
 
 	ast_destroy_type_ref(decl->type_ref);
-	ast_destroy_expression_list(decl->array_dimensions);
+	//ast_destroy_expression_list(decl->array_dimensions);
 	switch (decl->kind)
 	{
 	case decl_var:
@@ -376,7 +376,7 @@ void ast_decl_type_describe(str_buff_t* sb, ast_declaration_t* decl)
 		ast_type_spec_desc(sb, decl->type_ref->spec->data.ptr_type);
 
 		sb_append_ch(sb, '[');
-		sb_append_int(sb, decl->sema.total_array_count, 10);
+		sb_append_int(sb, decl->array_spec->sema.total_items, 10);
 		sb_append_ch(sb, ']');
 	}
 	else if (decl->kind == decl_var || decl->kind == decl_type)
@@ -520,7 +520,7 @@ bool ast_is_assignment_op(op_kind op)
 
 bool ast_is_array_decl(ast_declaration_t* decl)
 {
-	return decl->array_dimensions != NULL;
+	return decl->array_spec != NULL;
 }
 
 const char* ast_op_name(op_kind k)

@@ -50,53 +50,6 @@ expr_result_t sema_report_type_conversion_error(ast_expression_t* expr, ast_type
 	return result;
 }
 
-expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr)
-{
-	ast_type_spec_t* spec = sema_resolve_type(expr->data.struct_init.sema.user_type, expr->tokens.start);
-
-	expr_result_t result;
-	memset(&result, 0, sizeof(expr_result_t));
-
-	ast_struct_member_t* member = spec->data.user_type_spec->data.struct_members;
-	ast_struct_member_init_t* member_init = expr->data.struct_init.member_inits;
-
-	while (member)
-	{
-		if (member_init == NULL)
-			return _report_err(expr, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
-
-		expr_result_t init_result;
-
-		if (member_init->expr->kind == expr_struct_init)
-			member_init->expr->data.struct_init.sema.user_type = member->decl->type_ref->spec;
-
-		init_result = sema_process_expression(member_init->expr);
-
-		if (init_result.failure)
-		{
-			result.failure = true;
-			return result;
-		}
-
-		if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
-		{
-			return sema_report_type_conversion_error(member_init->expr, member->decl->type_ref->spec, init_result.result_type,
-				"initialisation of member '%s'", member->decl->name);
-		}
-
-		member_init->sema.member = member;
-
-		member = member->next;
-		member_init = member_init->next;
-	}
-
-	if (member_init)
-		return _report_err(expr, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
-
-	result.result_type = spec;
-	return result;
-}
-
 static expr_result_t _process_array_subscript_binary_op(ast_expression_t* expr)
 {
 	// lhs[rhs]
@@ -612,8 +565,8 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	case expr_cast:
 		result = _process_cast(expr);
 		break;
-	case expr_struct_init:
-		result = sema_process_struct_union_init_expression(expr);
+	case expr_compound_init:
+		assert(false);
 		break;
 	}
 	if (!result.failure)

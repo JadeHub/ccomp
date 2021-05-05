@@ -88,3 +88,63 @@ TEST_F(ArrayValidationTest, ptr_subscript)
 
 	ExpectNoError(code);
 }
+
+TEST_F(ArrayValidationTest, err_array_init_too_few)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int i[2] = {1};
+	}
+	)";
+
+	ExpectError(code, ERR_INVALID_INIT);
+}
+
+TEST_F(ArrayValidationTest, err_array_init_too_many)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int i[2] = {1, 2, 3};
+	}
+	)";
+
+	ExpectError(code, ERR_INVALID_INIT);
+}
+
+TEST_F(ArrayValidationTest, multi_dimention_decl_init)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int i[2][2] = { {1, 2}, {3, 4}};
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(ArrayValidationTest, array_of_structs_init)
+{
+	std::string code = R"(
+	void foo()
+	{
+		struct A {int x, y;} a[2] = { {1, 2}, {3, 4}};
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(ArrayValidationTest, unknown_len_array)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int i[] = {1, 2};
+	}
+	)";
+
+	ExpectNoError(code);
+}

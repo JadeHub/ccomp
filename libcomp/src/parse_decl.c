@@ -6,44 +6,43 @@
 
 ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context);
 
-ast_expression_t* parse_struct_union_init_expression()
+ast_expression_t* parse_compound_init_list()
 {
 	if (!expect_cur(tok_l_brace))
 		return NULL;
 
 	ast_expression_t* result = parse_alloc_expr();
-	result->kind = expr_struct_init;
+	result->kind = expr_compound_init;
 	next_tok();
 
-	ast_struct_member_init_t* last_member_init = NULL;
+	ast_compound_init_item_t* last_item = NULL;
 	while (!current_is(tok_r_brace))
 	{
 		//todo parse designator
-		ast_struct_member_init_t* member_init = (ast_struct_member_init_t*)malloc(sizeof(ast_struct_member_init_t));
-		memset(member_init, 0, sizeof(ast_struct_member_init_t));
+		ast_compound_init_item_t* item = (ast_compound_init_item_t*)malloc(sizeof(ast_compound_init_item_t));
+		memset(item, 0, sizeof(ast_compound_init_item_t));
 
 		if (current_is(tok_l_brace))
 		{
-			//nested struct
-			member_init->expr = parse_struct_union_init_expression();
+			//nested
+			item->expr = parse_compound_init_list();
 		}
 		else
 		{
-			member_init->expr = parse_constant_expression();
+			item->expr = parse_expression();
 		}
-		if (!member_init->expr)
+		if (!item->expr)
 		{
-			free(member_init);
+			free(item);
 			ast_destroy_expression(result);
 			return NULL;
 		}
 
-		if (result->data.struct_init.member_inits == NULL)
-			result->data.struct_init.member_inits = member_init;
+		if (result->data.compound_init.item_list == NULL)
+			result->data.compound_init.item_list = item;
 		else
-			last_member_init->next = member_init;
-		last_member_init = member_init;
-
+			last_item->next = item;
+		last_item = item;
 
 		if (current_is(tok_comma))
 			next_tok();
@@ -61,7 +60,7 @@ returns NULL if no array spec found
 returns an expression of kind expr_null if empty array spec found '[]'
 otherwise returns an expression representing the array size
 */
-ast_expression_t* opt_parse_array_spec()
+ast_expression_t* opt_parse_array_size()
 {
 	ast_expression_t* result = NULL;
 	if (current_is(tok_l_square_paren))
@@ -152,6 +151,35 @@ ast_func_params_t* parse_function_parameters()
 	return params;
 }
 
+ast_array_spec_t* opt_parse_array_spec()
+{
+	ast_expression_t* sz_expr = opt_parse_array_size();
+
+	if (!sz_expr)
+		return NULL;
+
+	ast_array_spec_t* result = (ast_array_spec_t*)malloc(sizeof(ast_array_spec_t));
+	memset(result, 0, sizeof(ast_array_spec_t));
+	
+	ast_array_dimension_t* last_d = NULL;
+	while (sz_expr)
+	{
+		ast_array_dimension_t* d = (ast_array_dimension_t*)malloc(sizeof(ast_array_dimension_t));
+		memset(d, 0, sizeof(ast_array_dimension_t));
+		d->expr = sz_expr;
+
+		if (result->dimension_list == NULL)
+			result->dimension_list = d;
+		else
+			last_d->next = d;
+		last_d = d;
+
+		sz_expr = opt_parse_array_size();
+	}
+
+	return result;
+}
+
 ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context)
 {
 	parse_type_ref_result_t type_ref_parse = parse_type_ref(type_spec, type_flags);
@@ -190,8 +218,15 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 	{
 		result->kind = decl_type;
 
-		ast_expression_list_t* array_sz_list = NULL;
-		ast_expression_t* array_sz_expr = opt_parse_array_spec();
+		result->array_spec = opt_parse_array_spec();
+
+		if (result->array_spec)
+		{
+			//array implies ptr type
+			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
+		}
+		/*ast_expression_list_t* array_sz_list = NULL;
+		ast_expression_t* array_sz_expr = opt_parse_array_size();
 		while (array_sz_expr)
 		{
 			ast_expression_list_t* array_sz = (ast_expression_list_t*)malloc(sizeof(ast_expression_list_t));
@@ -208,7 +243,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
 
 			array_sz_expr = opt_parse_array_spec();
-		}
+		}*/
 
 		if (context == dpc_struct)
 		{
@@ -227,9 +262,10 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			{
 				next_tok();
 
-				if (ast_type_is_struct_union(type_ref->spec) && current_is(tok_l_brace))
+				if ((result->array_spec || ast_type_is_struct_union(type_ref->spec))
+					&& current_is(tok_l_brace))
 				{
-					result->data.var.init_expr = parse_struct_union_init_expression();
+					result->data.var.init_expr = parse_compound_init_list();
 				}
 				else
 				{

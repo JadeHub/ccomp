@@ -49,7 +49,7 @@ typedef struct
 	struct ast_expression* cond;
 	struct ast_expression* true_branch;
 	struct ast_expression* false_branch;
-}ast_cond_expr_data_t;
+}ast_cond_expr_t;
 
 /*
 functional call parameter
@@ -148,33 +148,27 @@ typedef struct
 	result type
 	*/
 	struct ast_type_ref* type_ref;
-}ast_expr_cast_data_t;
+}ast_expr_cast_t;
 
-typedef struct ast_struct_member_init
+/*
+* New
+*/
+typedef struct ast_compont_init_item
 {
 	struct ast_expression* expr;
-	struct ast_struct_member_init* next;
+	struct ast_compont_init_item* next;
 
 	struct
 	{
 		struct ast_struct_member* member;
 	}sema;
+}ast_compound_init_item_t;
 
-}ast_struct_member_init_t;
-
-/*
-struct/union inintilisation
-the '{1, 2}' in 'struct { int i, j;} val = {1, 2};'
-*/
 typedef struct
 {
-	ast_struct_member_init_t* member_inits;
+	ast_compound_init_item_t* item_list;
 
-	struct
-	{
-		struct ast_type_spec* user_type;
-	}sema;
-}ast_expr_struct_init_t;
+}ast_expr_compound_init_t;
 
 typedef enum
 {
@@ -188,6 +182,7 @@ typedef enum
 	expr_sizeof,
 	expr_cast,
 	expr_struct_init,
+	expr_compound_init,
 	expr_null
 }expression_kind;
 
@@ -213,8 +208,8 @@ static inline const char* ast_expr_kind_name(expression_kind k)
 		return "sizeof";
 	case expr_cast:
 		return "cast";
-	case expr_struct_init:
-		return "struct initialiser";
+	case expr_compound_init:
+		return "compound initialiser";
 	case expr_null:
 		return "null";
 	}
@@ -235,11 +230,11 @@ typedef struct ast_expression
 		ast_int_literal_t int_literal;
 		ast_string_literal_t str_literal;
 		ast_expr_identifier_t identifier;
-		ast_cond_expr_data_t condition;
+		ast_cond_expr_t condition;
 		ast_expr_func_call_t func_call;
 		ast_sizeof_call_t sizeof_call;
-		ast_expr_cast_data_t cast;
-		ast_expr_struct_init_t struct_init;
+		ast_expr_cast_t cast;
+		ast_expr_compound_init_t compound_init;
 	}data;
 
 	struct {
@@ -428,7 +423,7 @@ typedef struct ast_var_decl
 	*/
 	ast_expression_t* init_expr;
 
-	
+
 	/*
 	bit size expression for struct members
 	*/
@@ -496,6 +491,58 @@ static inline const char* ast_decl_kind_name(ast_decl_kind k)
 }
 
 /*
+Array size kind
+*/
+typedef enum
+{
+	AS_CONST,		//int i[5]
+	AS_UNKNOWN,		//int i[]
+
+	//unsupported
+	AS_VAR			//int l = 5; int i[l];
+}ast_array_size_kind;
+
+typedef struct ast_array_dimension
+{
+	ast_expression_t* expr;
+	struct ast_array_dimension* next;
+
+	//ast_array_size_kind size_kind;
+
+	struct
+	{
+		/*
+		expr folded to an int
+		*/
+		size_t element_count;
+
+		/*
+		element_count * elem type size
+		*/
+		size_t alloc_size;
+		
+	}sema;
+
+}ast_array_dimension_t;
+
+
+typedef struct
+{
+	ast_array_dimension_t* dimension_list;
+
+	struct
+	{
+		/*
+		Total number of items to be allocated as an array. ie 30 for 'int [10][3]'
+		*/
+		size_t total_items;
+
+		ast_array_size_kind size_kind;
+	}sema;
+
+}ast_array_spec_t;
+
+/*
 A declaration
 */
 typedef struct ast_declaration
@@ -510,7 +557,7 @@ typedef struct ast_declaration
 	ast_type_ref_t* type_ref;
 
 	//[10][20]...
-	ast_expression_list_t* array_dimensions;
+	ast_array_spec_t* array_spec;
 
 	union
 	{
@@ -520,16 +567,12 @@ typedef struct ast_declaration
 
 	struct ast_declaration* next;
 
-	struct {
+	struct
+	{
 		/*
-		size to be allocated on heap - eg type_ref->size * array_dimensions
+		size to be allocated on heap - eg type_ref->size * total elements in array
 		*/
 		size_t alloc_size;
-
-		/*
-		Total number of items to be allocated as an array. ie 30 for 'int [10][3]'
-		*/
-		size_t total_array_count;
 	}sema;
 
 }ast_declaration_t;

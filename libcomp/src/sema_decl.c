@@ -5,14 +5,159 @@
 #include <string.h>
 #include <assert.h>
 
+expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_declaration_t* decl);
+bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* user_type);
+
+bool sema_process_array_compound_init(ast_expression_t* expr, ast_declaration_t* decl, ast_array_dimension_t* array_d)
+{
+	ast_type_spec_t* elem_type = decl->type_ref->spec->data.ptr_type;
+
+	ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
+	size_t item_count = 0;
+	while (init_item)
+	{
+		if (init_item->expr->kind == expr_compound_init)
+		{
+			if (array_d->next)
+			{
+				//elem is another array
+				if (!sema_process_array_compound_init(init_item->expr, decl, array_d->next))
+					return false;
+			}
+			else if(ast_type_is_struct_union(elem_type))
+			{
+				if (!sema_process_struct_compound_init(init_item->expr, elem_type))
+					return false;
+			}
+			else
+			{
+				diag_err(init_item->expr->tokens.start, ERR_TYPE_INCOMPLETE,
+					"compound initialiser requires array or sruct / union type");
+				return false;
+			}
+			
+		}
+		else
+		{
+			expr_result_t init_result = sema_process_expression(init_item->expr);
+			if (init_result.failure)
+				return false;
+
+			if (!sema_can_convert_type(elem_type, init_result.result_type))
+			{
+				sema_report_type_conversion_error(init_item->expr, elem_type, init_result.result_type,
+					"initialisation of array element");
+				return false;
+			}
+		}
+		item_count++;
+		init_item = init_item->next;
+	}
+
+	if (decl->array_spec->sema.size_kind == AS_CONST)
+	{
+		if (item_count != array_d->sema.element_count)
+		{
+			diag_err(expr->tokens.start, ERR_INVALID_INIT,
+				"incorrect number of items in array initialisation");
+			return false;
+		}
+	}
+	else
+	{
+		decl->array_spec->sema.total_items = item_count;
+		decl->array_spec->sema.size_kind = AS_CONST;
+	}
+
+	return true;
+}
+
+bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* user_type)
+{
+	ast_struct_member_t* member = user_type->data.user_type_spec->data.struct_members;
+	ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
+
+	while (member)
+	{
+		if (init_item == NULL)
+		{
+			diag_err(expr->tokens.start, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
+			return false;
+		}
+
+		expr_result_t init_result;
+
+		if (init_item->expr->kind == expr_compound_init)
+			init_result = sema_process_compound_init(init_item->expr, member->decl);
+		else
+			init_result = sema_process_expression(init_item->expr);
+
+		if (init_result.failure)
+			return false;
+
+		if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
+		{
+			sema_report_type_conversion_error(init_item->expr, member->decl->type_ref->spec, init_result.result_type,
+				"initialisation of member '%s'", member->decl->name);
+			return false;
+		}
+
+		init_item->sema.member = member;
+
+		member = member->next;
+		init_item = init_item->next;
+	}
+
+	if (init_item)
+	{
+		diag_err(expr->tokens.start, ERR_SYNTAX, "Incorrect number of init expressions for compound type");
+		return false;
+	}
+
+	return true;
+}
+
+expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_declaration_t* decl)
+{
+	expr_result_t result;
+	memset(&result, 0, sizeof(expr_result_t));
+
+	ast_type_spec_t* type = decl->type_ref->spec;
+	if (ast_type_is_struct_union(type))
+	{
+		result.failure = sema_process_struct_compound_init(expr, decl->type_ref->spec) == false;
+	}
+	else if (ast_is_array_decl(decl))
+	{
+		assert(type->kind == type_ptr);
+		result.failure = sema_process_array_compound_init(expr, decl, decl->array_spec->dimension_list) == false;
+	}
+	else
+	{
+		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"compound initialiser requires array or sruct / union type");
+		result.failure = true;
+		return result;
+	}
+
+	if (!result.failure)
+	{
+		result.result_type = decl->type_ref->spec;
+		result.array = ast_is_array_decl(decl);
+		expr->sema.result.type = decl->type_ref->spec;
+		expr->sema.result.array = ast_is_array_decl(decl);
+	}
+
+	return result;
+}
+
 static bool _process_global_var_init(ast_declaration_t* decl)
 {
 	if (decl->data.var.init_expr)
 	{
-		if (ast_type_is_struct_union(decl->type_ref->spec) && decl->data.var.init_expr->kind == expr_struct_init)
+		if (decl->data.var.init_expr->kind == expr_compound_init)
 		{
-			decl->data.var.init_expr->data.struct_init.sema.user_type = decl->type_ref->spec;
-			if(sema_process_expression(decl->data.var.init_expr).failure)
+			if (sema_process_compound_init(decl->data.var.init_expr, decl).failure)
 				return false;
 		}
 		else
@@ -99,6 +244,8 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 			//update definition
 			exist->data.var.init_expr = decl->data.var.init_expr;
 			decl->data.var.init_expr = NULL;
+
+			//process array dimentions?
 			if(!_process_global_var_init(decl))
 				return proc_decl_error;
 		}
@@ -143,20 +290,16 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 	if (decl->data.var.init_expr)
 	{
 		expr_result_t result;
+		ast_expression_t* expr = decl->data.var.init_expr;
 
-		if (decl->data.var.init_expr->kind == expr_struct_init)
+		if (expr->kind == expr_compound_init)
 		{
-			if (!ast_type_is_struct_union(decl->type_ref->spec))
-			{
-				diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-					"struct / union initialiser cannot be used with non-user type",
-					ast_declaration_name(decl));
-				return false;
-			}
-			decl->data.var.init_expr->data.struct_init.sema.user_type = decl->type_ref->spec;
+			result = sema_process_compound_init(expr, decl);
 		}
-
-		result = sema_process_expression(decl->data.var.init_expr);
+		else
+		{
+			result = sema_process_expression(decl->data.var.init_expr);
+		}
 		
 		if (result.failure)
 			return false;

@@ -14,7 +14,7 @@
 #define ERR_UNKNOWN_IDENTIFIER 7
 #define ERR_INVALID_PARAMS 8
 #define ERR_DUP_SYMBOL 9	//either function or global var
-#define ERR_INVALID_INIT 10 //global must have const init
+#define ERR_INVALID_INIT 10 //invalid initialisation
 #define ERR_DUP_TYPE_DEF 11	//Multiple definitions of the same struct
 #define ERR_TYPE_INCOMPLETE 11	//Type not defined
 #define ERR_INVALID_RETURN 12 //return statmement is not valid
@@ -28,6 +28,7 @@
 #define ERR_INITIALISER_NOT_CONST 20
 #define ERR_VALUE_OVERFLOW 21
 #define ERR_UNKNOWN 22 //compiler error
+
 
 struct token;
 

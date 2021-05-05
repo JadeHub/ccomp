@@ -19,7 +19,6 @@ typedef struct
 
 expr_result_t sema_process_expression(ast_expression_t* expr);
 expr_result_t sema_process_int_literal(ast_expression_t* expr);
-expr_result_t sema_process_struct_union_init_expression(ast_expression_t* expr);
 
 /*
 Result of analysing a definition

@@ -65,29 +65,57 @@ bool sema_process_array_dimentions(ast_declaration_t* decl)
 		return true;
 	}
 
-	ast_expression_list_t* array_sz = decl->array_dimensions;
+	ast_type_spec_t* elem_type = decl->type_ref->spec->data.ptr_type;
+
+	ast_array_dimension_t* array_sz = decl->array_spec->dimension_list;
 	size_t total = 0;
+
+	decl->array_spec->sema.size_kind = AS_CONST;
 
 	while (array_sz)
 	{
 		ast_expression_t* expr = array_sz->expr;
 
-		if (!sema_is_const_int_expr(expr))
+		if (expr->kind == expr_null)
 		{
-			_report_err(expr->tokens.start, ERR_INITIALISER_NOT_CONST,
-				"array size must be a constant integer expression",
-				ast_declaration_name(decl));
-			return false;
+			decl->array_spec->sema.size_kind = AS_UNKNOWN;
 		}
-		int_val_t expr_val = sema_fold_const_int_expr(expr);
-		if (total == 0)
-			total = expr_val.v.uint64;
 		else
-			total *= expr_val.v.uint64;
+		{
+			if (!sema_is_const_int_expr(expr))
+			{
+				_report_err(expr->tokens.start, ERR_INITIALISER_NOT_CONST,
+					"array size must be a constant integer expression",
+					ast_declaration_name(decl));
+				return false;
+			}
+			int_val_t expr_val = sema_fold_const_int_expr(expr);
+
+			if (expr_val.is_signed && expr_val.v.int64 < 0)
+			{
+				_report_err(expr->tokens.start, ERR_INVALID_INIT,
+					"array size must be a positive integer expression",
+					ast_declaration_name(decl));
+				return false;
+			}
+
+			array_sz->sema.element_count = (size_t)expr_val.v.uint64;
+			array_sz->sema.alloc_size = array_sz->sema.element_count * elem_type->size;
+
+			if (total == 0)
+				total = expr_val.v.uint64;
+			else
+				total *= expr_val.v.uint64;
+		}
+
 		array_sz = array_sz->next;
 	}
-	decl->sema.total_array_count = total;
-	decl->sema.alloc_size = total * decl->type_ref->spec->data.ptr_type->size;
+
+	if (decl->array_spec->sema.size_kind == AS_CONST)
+	{
+		decl->sema.alloc_size = total * elem_type->size;
+		decl->array_spec->sema.total_items = total;
+	}
 	return true;
 }
 
@@ -125,17 +153,26 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 				member->decl->name);
 		}
 
-		if (!sema_process_array_dimentions(member->decl))
-			return false;
-
-		if (ast_is_bit_field_member(member))
+		if (ast_is_array_decl(member->decl))
 		{
-			if (ast_is_array_decl(member->decl))
+			if (!sema_process_array_dimentions(member->decl))
+				return false;
+
+			if (member->decl->array_spec->sema.size_kind == AS_UNKNOWN)
+			{
+				//Unsupported feature - an array of unknown size may appear as the last member
+				return _report_err(member->decl->tokens.start, ERR_UNSUPPORTED,
+					"member array must have constant size");
+			}
+			if (ast_is_bit_field_member(member))
 			{
 				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
 					"bit field cannt be declared as an array");
 			}
+		}
 
+		if (ast_is_bit_field_member(member))
+		{
 			if (!ast_type_is_int(member->decl->type_ref->spec))
 			{
 				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,

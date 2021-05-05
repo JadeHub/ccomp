@@ -25,7 +25,7 @@ static size_t _calc_union_layout(ast_type_spec_t* spec)
 
 static size_t _member_alloc_size(ast_struct_member_t* member)
 {
-	if (member->decl->array_dimensions)
+	if (ast_is_array_decl(member->decl))
 		return member->decl->sema.alloc_size;
 	return member->decl->type_ref->spec->size;
 }

@@ -556,3 +556,16 @@ TEST_F(StructValidationTest, nested_struct_init)
 
 	ExpectNoError(code);
 }
+
+TEST_F(StructValidationTest, err_member_unknown_array_len)
+{
+	std::string code = R"(
+	struct A
+	{
+		int i[];
+	};
+
+	)";
+
+	ExpectError(code, ERR_UNSUPPORTED);
+}

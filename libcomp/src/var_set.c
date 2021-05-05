@@ -63,20 +63,20 @@ void var_enter_function(var_set_t* vars, ast_declaration_t* fn)
 	if (param)
 	{
 		//skip 4 bytes of stack for the return value & 4 bytes for ebp which is pushed in the fn prologue		
-		int offset = 8;
+		size_t offset = 8;
 
 		if (ast_func_decl_return_type(fn)->size > 4)
 			offset += 4; //add 4 bytes for the return value pointer
 
 		while (param)
-		{			
-			var_data_t* var = _make_stack_var(offset, param->decl->name);
+		{
+			var_data_t* var = _make_stack_var((int)offset, param->decl->name);
 			var->kind = var_param;
 			var->var_decl = param->decl;
 			var->next = vars->vars;
 			vars->vars = var;
 
-			uint32_t param_sz = param->decl->type_ref->spec->size;
+			size_t param_sz = param->decl->type_ref->spec->size;
 			offset += param_sz < 4 ? 4 : param_sz;
 			param = param->next;
 		}
@@ -146,7 +146,7 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 	
 	size_t sz = decl->sema.alloc_size;
 
-	var = _make_stack_var(vars->bsp_offset - sz, decl->name);
+	var = _make_stack_var(vars->bsp_offset - (int)sz, decl->name);
 	var->kind = var_stack;
 	var->var_decl = decl;
 

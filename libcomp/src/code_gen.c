@@ -160,30 +160,32 @@ ast_type_spec_t* _get_func_sig_ret_type(ast_type_ref_t* func_sig)
 	return func_sig->spec->data.func_sig_spec->ret_type;
 }
 
-void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* user_type, ast_expr_struct_init_t* expr)
+void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* decl_type, ast_expr_compound_init_t* init)
 {
 	gen_annotate_start("struct init expression");
-	ast_struct_member_init_t* member_init = expr->member_inits;
-	while (member_init)
+	ast_compound_init_item_t* init_item = init->item_list;
+	while (init_item)
 	{
-		ast_struct_member_t* member = member_init->sema.member;
+		ast_struct_member_t* member = init_item->sema.member;
 		gen_annotate("init member %s", member->decl->name);
 
-		if (ast_type_is_struct_union(member->decl->type_ref->spec) && member_init->expr->kind == expr_struct_init)
+		if (ast_type_is_struct_union(member->decl->type_ref->spec) && init_item->expr->kind == expr_compound_init)
 		{
-			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset, member->decl->type_ref->spec->data.user_type_spec, &member_init->expr->data.struct_init);
+			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset,
+				member->decl->type_ref->spec->data.user_type_spec,
+				&init_item->expr->data.compound_init);
 		}
 		else
 		{
-			gen_expression(member_init->expr);
+			gen_expression(init_item->expr);
 			_gen_mov_a_to_stack(member->decl->type_ref->spec->size, bsp_offset + (int32_t)member->sema.offset);
 		}
 
-		if (user_type->kind == user_type_union)
+		if (decl_type->kind == user_type_union)
 			break; //only init the first member for unions
 
 		member = member->next;
-		member_init = member_init->next;
+		init_item = init_item->next;
 	}
 	gen_annotate_end();
 }
@@ -195,9 +197,11 @@ void gen_var_decl(ast_declaration_t* decl)
 	gen_annotate_start("local variable '%s' at stack %d", decl->name, var->bsp_offset);
 	if (decl->data.var.init_expr)
 	{
-		if (decl->data.var.init_expr->kind == expr_struct_init)
+		if (decl->data.var.init_expr->kind == expr_compound_init)
 		{
-			gen_struct_union_init(var->bsp_offset, decl->type_ref->spec->data.user_type_spec, &decl->data.var.init_expr->data.struct_init);
+			gen_struct_union_init(var->bsp_offset,
+				decl->type_ref->spec->data.user_type_spec, //declared type
+				&decl->data.var.init_expr->data.compound_init);
 		}
 		else
 		{
@@ -622,13 +626,13 @@ void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
 	{
 		gen_asm(".long .%s", expr->data.str_literal.sema.label); //label
 	}
-	else if (expr->kind == expr_struct_init)
+	else if (expr->kind == expr_compound_init)
 	{
-		ast_struct_member_init_t* member_init = expr->data.struct_init.member_inits;
+		ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
 		size_t offset = 0;
-		while (member_init)
+		while (init_item)
 		{
-			ast_struct_member_t* member = member_init->sema.member;
+			ast_struct_member_t* member = init_item->sema.member;
 			if (offset != member->sema.offset)
 			{
 				//padding
@@ -636,13 +640,13 @@ void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
 				offset = member->sema.offset;
 			}
 
-			gen_global_var_init(member_init->expr, member->decl);
+			gen_global_var_init(init_item->expr, member->decl);
 
 			offset += member->decl->type_ref->spec->size;
 
 			//tail padding?
 
-			member_init = member_init->next;
+			init_item = init_item->next;
 		}
 
 		if (offset != expr->sema.result.type->size)
