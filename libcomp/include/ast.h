@@ -244,7 +244,6 @@ typedef struct ast_expression
 			* expression result type
 			*/
 			struct ast_type_spec* type;
-			bool array;
 		}result;
 	}sema;
 
@@ -277,6 +276,7 @@ typedef enum
 	type_double,*/
 	type_user,
 	type_ptr,
+	type_array,
 	type_func_sig,
 	type_alias //typedef
 }type_kind;
@@ -286,10 +286,8 @@ member of a user defined struct or union
 */
 typedef struct ast_struct_member
 {
-	token_range_t tokens;
-	
 	/*
-	declaration - includes name, type, array spec
+	declaration - includes name, type
 	*/
 	struct ast_declaration* decl;
 
@@ -373,6 +371,18 @@ typedef struct ast_func_sig_type_spec
 
 }ast_func_sig_type_spec_t;
 
+typedef struct
+{
+	struct ast_type_spec* element_type;
+	ast_expression_t* size_expr;
+
+	struct
+	{
+		size_t array_sz;
+	}sema;
+
+}ast_array_spec_t;
+
 /*
 type specification
 either a built in type, a user defined type, a function pointer, a pointer to one of these or a type alias (typedef)
@@ -391,6 +401,8 @@ typedef struct ast_type_spec
 		type pointed to if kind is type_ptr
 		*/
 		struct ast_type_spec* ptr_type;
+
+		ast_array_spec_t* array_spec;
 	}data;
 }ast_type_spec_t;
 
@@ -491,58 +503,6 @@ static inline const char* ast_decl_kind_name(ast_decl_kind k)
 }
 
 /*
-Array size kind
-*/
-typedef enum
-{
-	AS_CONST,		//int i[5]
-	AS_UNKNOWN,		//int i[]
-
-	//unsupported
-	AS_VAR			//int l = 5; int i[l];
-}ast_array_size_kind;
-
-typedef struct ast_array_dimension
-{
-	ast_expression_t* expr;
-	struct ast_array_dimension* next;
-
-	//ast_array_size_kind size_kind;
-
-	struct
-	{
-		/*
-		expr folded to an int
-		*/
-		size_t element_count;
-
-		/*
-		element_count * elem type size
-		*/
-		size_t alloc_size;
-		
-	}sema;
-
-}ast_array_dimension_t;
-
-
-typedef struct
-{
-	ast_array_dimension_t* dimension_list;
-
-	struct
-	{
-		/*
-		Total number of items to be allocated as an array. ie 30 for 'int [10][3]'
-		*/
-		size_t total_items;
-
-		ast_array_size_kind size_kind;
-	}sema;
-
-}ast_array_spec_t;
-
-/*
 A declaration
 */
 typedef struct ast_declaration
@@ -556,9 +516,6 @@ typedef struct ast_declaration
 	//variable or function return type
 	ast_type_ref_t* type_ref;
 
-	//[10][20]...
-	ast_array_spec_t* array_spec;
-
 	union
 	{
 		ast_var_decl_data_t var;
@@ -566,14 +523,6 @@ typedef struct ast_declaration
 	}data;
 
 	struct ast_declaration* next;
-
-	struct
-	{
-		/*
-		size to be allocated on heap - eg type_ref->size * total elements in array
-		*/
-		size_t alloc_size;
-	}sema;
 
 }ast_declaration_t;
 
@@ -744,11 +693,6 @@ typedef struct
 }ast_trans_unit_t;
 
 /*
-returns true if the declration declares an array
-*/
-bool ast_is_array_decl(ast_declaration_t* decl);
-
-/*
 returns true if the operation is a form of assignment (=, +=, etc)
 */
 bool ast_is_assignment_op(op_kind op);
@@ -781,6 +725,11 @@ find a user type member by name
 ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* struct_spec, const char* name);
 
 /*
+returns a type spec which represents an array of the given element type and size
+*/
+ast_type_spec_t* ast_make_array_type(ast_type_spec_t* element_type, ast_expression_t* size_expr);
+
+/*
 returns a type spec which represents a pointer to given type
 */
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* type);
@@ -809,6 +758,16 @@ ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn);
 returns true if the given type spec is a pointer to a function signature
 */
 bool ast_type_is_fn_ptr(ast_type_spec_t* type);
+
+/*
+returns true if the given type spec is an array
+*/
+bool ast_type_is_array(ast_type_spec_t* type);
+
+/*
+returns true if the given type spec is a pointer
+*/
+bool ast_type_is_ptr(ast_type_spec_t* type);
 
 /*
 returns true if the given type spec is a signed integer type

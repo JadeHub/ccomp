@@ -13,7 +13,6 @@ typedef struct
 {
 	bool failure;
 	ast_type_spec_t* result_type; //can be replaced with ast_expression_t::sema::result_type
-	bool array; //result was an array of result_type
 	ast_struct_member_t* member; //result was a struct member access (this is used to implement the rule which prevents taking the address of a bit field member
 }expr_result_t;
 
@@ -61,7 +60,6 @@ int_val_t sema_fold_const_int_expr(ast_expression_t* expr);
 bool process_sizeof_expr(ast_expression_t* expr);
 ast_type_spec_t* int_val_smallest_size(int_val_t* val);
 bool int_val_will_fit(int_val_t* val, ast_type_spec_t* type);
-bool sema_process_array_dimentions(ast_declaration_t* decl);
 
 //decl
 proc_decl_result sema_process_function_decl(ast_declaration_t* decl);

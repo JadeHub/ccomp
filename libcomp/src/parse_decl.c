@@ -151,34 +151,6 @@ ast_func_params_t* parse_function_parameters()
 	return params;
 }
 
-ast_array_spec_t* opt_parse_array_spec()
-{
-	ast_expression_t* sz_expr = opt_parse_array_size();
-
-	if (!sz_expr)
-		return NULL;
-
-	ast_array_spec_t* result = (ast_array_spec_t*)malloc(sizeof(ast_array_spec_t));
-	memset(result, 0, sizeof(ast_array_spec_t));
-	
-	ast_array_dimension_t* last_d = NULL;
-	while (sz_expr)
-	{
-		ast_array_dimension_t* d = (ast_array_dimension_t*)malloc(sizeof(ast_array_dimension_t));
-		memset(d, 0, sizeof(ast_array_dimension_t));
-		d->expr = sz_expr;
-
-		if (result->dimension_list == NULL)
-			result->dimension_list = d;
-		else
-			last_d->next = d;
-		last_d = d;
-
-		sz_expr = opt_parse_array_size();
-	}
-
-	return result;
-}
 
 ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_flags, decl_parse_context context)
 {
@@ -218,32 +190,20 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 	{
 		result->kind = decl_type;
 
-		result->array_spec = opt_parse_array_spec();
-
-		if (result->array_spec)
+		ast_expression_t* size_expr = opt_parse_array_size();
+		while (size_expr)
 		{
-			//array implies ptr type
-			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
-		}
-		/*ast_expression_list_t* array_sz_list = NULL;
-		ast_expression_t* array_sz_expr = opt_parse_array_size();
-		while (array_sz_expr)
-		{
-			ast_expression_list_t* array_sz = (ast_expression_list_t*)malloc(sizeof(ast_expression_list_t));
-			memset(array_sz, 0, sizeof(ast_expression_list_t));
-			array_sz->expr = array_sz_expr;
-
-			if (result->array_dimensions == NULL)
-				result->array_dimensions = array_sz; //first 
+			if(ast_type_is_array(result->type_ref->spec))
+				result->type_ref->spec->data.array_spec->element_type = ast_make_array_type(result->type_ref->spec->data.array_spec->element_type, size_expr);
 			else
-				array_sz_list->next = array_sz;
-			array_sz_list = array_sz;
+			result->type_ref->spec = ast_make_array_type(result->type_ref->spec, size_expr);
+			size_expr = opt_parse_array_size();
+			//while (size_expr)
+			{
 
-			//array implies ptr type
-			result->type_ref->spec = ast_make_ptr_type(result->type_ref->spec);
-
-			array_sz_expr = opt_parse_array_spec();
-		}*/
+				//size_expr = opt_parse_array_size();
+			}
+		}
 
 		if (context == dpc_struct)
 		{
@@ -262,7 +222,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			{
 				next_tok();
 
-				if ((result->array_spec || ast_type_is_struct_union(type_ref->spec))
+				if ((ast_type_is_array(type_ref->spec) || ast_type_is_struct_union(type_ref->spec))
 					&& current_is(tok_l_brace))
 				{
 					result->data.var.init_expr = parse_compound_init_list();

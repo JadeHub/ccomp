@@ -34,13 +34,27 @@ TEST_F(ArrayValidationTest, var_array_param_decl_no_name)
 	ExpectNoError(code);
 }
 
-TEST_F(ArrayValidationTest, array_subscript)
+TEST_F(ArrayValidationTest, ptr_subscript)
 {
 	std::string code = R"(
 	char foo()
 	{
 		char* str = "Hello";
 		return str[2];
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(ArrayValidationTest, array_subscript)
+{
+	std::string code = R"(
+	int foo()
+	{
+		int i[2];
+		i[1] = 5;
+		return i[1];
 	}
 	)";
 
@@ -75,7 +89,7 @@ TEST_F(ArrayValidationTest, err_array_subscript_not_ptr_idx)
 	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
-TEST_F(ArrayValidationTest, ptr_subscript)
+TEST_F(ArrayValidationTest, ptr_fn_subscript)
 {
 	std::string code = R"(
 	char* fn() {}
@@ -118,7 +132,23 @@ TEST_F(ArrayValidationTest, multi_dimention_decl_init)
 	std::string code = R"(
 	void foo()
 	{
-		int i[2][2] = { {1, 2}, {3, 4}};
+		int i[5][2] = {{1, 2}, {3, 4}};
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(ArrayValidationTest, multi_dimention_assign)
+{
+	std::string code = R"(
+	int foo()
+	{
+		int i[2][3];
+
+		i[1][2] = 5;
+
+		return i[1][2];
 	}
 	)";
 
@@ -130,14 +160,27 @@ TEST_F(ArrayValidationTest, array_of_structs_init)
 	std::string code = R"(
 	void foo()
 	{
-		struct A {int x, y;} a[2] = { {1, 2}, {3, 4}};
+		struct A {int x, y;} a[2] = {{1, 2}, {3, 4}};
 	}
 	)";
 
 	ExpectNoError(code);
 }
 
-TEST_F(ArrayValidationTest, unknown_len_array)
+TEST_F(ArrayValidationTest, ptr_conversion)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int a[10];
+		int *p = a;
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+/*TEST_F(ArrayValidationTest, unknown_len_array)
 {
 	std::string code = R"(
 	void foo()
@@ -147,4 +190,4 @@ TEST_F(ArrayValidationTest, unknown_len_array)
 	)";
 
 	ExpectNoError(code);
-}
+}*/

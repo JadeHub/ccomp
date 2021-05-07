@@ -12,7 +12,7 @@ TEST_F(ReturnValidationTest, err_return_when_void)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_RETURN);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(ReturnValidationTest, err_missing_expr)
@@ -36,7 +36,7 @@ TEST_F(ReturnValidationTest, err_wrong_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_RETURN);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(ReturnValidationTest, return_struct)

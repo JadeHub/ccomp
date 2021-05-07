@@ -160,6 +160,8 @@ ast_type_spec_t* _get_func_sig_ret_type(ast_type_ref_t* func_sig)
 	return func_sig->spec->data.func_sig_spec->ret_type;
 }
 
+void gen_compound_init(int32_t bsp_offset, ast_type_spec_t* decl_type, ast_expr_compound_init_t* init);
+
 void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* decl_type, ast_expr_compound_init_t* init)
 {
 	gen_annotate_start("struct init expression");
@@ -169,11 +171,10 @@ void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* decl_type, 
 		ast_struct_member_t* member = init_item->sema.member;
 		gen_annotate("init member %s", member->decl->name);
 
-		if (ast_type_is_struct_union(member->decl->type_ref->spec) && init_item->expr->kind == expr_compound_init)
+		if (init_item->expr->kind == expr_compound_init)
 		{
-			gen_struct_union_init(bsp_offset + (int32_t)member->sema.offset,
-				member->decl->type_ref->spec->data.user_type_spec,
-				&init_item->expr->data.compound_init);
+			gen_compound_init(bsp_offset + (int32_t)member->sema.offset,
+				member->decl->type_ref->spec, &init_item->expr->data.compound_init);
 		}
 		else
 		{
@@ -190,6 +191,41 @@ void gen_struct_union_init(int32_t bsp_offset, ast_user_type_spec_t* decl_type, 
 	gen_annotate_end();
 }
 
+void gen_array_compound_init(int32_t bsp_offset, ast_type_spec_t* elem_type, ast_expr_compound_init_t* init)
+{
+	gen_annotate_start("struct init expression");
+	ast_compound_init_item_t* init_item = init->item_list;
+	while (init_item)
+	{
+		if (init_item->expr->kind == expr_compound_init)
+		{
+			gen_compound_init(bsp_offset,
+				elem_type, &init_item->expr->data.compound_init);
+		}
+		else
+		{
+			gen_expression(init_item->expr);
+			_gen_mov_a_to_stack(elem_type->size, bsp_offset);
+		}
+		bsp_offset += (int32_t)elem_type->size;
+
+		init_item = init_item->next;
+	}
+	gen_annotate_end();
+}
+
+void gen_compound_init(int32_t bsp_offset, ast_type_spec_t* decl_type, ast_expr_compound_init_t* init)
+{
+	if (ast_type_is_struct_union(decl_type))
+	{
+		gen_struct_union_init(bsp_offset, decl_type->data.user_type_spec, init);
+	}
+	else if (ast_type_is_array(decl_type))
+	{
+		gen_array_compound_init(bsp_offset, decl_type->data.array_spec->element_type, init);
+	}
+}
+
 void gen_var_decl(ast_declaration_t* decl)
 {
 	var_data_t* var = var_decl_stack_var(_var_set, decl);
@@ -199,9 +235,7 @@ void gen_var_decl(ast_declaration_t* decl)
 	{
 		if (decl->data.var.init_expr->kind == expr_compound_init)
 		{
-			gen_struct_union_init(var->bsp_offset,
-				decl->type_ref->spec->data.user_type_spec, //declared type
-				&decl->data.var.init_expr->data.compound_init);
+			gen_compound_init(var->bsp_offset, decl->type_ref->spec, &decl->data.var.init_expr->data.compound_init);
 		}
 		else
 		{
@@ -227,15 +261,13 @@ void gen_var_decl(ast_declaration_t* decl)
 			else
 			{
 				_gen_mov_a_to_stack(decl->type_ref->spec->size, var->bsp_offset);
-
-				//gen_asm("movl %%eax, %d(%%ebp)", var->bsp_offset);
 			}
 		}
 	}
 	else
 	{
 		gen_annotate("init with zero");
-		for (int i = 0; i < decl->sema.alloc_size / 4; i++)
+		for (int i = 0; i < decl->type_ref->spec->size / 4; i++)
 		{
 			gen_asm("movl $0, %d(%%ebp)", var->bsp_offset + i * 4);
 		}
@@ -605,28 +637,21 @@ void gen_function(ast_declaration_t* fn)
 	_cur_fun = NULL;
 }
 
-void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
+void gen_global_var_init(ast_expression_t* expr, ast_type_spec_t* spec);
+
+void gen_global_compount_init(ast_expression_t* expr, ast_type_spec_t* spec)
 {
-	if (expr->kind == expr_int_literal)
+	if (ast_type_is_array(spec))
 	{
-		assert(int_val_required_width(&expr->data.int_literal.val) <= 32);
-		if (decl->type_ref->spec->size == 1)
-			gen_asm(".byte %d", int_val_as_int32(&expr->data.int_literal.val));
-		else if (decl->type_ref->spec->size == 2)
-			gen_asm(".value %d", int_val_as_int32(&expr->data.int_literal.val));
-		else if (decl->type_ref->spec->size == 4)
+		ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
+		ast_type_spec_t* elem_type = spec->data.array_spec->element_type;
+		while (init_item)
 		{
-			if (expr->data.int_literal.val.is_signed)
-				gen_asm(".long %d", int_val_as_int32(&expr->data.int_literal.val)); //data and init value
-			else
-				gen_asm(".long %d", int_val_as_uint32(&expr->data.int_literal.val)); //data and init value*/
+			gen_global_var_init(init_item->expr, elem_type);
+			init_item = init_item->next;
 		}
 	}
-	else if (expr->kind == expr_str_literal)
-	{
-		gen_asm(".long .%s", expr->data.str_literal.sema.label); //label
-	}
-	else if (expr->kind == expr_compound_init)
+	else if (ast_type_is_struct_union(spec))
 	{
 		ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
 		size_t offset = 0;
@@ -640,11 +665,9 @@ void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
 				offset = member->sema.offset;
 			}
 
-			gen_global_var_init(init_item->expr, member->decl);
+			gen_global_var_init(init_item->expr, member->decl->type_ref->spec);
 
 			offset += member->decl->type_ref->spec->size;
-
-			//tail padding?
 
 			init_item = init_item->next;
 		}
@@ -654,6 +677,33 @@ void gen_global_var_init(ast_expression_t* expr, ast_declaration_t* decl)
 			//padding
 			gen_asm(".zero %d", expr->sema.result.type->size - offset);
 		}
+	}
+}
+
+void gen_global_var_init(ast_expression_t* expr, ast_type_spec_t* spec)
+{
+	if (expr->kind == expr_int_literal)
+	{
+		assert(int_val_required_width(&expr->data.int_literal.val) <= 32);
+		if (spec->size == 1)
+			gen_asm(".byte %d", int_val_as_int32(&expr->data.int_literal.val));
+		else if (spec->size == 2)
+			gen_asm(".value %d", int_val_as_int32(&expr->data.int_literal.val));
+		else if (spec->size == 4)
+		{
+			if (expr->data.int_literal.val.is_signed)
+				gen_asm(".long %d", int_val_as_int32(&expr->data.int_literal.val)); //data and init value
+			else
+				gen_asm(".long %d", int_val_as_uint32(&expr->data.int_literal.val)); //data and init value*/
+		}
+	}
+	else if (expr->kind == expr_str_literal)
+	{
+		gen_asm(".long .%s", expr->data.str_literal.sema.label); //label
+	}
+	else if (expr->kind == expr_compound_init)
+	{
+		gen_global_compount_init(expr, spec);
 	}
 }
 
@@ -672,7 +722,7 @@ void gen_global_var(ast_declaration_t* decl)
 		gen_asm(".data"); //data section
 		gen_asm(".align 4");
 		gen_asm("%s:", var->global_name); //label
-		gen_global_var_init(var_expr, decl);
+		gen_global_var_init(var_expr, decl->type_ref->spec);
 
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
@@ -684,7 +734,7 @@ void gen_global_var(ast_declaration_t* decl)
 		gen_asm(".bss"); //bss section
 		gen_asm(".align 4");
 		gen_asm("%s:", var->global_name); //label
-		gen_asm(".zero %d", decl->sema.alloc_size); //data length
+		gen_asm(".zero %d", decl->type_ref->spec->size); //data length
 		gen_asm(".text"); //back to text section
 		gen_asm("\n");
 	}

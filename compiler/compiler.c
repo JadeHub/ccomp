@@ -130,7 +130,7 @@ void on_observe_user_type_def(ast_type_spec_t* spec)
             {
                 printf("\t Offset %3ld (len %3ld)    Member %-32s %s\n",
                     member->sema.offset,
-                    member->decl->sema.alloc_size,
+                    member->decl->type_ref->spec->size,
                     member->decl->name,
                     sb_str(type_name));
             }

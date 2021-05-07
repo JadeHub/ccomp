@@ -5,37 +5,20 @@
 #include <string.h>
 #include <assert.h>
 
-expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_declaration_t* decl);
-bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* user_type);
+expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_type_spec_t* type);
 
-bool sema_process_array_compound_init(ast_expression_t* expr, ast_declaration_t* decl, ast_array_dimension_t* array_d)
+bool sema_process_array_compound_init(ast_expression_t* expr, ast_type_spec_t* array_type)
 {
-	ast_type_spec_t* elem_type = decl->type_ref->spec->data.ptr_type;
+	ast_type_spec_t* elem_type = array_type->data.array_spec->element_type;
 
 	ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
-	size_t item_count = 0;
+	size_t elem_count = 0;
 	while (init_item)
 	{
 		if (init_item->expr->kind == expr_compound_init)
 		{
-			if (array_d->next)
-			{
-				//elem is another array
-				if (!sema_process_array_compound_init(init_item->expr, decl, array_d->next))
-					return false;
-			}
-			else if(ast_type_is_struct_union(elem_type))
-			{
-				if (!sema_process_struct_compound_init(init_item->expr, elem_type))
-					return false;
-			}
-			else
-			{
-				diag_err(init_item->expr->tokens.start, ERR_TYPE_INCOMPLETE,
-					"compound initialiser requires array or sruct / union type");
+			if (sema_process_compound_init(init_item->expr, elem_type).failure)
 				return false;
-			}
-			
 		}
 		else
 		{
@@ -50,23 +33,22 @@ bool sema_process_array_compound_init(ast_expression_t* expr, ast_declaration_t*
 				return false;
 			}
 		}
-		item_count++;
+		elem_count++;
 		init_item = init_item->next;
 	}
 
-	if (decl->array_spec->sema.size_kind == AS_CONST)
+	if (array_type->size == 0)
 	{
-		if (item_count != array_d->sema.element_count)
+		array_type->data.array_spec->sema.array_sz = elem_count; //not sure this is right when elements are themselves arrays
+	}
+	else
+	{
+		if (elem_count != array_type->data.array_spec->sema.array_sz)
 		{
 			diag_err(expr->tokens.start, ERR_INVALID_INIT,
 				"incorrect number of items in array initialisation");
 			return false;
 		}
-	}
-	else
-	{
-		decl->array_spec->sema.total_items = item_count;
-		decl->array_spec->sema.size_kind = AS_CONST;
 	}
 
 	return true;
@@ -88,7 +70,7 @@ bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* 
 		expr_result_t init_result;
 
 		if (init_item->expr->kind == expr_compound_init)
-			init_result = sema_process_compound_init(init_item->expr, member->decl);
+			init_result = sema_process_compound_init(init_item->expr, member->decl->type_ref->spec);
 		else
 			init_result = sema_process_expression(init_item->expr);
 
@@ -117,24 +99,23 @@ bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* 
 	return true;
 }
 
-expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_declaration_t* decl)
+expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_type_spec_t* type)
 {
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
 
-	ast_type_spec_t* type = decl->type_ref->spec;
 	if (ast_type_is_struct_union(type))
 	{
-		result.failure = sema_process_struct_compound_init(expr, decl->type_ref->spec) == false;
+		result.failure = sema_process_struct_compound_init(expr, type) == false;
 	}
-	else if (ast_is_array_decl(decl))
+	else if (ast_type_is_array(type))
 	{
-		assert(type->kind == type_ptr);
-		result.failure = sema_process_array_compound_init(expr, decl, decl->array_spec->dimension_list) == false;
+		result.failure = !sema_process_array_compound_init(expr, type);
+
 	}
 	else
 	{
-		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+		diag_err(expr->tokens.start, ERR_TYPE_INCOMPLETE,
 			"compound initialiser requires array or sruct / union type");
 		result.failure = true;
 		return result;
@@ -142,10 +123,8 @@ expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_declaration
 
 	if (!result.failure)
 	{
-		result.result_type = decl->type_ref->spec;
-		result.array = ast_is_array_decl(decl);
-		expr->sema.result.type = decl->type_ref->spec;
-		expr->sema.result.array = ast_is_array_decl(decl);
+		result.result_type = type;
+		expr->sema.result.type = type;
 	}
 
 	return result;
@@ -157,7 +136,7 @@ static bool _process_global_var_init(ast_declaration_t* decl)
 	{
 		if (decl->data.var.init_expr->kind == expr_compound_init)
 		{
-			if (sema_process_compound_init(decl->data.var.init_expr, decl).failure)
+			if (sema_process_compound_init(decl->data.var.init_expr, decl->type_ref->spec).failure)
 				return false;
 		}
 		else
@@ -252,9 +231,6 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 		return proc_decl_ignore;
 	}
 
-	if (!sema_process_array_dimentions(decl) || decl->sema.alloc_size == 0)
-		return proc_decl_error;
-
 	if (!_process_global_var_init(decl))
 		return proc_decl_error;
 
@@ -281,12 +257,6 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 		return false;
 	}
 
-	if (!sema_process_array_dimentions(decl))
-		return false;
-
-	if (decl->sema.alloc_size == 0)
-		return false;
-
 	if (decl->data.var.init_expr)
 	{
 		expr_result_t result;
@@ -294,7 +264,7 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 
 		if (expr->kind == expr_compound_init)
 		{
-			result = sema_process_compound_init(expr, decl);
+			result = sema_process_compound_init(expr, decl->type_ref->spec);
 		}
 		else
 		{
@@ -323,7 +293,7 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 	}
 
 	idm_add_decl(sema_id_map(), decl);
-	sema_get_cur_fn_ctx()->decl->data.func.sema.required_stack_size += decl->sema.alloc_size;
+	sema_get_cur_fn_ctx()->decl->data.func.sema.required_stack_size += decl->type_ref->spec->size;
 
 	return true;
 }

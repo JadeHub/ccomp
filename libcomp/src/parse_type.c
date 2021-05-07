@@ -315,7 +315,6 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 			{
 				ast_struct_member_t* member = (ast_struct_member_t*)malloc(sizeof(ast_struct_member_t));
 				memset(member, 0, sizeof(ast_struct_member_t));
-				member->tokens = decl->tokens;
 				member->decl = decl;
 
 				if (last_member == NULL)
@@ -609,7 +608,8 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 
 	if (current_is(tok_l_paren) && next_is(tok_star))
 	{
-		//function pointer
+		//function pointer 'int (*fn)(void)'
+		//array pointer 'int (*ptr)[10]'
 		next_tok();
 		next_tok();
 		if (current_is(tok_identifier))
@@ -620,9 +620,20 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 		expect_cur(tok_r_paren);
 		next_tok();
 
-		//params
-		ast_func_params_t* params = parse_function_parameters();
-		result.type->spec = ast_make_func_ptr_type(result.type->spec, params);
+		if (current_is(tok_l_brace))
+		{
+			//array pointer
+
+
+		}
+		else
+		{
+			//function pointer
+			expect_cur(tok_l_paren);
+			//params
+			ast_func_params_t* params = parse_function_parameters();
+			result.type->spec = ast_make_func_ptr_type(result.type->spec, params);
+		}
 	}
 	else
 	{

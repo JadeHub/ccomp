@@ -23,13 +23,6 @@ static size_t _calc_union_layout(ast_type_spec_t* spec)
 	return size + pad;
 }
 
-static size_t _member_alloc_size(ast_struct_member_t* member)
-{
-	if (ast_is_array_decl(member->decl))
-		return member->decl->sema.alloc_size;
-	return member->decl->type_ref->spec->size;
-}
-
 size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 {
 	if (ast_type_is_enum(spec))
@@ -104,7 +97,7 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 			size_t pad = (align - (offset % align)) % align;
 			member->sema.offset = offset + pad;
 
-			offset = member->sema.offset + _member_alloc_size(member);
+			offset = member->sema.offset + member->decl->type_ref->spec->size;
 			member = member->next;
 		}
 	}
@@ -121,6 +114,9 @@ size_t abi_calc_user_type_layout(ast_type_spec_t* spec)
 size_t abi_get_type_alignment(ast_type_spec_t* spec)
 {
 	assert(spec->kind != type_alias); //assume the type has been 'resolved'
+
+	if (spec->kind == type_array)
+		return abi_get_type_alignment(spec->data.array_spec->element_type);
 
 	if (spec->kind != type_user || ast_type_is_enum(spec))
 		return spec->size;

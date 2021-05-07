@@ -144,7 +144,7 @@ var_data_t* var_decl_stack_var(var_set_t* vars, ast_declaration_t* decl)
 		return NULL;
 	}
 	
-	size_t sz = decl->sema.alloc_size;
+	size_t sz = decl->type_ref->spec->size;
 
 	var = _make_stack_var(vars->bsp_offset - (int)sz, decl->name);
 	var->kind = var_stack;

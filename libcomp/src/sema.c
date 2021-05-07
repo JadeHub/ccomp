@@ -57,68 +57,6 @@ static bool process_expression(ast_expression_t* expr)
 	return !result.failure;
 }
 
-bool sema_process_array_dimentions(ast_declaration_t* decl)
-{
-	if (!ast_is_array_decl(decl))
-	{
-		decl->sema.alloc_size = decl->type_ref->spec->size;
-		return true;
-	}
-
-	ast_type_spec_t* elem_type = decl->type_ref->spec->data.ptr_type;
-
-	ast_array_dimension_t* array_sz = decl->array_spec->dimension_list;
-	size_t total = 0;
-
-	decl->array_spec->sema.size_kind = AS_CONST;
-
-	while (array_sz)
-	{
-		ast_expression_t* expr = array_sz->expr;
-
-		if (expr->kind == expr_null)
-		{
-			decl->array_spec->sema.size_kind = AS_UNKNOWN;
-		}
-		else
-		{
-			if (!sema_is_const_int_expr(expr))
-			{
-				_report_err(expr->tokens.start, ERR_INITIALISER_NOT_CONST,
-					"array size must be a constant integer expression",
-					ast_declaration_name(decl));
-				return false;
-			}
-			int_val_t expr_val = sema_fold_const_int_expr(expr);
-
-			if (expr_val.is_signed && expr_val.v.int64 < 0)
-			{
-				_report_err(expr->tokens.start, ERR_INVALID_INIT,
-					"array size must be a positive integer expression",
-					ast_declaration_name(decl));
-				return false;
-			}
-
-			array_sz->sema.element_count = (size_t)expr_val.v.uint64;
-			array_sz->sema.alloc_size = array_sz->sema.element_count * elem_type->size;
-
-			if (total == 0)
-				total = expr_val.v.uint64;
-			else
-				total *= expr_val.v.uint64;
-		}
-
-		array_sz = array_sz->next;
-	}
-
-	if (decl->array_spec->sema.size_kind == AS_CONST)
-	{
-		decl->sema.alloc_size = total * elem_type->size;
-		decl->array_spec->sema.total_items = total;
-	}
-	return true;
-}
-
 static bool _is_member_name_unique(ast_user_type_spec_t* user_type_spec, ast_struct_member_t* unique)
 {
 	ast_struct_member_t* member = user_type_spec->data.struct_members;
@@ -139,7 +77,7 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 	{
 		if (strlen(member->decl->name) > 0 && !_is_member_name_unique(user_type_spec, member))
 		{
-			return _report_err(member->tokens.start, ERR_DUP_SYMBOL,
+			return _report_err(member->decl->tokens.start, ERR_DUP_SYMBOL,
 				"duplicate %s member %s",
 				ast_user_type_kind_name(user_type_spec->kind),
 				member->decl->name);
@@ -147,32 +85,20 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 
 		if (!sema_resolve_type_ref(member->decl->type_ref) || member->decl->type_ref->spec->size == 0)
 		{
-			return _report_err(member->tokens.start, ERR_TYPE_INCOMPLETE,
+			return _report_err(member->decl->tokens.start, ERR_TYPE_INCOMPLETE,
 				"%s member %s is of incomplete type",
 				ast_user_type_kind_name(user_type_spec->kind),
 				member->decl->name);
 		}
 
-		if (ast_is_array_decl(member->decl))
+		if (ast_is_bit_field_member(member))
 		{
-			if (!sema_process_array_dimentions(member->decl))
-				return false;
-
-			if (member->decl->array_spec->sema.size_kind == AS_UNKNOWN)
-			{
-				//Unsupported feature - an array of unknown size may appear as the last member
-				return _report_err(member->decl->tokens.start, ERR_UNSUPPORTED,
-					"member array must have constant size");
-			}
-			if (ast_is_bit_field_member(member))
+			if (ast_type_is_array(member->decl->type_ref->spec))
 			{
 				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
 					"bit field cannt be declared as an array");
 			}
-		}
 
-		if (ast_is_bit_field_member(member))
-		{
 			if (!ast_type_is_int(member->decl->type_ref->spec))
 			{
 				return _report_err(member->decl->data.var.bit_sz->tokens.start, ERR_UNSUPPORTED,
@@ -336,6 +262,47 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 	if (spec->kind == type_ptr)
 	{
 		spec->data.ptr_type = sema_resolve_type(spec->data.ptr_type, start);
+
+		if (!spec->data.ptr_type)
+		{
+			_report_err(start, ERR_UNKNOWN_TYPE,
+				"pointer to unknown type");
+			return NULL;
+		}
+		return spec;
+	}
+
+	if (spec->kind == type_array )// && spec->data.array_spec->size_expr->kind != expr_null && spec->data.array_spec->sema.array_sz == 0)
+	{
+		if (spec->size == 0 && spec->data.array_spec->size_expr->kind != expr_null)
+		{
+			ast_array_spec_t* array_spec = spec->data.array_spec;
+
+			array_spec->element_type = sema_resolve_type(array_spec->element_type, start);
+			if (!array_spec->element_type || array_spec->element_type->size == 0)
+			{
+				_report_err(array_spec->size_expr->tokens.start, ERR_INITIALISER_NOT_CONST,
+					"array element size unknown");
+				return NULL;
+			}
+
+			if (!sema_is_const_int_expr(array_spec->size_expr))
+			{
+				_report_err(array_spec->size_expr->tokens.start, ERR_INITIALISER_NOT_CONST,
+					"array size must be a constant integer expression");
+				return NULL;
+			}
+			int_val_t expr_val = sema_fold_const_int_expr(array_spec->size_expr);
+
+			if (expr_val.is_signed && expr_val.v.int64 <= 0)
+			{
+				_report_err(array_spec->size_expr->tokens.start, ERR_INVALID_INIT,
+					"array size must be a positive integer expression");
+				return NULL;
+			}
+			array_spec->sema.array_sz = (size_t)expr_val.v.uint64;
+			spec->size = array_spec->sema.array_sz * array_spec->element_type->size;
+		}
 		return spec;
 	}
 
@@ -497,6 +464,12 @@ bool sema_is_same_type(ast_type_spec_t* lhs, ast_type_spec_t* rhs)
 		return sema_is_same_type(lhs->data.ptr_type, rhs->data.ptr_type);
 	}
 
+	if (lhs->kind == type_array)
+	{
+		return sema_is_same_type(lhs->data.array_spec->element_type, rhs->data.array_spec->element_type) && 
+				lhs->data.array_spec->sema.array_sz == rhs->data.array_spec->sema.array_sz;
+	}
+
 	if (lhs->kind == type_func_sig)
 	{
 		return sema_is_same_func_sig(lhs->data.func_sig_spec, rhs->data.func_sig_spec);
@@ -513,6 +486,16 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 	//are they exactly the same type?
 	if (sema_is_same_type(target, type))
 		return true;
+
+	if (ast_type_is_ptr(target) && ast_type_is_array(type))
+	{
+		//any array can be converted to void*
+		if (target->data.ptr_type->kind == type_void)
+			return true;
+
+		//converting an array to a pointer
+		return sema_can_convert_type(target->data.ptr_type, type->data.array_spec->element_type);
+	}
 
 	//integer promotion
 	if (ast_type_is_int(target) && ast_type_is_int(type) && target->size >= type->size)
@@ -700,8 +683,8 @@ bool process_return_statement(ast_statement_t* smnt)
 	{
 		if (!sema_can_convert_type(ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl), result.result_type))
 		{
-			return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
-				"return value type does not match function declaration");
+			sema_report_type_conversion_error(smnt->data.expr, ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl), result.result_type, "return statement");
+			return false;
 		}
 	}
 	else if (sema_get_cur_fn_ctx()->decl->type_ref->spec->kind != type_void)

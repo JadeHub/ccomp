@@ -160,7 +160,6 @@ void ast_destroy_declaration(ast_declaration_t* decl)
 	if (!decl) return;
 
 	ast_destroy_type_ref(decl->type_ref);
-	//ast_destroy_expression_list(decl->array_dimensions);
 	switch (decl->kind)
 	{
 	case decl_var:
@@ -308,6 +307,8 @@ const char* ast_type_name(ast_type_spec_t* type)
 		return "uint32";
 	case type_user:
 		return type->data.user_type_spec->name;
+	case type_array:
+		return "array"; //todo
 	case type_ptr:
 		return "pointer"; //todo
 	}
@@ -369,14 +370,14 @@ void ast_type_ref_desc(str_buff_t* sb, ast_type_ref_t* type_ref)
 
 void ast_decl_type_describe(str_buff_t* sb, ast_declaration_t* decl)
 {
-	if (ast_is_array_decl(decl))
+	if (ast_type_is_array(decl->type_ref->spec))
 	{
 		ast_type_ref_desc(sb, decl->type_ref);
-		//ignore the implied pointer for arrays
-		ast_type_spec_desc(sb, decl->type_ref->spec->data.ptr_type);
+		ast_type_spec_desc(sb, decl->type_ref->spec->data.array_spec->element_type);
 
 		sb_append_ch(sb, '[');
-		sb_append_int(sb, decl->array_spec->sema.total_items, 10);
+		sb_append(sb, "to do");
+		//sb_append_int(sb, decl->array_spec->sema.total_items, 10);
 		sb_append_ch(sb, ']');
 	}
 	else if (decl->kind == decl_var || decl->kind == decl_type)
@@ -404,6 +405,19 @@ ast_struct_member_t* ast_find_struct_member(ast_user_type_spec_t* user_type_spec
 		member = member->next;
 	}
 	return NULL;
+}
+
+ast_type_spec_t* ast_make_array_type(ast_type_spec_t* element_type, ast_expression_t* size_expr)
+{
+	ast_type_spec_t* result = (ast_type_spec_t*)malloc(sizeof(ast_type_spec_t));
+	memset(result, 0, sizeof(ast_type_spec_t));
+	result->kind = type_array;
+	result->size = 0;
+	result->data.array_spec = (ast_array_spec_t*)malloc(sizeof(ast_array_spec_t));
+	memset(result->data.array_spec, 0, sizeof(ast_array_spec_t));
+	result->data.array_spec->element_type = element_type;
+	result->data.array_spec->size_expr = size_expr;
+	return result;
 }
 
 ast_type_spec_t* ast_make_ptr_type(ast_type_spec_t* type)
@@ -445,6 +459,16 @@ ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn)
 bool ast_type_is_fn_ptr(ast_type_spec_t* type)
 {
 	return type->kind == type_ptr && type->data.ptr_type->kind == type_func_sig;
+}
+
+bool ast_type_is_array(ast_type_spec_t* type)
+{
+	return type->kind == type_array;
+}
+
+bool ast_type_is_ptr(ast_type_spec_t* type)
+{
+	return type->kind == type_ptr;
 }
 
 ast_type_spec_t* ast_make_func_ptr_type(ast_type_spec_t* ret_type, ast_func_params_t* params)
@@ -516,11 +540,6 @@ bool ast_is_assignment_op(op_kind op)
 		return true;
 	}
 	return false;
-}
-
-bool ast_is_array_decl(ast_declaration_t* decl)
-{
-	return decl->array_spec != NULL;
 }
 
 const char* ast_op_name(op_kind k)

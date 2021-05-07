@@ -60,8 +60,8 @@ static expr_result_t _process_array_subscript_binary_op(ast_expression_t* expr)
 	if (lhs_result.failure)
 		return lhs_result;
 
-	if (lhs_result.result_type->kind != type_ptr)
-		return _report_err(expr, ERR_INCOMPATIBLE_TYPE, "[] operator: expected pointer type");
+	if(!ast_type_is_array(lhs_result.result_type) && !ast_type_is_ptr(lhs_result.result_type))
+		return _report_err(expr, ERR_INCOMPATIBLE_TYPE, "[] operator: expected array or pointer type");
 
 	expr_result_t rhs_result = sema_process_expression(expr->data.binary_op.rhs);
 	if (rhs_result.failure)
@@ -71,7 +71,10 @@ static expr_result_t _process_array_subscript_binary_op(ast_expression_t* expr)
 		return _report_err(expr, ERR_INCOMPATIBLE_TYPE, "[] operator: subscript must be an integer type");
 
 	//result is the type pointed to by lhs
-	result.result_type = lhs_result.result_type->data.ptr_type;
+	if (ast_type_is_array(lhs_result.result_type))
+		result.result_type = lhs_result.result_type->data.array_spec->element_type;
+	else if (ast_type_is_ptr(lhs_result.result_type))
+		result.result_type = lhs_result.result_type->data.ptr_type;
 	return result;
 }
 
@@ -127,7 +130,6 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 	}
 
 	result.result_type = member->decl->type_ref->spec;
-	result.array = ast_is_array_decl(member->decl);
 	result.member = member;
 	return result;
 }
@@ -141,7 +143,7 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	if (target_result.failure)
 		return target_result;
 
-	if (target_result.array)
+	if (ast_type_is_array(target_result.result_type))
 	{
 		return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
 			"cannot assign to array type expression");
@@ -177,13 +179,7 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	}
 	else if (!sema_can_convert_type(target_result.result_type, result.result_type))
 	{
-		//sema_can_convert_type(target_result.result_type, result.result_type);
-
 		return sema_report_type_conversion_error(expr, target_result.result_type, result.result_type, "assignment");
-
-		/*return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-			"assignment to incompatible type. expected %s",
-			ast_type_name(target_result.result_type));*/
 	}
 
 	return target_result;
@@ -312,8 +308,6 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 					ast_declaration_name(decl));
 			}
 			result.result_type = decl->type_ref->spec;
-			result.array = ast_is_array_decl(decl);
-
 
 			if (decl->data.var.init_expr && 
 				decl->data.var.init_expr->kind == expr_int_literal &&
@@ -336,16 +330,6 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 			return result;
 		}
 	}
-
-	//enum value?
-	/*int_val_t* enum_val = idm_find_enum_val(sema_id_map(), expr->data.identifier.name);
-	if (enum_val)
-	{
-		ast_destroy_expression_data(expr);
-		expr->kind = expr_int_literal;
-		expr->data.int_literal.val = *enum_val;
-		return sema_process_expression(expr);
-	}*/
 	
 	return _report_err(expr, ERR_UNKNOWN_IDENTIFIER,
 		"identifier '%s' not defined",
@@ -572,7 +556,7 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	if (!result.failure)
 	{
 		expr->sema.result.type = result.result_type;
-		expr->sema.result.array = result.array;
+		//expr->sema.result.array = result.array;
 	}
 	return result;
 }

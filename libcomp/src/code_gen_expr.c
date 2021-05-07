@@ -9,7 +9,6 @@
 
 bool lval = false;
 
-
 static bool _is_unsigned_int_type(ast_type_spec_t* type)
 {
 	return type->kind == type_uint8 ||
@@ -59,7 +58,7 @@ void gen_assignment(ast_expression_t* expr)
 	gen_asm("pop %%edx");
 
 	//if the target is a user defined type we assume eax and edx are pointers
-	if (expr->sema.result.type->kind == type_user)
+	if (ast_type_is_struct_union(expr->sema.result.type))
 	{
 		gen_annotate("copy user defined type by value");
 		uint32_t offset = 0;
@@ -224,11 +223,11 @@ void gen_identifier(ast_expression_t* expr)
 			gen_annotate("'%s' is local at %d(%%ebp)", expr->data.identifier.name, var->bsp_offset);
 
 		//if we are processing an lval or we are referencing a user defined type load the address into eax
-		if (lval || expr->sema.result.type->kind == type_user || ast_is_array_decl(var->var_decl)) 
+		if (lval || ast_type_is_struct_union(expr->sema.result.type) || ast_type_is_array(expr->sema.result.type))
 		{
 			if (lval)
 				gen_annotate("loading address of lval into eax");
-			else if (ast_is_array_decl(var->var_decl))
+			else if (ast_type_is_array(expr->sema.result.type))
 				gen_annotate("loading address of array into eax");
 			else
 				gen_annotate("loading address of user_type into eax");
@@ -411,7 +410,7 @@ void gen_condition_expr(ast_expression_t* expr)
 
 void gen_member_access(ast_expression_t* expr)
 {
-	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_user);
+	assert(ast_type_is_struct_union(expr->data.binary_op.lhs->sema.result.type));
 	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result.type;
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
 	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec,
@@ -430,7 +429,7 @@ void gen_member_access(ast_expression_t* expr)
 		gen_asm("addl $%d, %%eax", member->sema.offset);
 	}
 
-	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
+	if (!lval && !ast_type_is_struct_union(expr->sema.result.type) && !ast_type_is_array(expr->sema.result.type))
 	{
 		gen_annotate("store member value in eax");
 		//we are not processing an lval and the member type is not a user type so move the value into eax
@@ -443,7 +442,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 {
 	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_ptr);
 	ast_type_spec_t* user_type = expr->data.binary_op.lhs->sema.result.type->data.ptr_type;
-	assert(user_type->kind == type_user);
+	assert(ast_type_is_struct_union(user_type));
 	assert(expr->data.binary_op.rhs->kind == expr_identifier);
 
 	ast_struct_member_t* member = ast_find_struct_member(user_type->data.user_type_spec,
@@ -465,7 +464,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 	gen_annotate("add offset %d", member->sema.offset);
 	gen_asm("addl $%d, %%eax", member->sema.offset);
 
-	if (!lval && expr->sema.result.type->kind != type_user && !expr->sema.result.array)
+	if (!lval && !ast_type_is_struct_union(expr->sema.result.type) && !ast_type_is_array(expr->sema.result.type))
 	{
 		gen_annotate("store member value in eax");
 		//we are not processing an lval and the member type is not a user type so move the value into eax
@@ -476,7 +475,7 @@ void gen_ptr_member_access(ast_expression_t* expr)
 
 void gen_array_subscript(ast_expression_t* expr)
 {
-	assert(expr->data.binary_op.lhs->sema.result.type->kind == type_ptr);
+	assert(ast_type_is_array(expr->data.binary_op.lhs->sema.result.type) || ast_type_is_ptr(expr->data.binary_op.lhs->sema.result.type));
 
 	gen_annotate_start("array subscript");
 
@@ -491,7 +490,7 @@ void gen_array_subscript(ast_expression_t* expr)
 	gen_expression(expr->data.binary_op.lhs);
 
 	//lhs is not an array (it's a pointer) so we need to dereference it if we are tracking its address
-	if (lval && !expr->data.binary_op.lhs->sema.result.array)
+	if (lval && !ast_type_is_array(expr->data.binary_op.lhs->sema.result.type))
 	{
 		gen_asm("movl (%%eax), %%eax");
 	}
@@ -513,10 +512,10 @@ void gen_array_subscript(ast_expression_t* expr)
 	gen_asm("popl %%ecx");
 	gen_asm("addl %%ecx, %%eax");
 
-	if (!lval && expr->sema.result.type->kind != type_user)
+	if (!lval && !ast_type_is_struct_union(expr->sema.result.type) && !ast_type_is_array(expr->sema.result.type))
 	{
 		gen_annotate("store item value in eax");
-		//we are not processing an lval and the result is not a user type so move the value into eax
+		//we are not processing an lval and the result is not a user type or an array so move the value into eax
 		gen_asm("movl (%%eax), %%eax");
 	}
 
@@ -538,7 +537,7 @@ void gen_dereference(ast_expression_t* expr)
 	gen_annotate_start("dereference");
 	gen_expression(expr->data.unary_op.expression);
 
-	if (lval || expr->sema.result.type->kind != type_user)
+	if (lval || !ast_type_is_struct_union(expr->sema.result.type))
 	{
 		gen_asm("movl (%%eax), %%eax");
 	}

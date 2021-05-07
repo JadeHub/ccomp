@@ -105,7 +105,7 @@ TEST_F(StructValidationTest, err_incorrect_ret_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_RETURN);
+	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_incorrect_type_assign)
@@ -567,5 +567,5 @@ TEST_F(StructValidationTest, err_member_unknown_array_len)
 
 	)";
 
-	ExpectError(code, ERR_UNSUPPORTED);
+	ExpectError(code, ERR_TYPE_INCOMPLETE);
 }

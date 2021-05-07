@@ -1,9 +1,9 @@
 #include "validation_fixture.h"
 
-class StructAlignTest : public CompilerTest
+class StructLayoutTest : public CompilerTest
 {
 public:
-	StructAlignTest()
+	StructLayoutTest()
 	{
 		
 	}
@@ -35,7 +35,7 @@ public:
 	ast_type_spec_t* result = nullptr;
 };
 
-TEST_F(StructAlignTest, struct_single_char)
+TEST_F(StructLayoutTest, struct_single_char)
 {
 	ParseStructDecl(R"(
 	struct
@@ -49,7 +49,7 @@ TEST_F(StructAlignTest, struct_single_char)
 	EXPECT_EQ(0, MemberOffset("c1"));
 }
 
-TEST_F(StructAlignTest, struct_char_char_char)
+TEST_F(StructLayoutTest, struct_char_char_char)
 {
 	ParseStructDecl(R"(
 	struct
@@ -67,7 +67,7 @@ TEST_F(StructAlignTest, struct_char_char_char)
 	EXPECT_EQ(2, MemberOffset("c3"));
 }
 
-TEST_F(StructAlignTest, struct_char_short)
+TEST_F(StructLayoutTest, struct_char_short)
 {
 	ParseStructDecl(R"(
 	struct
@@ -83,7 +83,7 @@ TEST_F(StructAlignTest, struct_char_short)
 	EXPECT_EQ(2, MemberOffset("s1"));
 }
 
-TEST_F(StructAlignTest, struct_single_short)
+TEST_F(StructLayoutTest, struct_single_short)
 {
 	ParseStructDecl(R"(
 	struct
@@ -97,7 +97,7 @@ TEST_F(StructAlignTest, struct_single_short)
 	EXPECT_EQ(0, MemberOffset("s1"));
 }
 
-TEST_F(StructAlignTest, struct_single_int)
+TEST_F(StructLayoutTest, struct_single_int)
 {
 	ParseStructDecl(R"(
 	struct
@@ -111,7 +111,7 @@ TEST_F(StructAlignTest, struct_single_int)
 	EXPECT_EQ(0, MemberOffset("i1"));
 }
 
-TEST_F(StructAlignTest, struct_char_short_char)
+TEST_F(StructLayoutTest, struct_char_short_char)
 {
 	//alignment is 2 due to the short so we expect a single byte of padding at the end
 
@@ -131,7 +131,7 @@ TEST_F(StructAlignTest, struct_char_short_char)
 	EXPECT_EQ(4, MemberOffset("c2"));
 }
 
-TEST_F(StructAlignTest, struct_char_int_char)
+TEST_F(StructLayoutTest, struct_char_int_char)
 {
 	ParseStructDecl(R"(
 	struct
@@ -149,7 +149,7 @@ TEST_F(StructAlignTest, struct_char_int_char)
 	EXPECT_EQ(8, MemberOffset("c2"));
 }
 
-TEST_F(StructAlignTest, int_ptr)
+TEST_F(StructLayoutTest, int_ptr)
 {
 	ParseStructDecl(R"(
 	struct
@@ -159,6 +159,7 @@ TEST_F(StructAlignTest, int_ptr)
 		
 	};)");
 
+	ASSERT_NE(nullptr, result);
 	size_t sz = result->size;
 	EXPECT_EQ(8, sz);
 	EXPECT_EQ(4, abi_get_type_alignment(result));
@@ -166,7 +167,7 @@ TEST_F(StructAlignTest, int_ptr)
 	EXPECT_EQ(4, MemberOffset("p1"));
 }
 
-TEST_F(StructAlignTest, int_array)
+TEST_F(StructLayoutTest, int_array)
 {
 	ParseStructDecl(R"(
 	struct
@@ -181,7 +182,7 @@ TEST_F(StructAlignTest, int_array)
 	EXPECT_EQ(0, MemberOffset("i1"));
 }
 
-TEST_F(StructAlignTest, struct_array)
+TEST_F(StructLayoutTest, struct_array)
 {
 	ParseStructDecl(R"(
 	struct
@@ -192,12 +193,12 @@ TEST_F(StructAlignTest, struct_array)
 
 	size_t sz = result->size;
 	EXPECT_EQ(40, sz);
-	EXPECT_EQ(4, abi_get_type_alignment(result));
+	EXPECT_EQ(2, abi_get_type_alignment(result));
 	EXPECT_EQ(0, MemberOffset("m"));
 }
 
 //bit fields
-TEST_F(StructAlignTest, bit_field_int)
+TEST_F(StructLayoutTest, bit_field_int)
 {
 	ParseStructDecl(R"(
 	struct
@@ -225,7 +226,7 @@ TEST_F(StructAlignTest, bit_field_int)
 	EXPECT_EQ(16, Member("i3")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_int_zero_len)
+TEST_F(StructLayoutTest, bit_field_int_zero_len)
 {
 	ParseStructDecl(R"(
 	struct
@@ -255,7 +256,7 @@ TEST_F(StructAlignTest, bit_field_int_zero_len)
 	EXPECT_EQ(16, Member("i3")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_int_zero_len_initial)
+TEST_F(StructLayoutTest, bit_field_int_zero_len_initial)
 {
 	ParseStructDecl(R"(
 	struct
@@ -276,7 +277,7 @@ TEST_F(StructAlignTest, bit_field_int_zero_len_initial)
 	EXPECT_EQ(1, Member("i2")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_short)
+TEST_F(StructLayoutTest, bit_field_short)
 {
 	ParseStructDecl(R"(
 	struct
@@ -304,7 +305,7 @@ TEST_F(StructAlignTest, bit_field_short)
 	EXPECT_EQ(2, Member("i3")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_char)
+TEST_F(StructLayoutTest, bit_field_char)
 {
 	ParseStructDecl(R"(
 	struct
@@ -332,7 +333,7 @@ TEST_F(StructAlignTest, bit_field_char)
 	EXPECT_EQ(1, Member("c3")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_mix)
+TEST_F(StructLayoutTest, bit_field_mix)
 {
 	ParseStructDecl(R"(
 	struct A
@@ -358,7 +359,7 @@ TEST_F(StructAlignTest, bit_field_mix)
 	EXPECT_EQ(1, Member("y")->sema.bit_field.size);
 }
 
-TEST_F(StructAlignTest, bit_field_example1)
+TEST_F(StructLayoutTest, bit_field_example1)
 {
 	ParseStructDecl(R"(
 	struct A
