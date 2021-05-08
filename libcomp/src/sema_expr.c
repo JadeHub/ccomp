@@ -70,6 +70,23 @@ static expr_result_t _process_array_subscript_binary_op(ast_expression_t* expr)
 	if(!ast_type_is_int(rhs_result.result_type))
 		return _report_err(expr, ERR_INCOMPATIBLE_TYPE, "[] operator: subscript must be an integer type");
 
+	if (expr->data.binary_op.rhs->kind == expr_int_literal)
+	{
+		//bounds checks
+		ast_expression_t* int_expr = expr->data.binary_op.rhs;
+		int_val_t* idx = &expr->data.binary_op.rhs->data.int_literal.val;
+		if (idx->is_signed && idx->v.int64 < 0)
+		{
+			return _report_err(expr, ERR_ARRAY_BOUNDS, "negative array index");
+		}
+
+		if (ast_type_is_array(lhs_result.result_type) && idx->v.uint64 >= lhs_result.result_type->data.array_spec->sema.array_sz)
+		{
+			return _report_err(expr, ERR_ARRAY_BOUNDS, "array index %d exceeds size of %d",
+				idx->v.uint64, lhs_result.result_type->data.array_spec->sema.array_sz);
+		}
+	}
+
 	//result is the type pointed to by lhs
 	if (ast_type_is_array(lhs_result.result_type))
 		result.result_type = lhs_result.result_type->data.array_spec->element_type;

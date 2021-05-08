@@ -2,7 +2,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdarg.h>
 
 typedef struct
 {

@@ -22,7 +22,8 @@ typedef struct
 {
     uint32_t line;
     uint16_t col;
-    const char* path;
+    const char* path; //full path
+    const char* file_name; //file name only
 }file_pos_t;
 
 /*

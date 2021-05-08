@@ -137,7 +137,7 @@ void on_observe_user_type_def(ast_type_spec_t* spec)
             sb_destroy(type_name);
             member = member->next;
         }
-        printf("\t sizeof %2ul align %2ul\n", spec->size, abi_get_type_alignment(spec));
+        printf("\t sizeof %2lu align %2lu\n", spec->size, abi_get_type_alignment(spec));
     }
 }
 

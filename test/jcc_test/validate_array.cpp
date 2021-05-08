@@ -192,15 +192,70 @@ TEST_F(ArrayValidationTest, unknown_len_array)
 	ExpectNoError(code);
 }
 
-TEST_F(ArrayValidationTest, ptr_to_array)
+TEST_F(ArrayValidationTest, unknown_len_array_multi_d)
+{
+	//array containing 3 arrays each of 2 elements
+	std::string code = R"(
+	void foo()
+	{
+		int i[][] = {{1, 2}, {3, 4}, {5, 6}};
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_oob_1)
+{
+	//array containing 3 arrays each of 2 elements
+	std::string code = R"(
+	void foo()
+	{
+		int i[][] = {{1, 2}, {3, 4}, {5, 6}};
+
+		i[3][1] = 0;
+	}
+	)";
+
+	ExpectError(code, ERR_ARRAY_BOUNDS);
+}
+
+TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_oob_2)
+{
+	//array containing 3 arrays each of 2 elements
+	std::string code = R"(
+	void foo()
+	{
+		int i[][] = {{1, 2}, {3, 4}, {5, 6}};
+
+		i[2][2] = 0;
+	}
+	)";
+
+	ExpectError(code, ERR_ARRAY_BOUNDS);
+}
+
+TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_mixed_len_init)
 {
 	std::string code = R"(
 	void foo()
 	{
+		int i[][] = {{1, 2}, {3, 4, 5}, {6, 7}};
+	}
+	)";
+
+	ExpectError(code, ERR_INVALID_INIT);
+}
+
+TEST_F(ArrayValidationTest, ptr_to_array)
+{
+	std::string code = R"(
+	int foo()
+	{
 		int i[2] = {1, 2};
 		int (*p)[2] = &i;
 
-		return *p[1];
+		return (*p)[1];
 	}
 	)";
 

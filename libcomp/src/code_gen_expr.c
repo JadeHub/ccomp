@@ -537,7 +537,7 @@ void gen_dereference(ast_expression_t* expr)
 	gen_annotate_start("dereference");
 	gen_expression(expr->data.unary_op.expression);
 
-	if (lval || !ast_type_is_struct_union(expr->sema.result.type))
+	if (lval || (!ast_type_is_struct_union(expr->sema.result.type) && !ast_type_is_array(expr->sema.result.type)))
 	{
 		gen_asm("movl (%%eax), %%eax");
 	}

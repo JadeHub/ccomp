@@ -165,14 +165,11 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 
 	result->kind = decl_type;
 
-	if(ast_type_is_fn_ptr(type_ref->spec))
+	if (type_ref_parse.identifier)
 	{
-		if (type_ref_parse.identifier)
-		{
-			//copy the name seen while parsing the function pointer type
-			tok_spelling_cpy(type_ref_parse.identifier, result->name, MAX_LITERAL_NAME);
-		}
-	}	
+		//copy the name seen while parsing the function or array pointer type
+		tok_spelling_cpy(type_ref_parse.identifier, result->name, MAX_LITERAL_NAME);
+	}
 	else if (current_is(tok_identifier))
 	{
 		tok_spelling_cpy(current(), result->name, MAX_LITERAL_NAME);
@@ -188,6 +185,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 	}
 	else
 	{
+		//type
 		result->kind = decl_type;
 
 		ast_expression_t* size_expr = opt_parse_array_size();
@@ -210,7 +208,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			}
 		}
 
-		if (context == dpc_normal)
+		if (context == dpc_normal && !(type_ref->flags & TF_SC_TYPEDEF))
 		{
 			//initialiser is permitted
 			if (current_is(tok_equal))
@@ -244,7 +242,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 				parse_err(ERR_SYNTAX, "typedef cannot be initialised");
 				ast_destroy_declaration(result);
 				return NULL;
-			}			
+			}
 			parse_register_alias_name(result->name);
 		}
 		else if (strlen(result->name))

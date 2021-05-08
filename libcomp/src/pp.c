@@ -654,6 +654,7 @@ static str_buff_t* _make_system_inc_path(token_range_t* range)
 
 static bool _process_include(token_t* tok)
 {
+	token_t* source = tok;
 	tok = _pop_next();
 	token_range_t* range = tok_range_create(tok, tok);
 	*range = _extract_till_eol(tok);
@@ -710,7 +711,9 @@ static bool _process_include(token_t* tok)
 	free((void*)cur_path);
 	if (!src_is_valid_range(sr))
 	{
-		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s'", sb_str(path_buff));
+		file_pos_t src = src_get_pos_info(source->loc);
+
+		diag_err(tok, ERR_UNKNOWN_SRC_FILE, "unknown file '%s' included from '%s'", sb_str(path_buff), src.file_name);
 		sb_destroy(path_buff);
 		return false;
 	}

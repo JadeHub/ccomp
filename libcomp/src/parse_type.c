@@ -608,7 +608,7 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 	if (current_is(tok_l_paren) && next_is(tok_star))
 	{
 		//function pointer 'int (*fn)(void)'
-		//array pointer 'int (*ptr)[10]'
+		//or array pointer 'int (*ptr)[10]...'
 		next_tok();
 		next_tok();
 		if (current_is(tok_identifier))

@@ -28,6 +28,7 @@
 #define ERR_INITIALISER_NOT_CONST 20
 #define ERR_VALUE_OVERFLOW 21
 #define ERR_UNKNOWN 22 //compiler error
+#define ERR_ARRAY_BOUNDS 23
 
 
 struct token;

@@ -15,7 +15,8 @@ typedef struct
 	source_range_t range;
 	const char** lines;
 	uint32_t line_count;
-	const char* path;
+	const char* path;	//full path
+	const char* file_name;	//file name only
 }source_file_t;
 
 /*
@@ -114,15 +115,14 @@ source_file_t* _get_file_for_pos(const char* pos)
 file_pos_t src_get_pos_info(const char* pos)
 {
 	file_pos_t result;
-	result.col = 0;
-	result.line = 0;
-	result.path = NULL;
-
+	memset(&result, 0, sizeof(file_pos_t));
+	
 	source_file_t* file = _get_file_for_pos(pos);
 	if (!file)
 		return result;
 
 	result.path = file->path;
+	result.file_name = file->file_name;
 
 	uint32_t line = 0;
 	for (line = 1; line < file->line_count; line++)
@@ -175,6 +175,7 @@ bool src_is_valid_range(source_range_t* src)
 	return src && src->ptr && src->end && src->ptr < src->end;
 }
 
+//only used by unit tests
 void src_register_range(source_range_t src, char* path)
 {
 	source_file_t* file = _init_source(src);
@@ -189,6 +190,7 @@ source_file_t* _load_file(const char* dir, const char* fn)
 
 	source_file_t* file = _init_source(src);
 	file->path = path_combine(dir, fn);
+	file->file_name = path_filename(file->path);
 	sht_insert(_files, file->path, file);
 	return file;
 }
@@ -256,6 +258,7 @@ void src_deinit()
 	{
 		source_file_t* sf = (source_file_t*)it.val;
 		free((void*)sf->path);
+		free((void*)sf->file_name);
 		free(sf);
 		sht_next(_files, &it);
 	}
