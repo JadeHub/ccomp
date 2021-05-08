@@ -1,8 +1,7 @@
-int main(void)
+int main()
 {
-	int buff[10];
-	buff[5] = 5;
-	int* p = buff;
-	p[5] = 10;
-	return p[5];
+	int i[2] = {1, 2};
+	int (*p)[2] = &i;
+
+	return (*p)[1];
 }

@@ -33,6 +33,7 @@ ast_func_params_t* parse_function_parameters();
 ast_type_ref_t* try_parse_type_ref();
 ast_expression_t* try_parse_literal();
 ast_expression_t* parse_optional_expression(tok_kind term_tok);
+ast_expression_t* opt_parse_array_size();
 
 void parse_on_enter_block();
 void parse_on_leave_block();

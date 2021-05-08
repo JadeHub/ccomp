@@ -150,6 +150,18 @@ TEST_F(ParstDeclTest, var_fn_ptr_typedef)
 	ParseDecl("typedef int (*fn)(int);");
 }
 
+TEST_F(ParstDeclTest, array_of_ptrs)
+{
+	ParseDecl("int *p[5];");
+	AssertValid();
+	ASSERT_EQ(1, count);
+	ExpectArrayDecl(0, "p", 5);
+	ast_type_spec_t* spec = DeclNo(0)->type_ref->spec;
+	//element type is pointer to int
+	EXPECT_EQ(type_ptr, spec->data.array_spec->element_type->kind);
+	EXPECT_EQ(int32_type_spec, spec->data.array_spec->element_type->data.ptr_type);
+}
+
 TEST_F(ParstDeclTest, array_type)
 {
 	ParseDecl("int p[5];");
@@ -177,4 +189,12 @@ TEST_F(ParstDeclTest, multi_d_array_type)
 	ASSERT_EQ(elem_spec->kind, type_array);
 	ExpectArraySize(elem_spec, 2);
 	EXPECT_EQ(8, elem_spec->size);
+}
+
+TEST_F(ParstDeclTest, array_ptr)
+{
+	ParseDecl("int (*p)[5];");
+	AssertValid();
+	ASSERT_EQ(1, count);
+
 }

@@ -7,9 +7,9 @@
 
 expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_type_spec_t* type);
 
-bool sema_process_array_compound_init(ast_expression_t* expr, ast_type_spec_t* array_type)
+bool sema_process_array_compound_init(ast_expression_t* expr, ast_type_spec_t* array_spec)
 {
-	ast_type_spec_t* elem_type = array_type->data.array_spec->element_type;
+	ast_type_spec_t* elem_type = array_spec->data.array_spec->element_type;
 
 	ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
 	size_t elem_count = 0;
@@ -37,13 +37,14 @@ bool sema_process_array_compound_init(ast_expression_t* expr, ast_type_spec_t* a
 		init_item = init_item->next;
 	}
 
-	if (array_type->size == 0)
+	if (array_spec->size == 0)
 	{
-		array_type->data.array_spec->sema.array_sz = elem_count; //not sure this is right when elements are themselves arrays
+		array_spec->data.array_spec->sema.array_sz = elem_count; //not sure this is right when elements are themselves arrays
+		array_spec->size = elem_count * elem_type->size;
 	}
 	else
 	{
-		if (elem_count != array_type->data.array_spec->sema.array_sz)
+		if (elem_count != array_spec->data.array_spec->sema.array_sz)
 		{
 			diag_err(expr->tokens.start, ERR_INVALID_INIT,
 				"incorrect number of items in array initialisation");
@@ -249,7 +250,7 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 		return false;
 	}
 
-	if (!sema_resolve_type_ref(decl->type_ref) || decl->type_ref->spec->size == 0)
+	if (!sema_resolve_type_ref(decl->type_ref))
 	{
 		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
 			"var '%s' is of incomplete type",
@@ -290,6 +291,15 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 				ast_type_name(decl->type_ref->spec));
 			return false;
 		}
+	}
+
+	//check this here as the size may have been set while processing the init expression in the case of an array 'int []i = {1, 2}'
+	if (decl->type_ref->spec->size == 0)
+	{
+		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"var '%s' is of incomplete type",
+			ast_declaration_name(decl));
+		return false;
 	}
 
 	idm_add_decl(sema_id_map(), decl);

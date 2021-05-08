@@ -132,7 +132,7 @@ TEST_F(ArrayValidationTest, multi_dimention_decl_init)
 	std::string code = R"(
 	void foo()
 	{
-		int i[5][2] = {{1, 2}, {3, 4}};
+		int i[6][2] = {{1, 2}, {3, 4}, {1, 2}, {3, 4}, {1, 2}, {3, 4}};
 	}
 	)";
 
@@ -180,7 +180,7 @@ TEST_F(ArrayValidationTest, ptr_conversion)
 	ExpectNoError(code);
 }
 
-/*TEST_F(ArrayValidationTest, unknown_len_array)
+TEST_F(ArrayValidationTest, unknown_len_array)
 {
 	std::string code = R"(
 	void foo()
@@ -190,4 +190,19 @@ TEST_F(ArrayValidationTest, ptr_conversion)
 	)";
 
 	ExpectNoError(code);
-}*/
+}
+
+TEST_F(ArrayValidationTest, ptr_to_array)
+{
+	std::string code = R"(
+	void foo()
+	{
+		int i[2] = {1, 2};
+		int (*p)[2] = &i;
+
+		return *p[1];
+	}
+	)";
+
+	ExpectNoError(code);
+}

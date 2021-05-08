@@ -196,13 +196,8 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			if(ast_type_is_array(result->type_ref->spec))
 				result->type_ref->spec->data.array_spec->element_type = ast_make_array_type(result->type_ref->spec->data.array_spec->element_type, size_expr);
 			else
-			result->type_ref->spec = ast_make_array_type(result->type_ref->spec, size_expr);
+				result->type_ref->spec = ast_make_array_type(result->type_ref->spec, size_expr);
 			size_expr = opt_parse_array_size();
-			//while (size_expr)
-			{
-
-				//size_expr = opt_parse_array_size();
-			}
 		}
 
 		if (context == dpc_struct)
@@ -254,7 +249,7 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 		}
 		else if (strlen(result->name))
 		{
-			//variable 
+			//variable
 			result->kind = decl_var;
 		}
 		else

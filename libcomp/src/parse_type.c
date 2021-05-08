@@ -287,7 +287,6 @@ ast_user_type_spec_t* parse_struct_spec(user_type_kind kind)
 	if (current_is(tok_l_brace))
 	{
 		next_tok();
-		//uint32_t offset = 0;
 		ast_struct_member_t* last_member = NULL;
 		while (!current_is(tok_r_brace))
 		{
@@ -620,11 +619,11 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 		expect_cur(tok_r_paren);
 		next_tok();
 
-		if (current_is(tok_l_brace))
+		if (current_is(tok_l_square_paren))
 		{
 			//array pointer
-
-
+			ast_expression_t* sz_expr = opt_parse_array_size();
+			result.type->spec = ast_make_ptr_type(ast_make_array_type(result.type->spec, sz_expr));
 		}
 		else
 		{
