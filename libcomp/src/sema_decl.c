@@ -366,6 +366,13 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 			return false;
 		}
 
+		if (ast_type_is_array(param->decl->type_ref->spec))
+		{
+			//array param types are transformed to pointers
+			ast_type_spec_t* elem_type = param->decl->type_ref->spec->data.array_spec->element_type;
+			param->decl->type_ref->spec = ast_make_ptr_type(elem_type);
+		}
+
 		if (!sema_resolve_type_ref(param->decl->type_ref))
 			return false;
 
@@ -405,8 +412,15 @@ proc_decl_result sema_process_function_decl(ast_declaration_t* decl)
 	if (params->ellipse_param && params->param_count == 0)
 	{
 		diag_err(decl->tokens.start, ERR_SYNTAX,
-			"use of ellipse parameter requires at least one other parameter",
+			"use of ellipse parameter in '%s' requires at least one other parameter",
 			name);
+		return proc_decl_error;
+	}
+
+	if (ast_type_is_array(ast_func_decl_return_type(decl)))
+	{
+		diag_err(decl->tokens.start, ERR_SYNTAX,
+			"function '%s' may not return array type", name);
 		return proc_decl_error;
 	}
 
@@ -433,7 +447,6 @@ proc_decl_result sema_process_function_decl(ast_declaration_t* decl)
 		if (!_is_fn_definition(exist) && _is_fn_definition(decl))
 		{
 			//update definition
-			//exist->data.func
 			idm_update_decl(sema_id_map(), decl);
 		}
 	}

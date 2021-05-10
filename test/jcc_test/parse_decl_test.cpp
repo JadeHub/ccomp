@@ -191,6 +191,25 @@ TEST_F(ParstDeclTest, multi_d_array_type)
 	EXPECT_EQ(8, elem_spec->size);
 }
 
+TEST_F(ParstDeclTest, multi_d_array_type2)
+{
+	ParseDecl("int p[2][3][4];");
+	AssertValid();
+	ASSERT_EQ(1, count);
+
+	//p is an array containing 2 elements
+	ExpectArrayDecl(0, "p", 2);
+	ast_type_spec_t* spec = DeclNo(0)->type_ref->spec;
+	sema_resolve_type(spec, DeclNo(0)->tokens.start);
+	EXPECT_EQ(96, spec->size);
+	//each of those elements are an array containing 3 elements
+	ast_type_spec_t* elem_spec = spec->data.array_spec->element_type;
+	sema_resolve_type(elem_spec, DeclNo(0)->tokens.start);
+	ASSERT_EQ(elem_spec->kind, type_array);
+	ExpectArraySize(elem_spec, 3);
+	//EXPECT_EQ(8, elem_spec->size);
+}
+
 TEST_F(ParstDeclTest, array_ptr)
 {
 	ParseDecl("int (*p)[5];");

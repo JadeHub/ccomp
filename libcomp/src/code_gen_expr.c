@@ -576,7 +576,13 @@ void gen_func_call(ast_expression_t* expr)
 		gen_expression(param->expr);
 		ast_type_spec_t* param_type = param->expr->sema.result.type;
 
-		if (param_type->size == 1)
+		if (ast_type_is_array(param_type))
+		{
+			//array to pointer conversion
+			gen_asm("pushl %%eax");
+			pushed += 4;
+		}
+		else if (param_type->size == 1)
 		{
 			gen_asm("%s %%al, %%edx", _promoting_mov_instr(param_type));
 			gen_asm("pushl %%edx");
