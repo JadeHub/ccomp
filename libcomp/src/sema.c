@@ -34,6 +34,12 @@ func_context_t* sema_get_cur_fn_ctx()
 proc_decl_result sema_process_function_decl(ast_declaration_t* decl);
 bool process_statement(ast_statement_t* smnt);
 
+void sema_make_label_name(char* name)
+{
+	static uint32_t next_label = 0;
+	sprintf(name, "_lbl%d", ++next_label);
+}
+
 static bool _report_err(token_t* tok, int err, const char* format, ...)
 {
 	char buff[512];
@@ -675,17 +681,145 @@ bool process_label_statement(ast_statement_t* smnt)
 	return process_statement(smnt->data.label_smnt.smnt);
 }
 
+bool process_switch_statement_inner(ast_switch_smnt_data_t* data, ast_statement_t* inner);
+
+bool process_case_statement(ast_switch_smnt_data_t* switch_data, ast_statement_t* case_smnt)
+{
+	ast_case_smnt_data_t* case_data = &case_smnt->data.case_smnt;
+
+	if (case_data->dflt)
+	{
+		if (switch_data->sema.dflt_case)
+		{
+			return _report_err(case_smnt->tokens.start, ERR_INVALID_SWITCH,
+				"Multiple default cases in switch statement");
+		}
+		switch_data->sema.dflt_case = case_data;
+	}
+	else
+	{
+		if (!process_expression(case_data->expr))
+			return false;
+
+		if (case_data->expr->kind != expr_int_literal)
+		{
+			return _report_err(case_data->expr->tokens.start, ERR_INVALID_SWITCH,
+				"case must be a constant expression");
+		}
+		switch_data->sema.case_smnts[switch_data->sema.case_count] = case_data;
+		switch_data->sema.case_count++;
+	}
+
+	sema_make_label_name(case_data->sema.lbl);
+
+	if (case_data->smnt && !process_switch_statement_inner(switch_data, case_data->smnt))
+		return false;
+	
+	if (switch_data->sema.case_count == 256)
+	{
+		return _report_err(case_smnt->tokens.start, ERR_INVALID_SWITCH,
+			"maximum number of case statements exceeded in switch");
+	}
+	return true;
+}
+
+bool process_switch_statement_inner(ast_switch_smnt_data_t* data, ast_statement_t* inner)
+{
+	data->sema.last_smnt_was_case = false;
+	if (inner->kind == smnt_compound)
+	{
+		ast_block_item_t* blk = inner->data.compound.blocks;
+
+		while (blk)
+		{
+			if (blk->kind == blk_smnt)
+			{
+				if (!process_switch_statement_inner(data, blk->data.smnt))
+					return false;
+			}
+			else
+			{
+				if (!process_block_item(blk))
+					return false;
+			}
+			blk = blk->next;
+		}
+	}
+	else if (inner->kind == smnt_case)
+	{
+		data->sema.last_smnt_was_case = true;
+		if (!process_case_statement(data, inner))
+			return false;
+		
+	}
+	else
+	{
+		if (!process_statement(inner))
+			return false;
+	}
+
+	return true;
+}
+
 bool process_switch_statement(ast_statement_t * smnt)
 {
-	if (!smnt->data.switch_smnt.default_case && !smnt->data.switch_smnt.cases)
+	/*
+	Switch statement has an expression which is evaluated at run time and
+	a single inner statement which most likely a compound statement which includes case and other statements
+
+	eg
+
+	switch(x)
+	{
+		//each of these lines is a single statement in the ast
+		case 1: fn();
+			y++;
+			break;
+		case 2: fn();
+			y--;
+			break;
+		default: break;
+	}
+
+	*/
+
+	if (!process_expression(smnt->data.switch_smnt.expr))
+		return false;
+
+	ast_statement_t* inner = smnt->data.switch_smnt.smnt;
+	if (inner)
+	{
+		smnt->data.switch_smnt.sema.case_smnts = (ast_case_smnt_data_t**)malloc(sizeof(ast_case_smnt_data_t*) * 256);
+		memset(smnt->data.switch_smnt.sema.case_smnts, 0, sizeof(ast_case_smnt_data_t*) * 256);
+		smnt->data.switch_smnt.sema.case_count = 0;
+		if (!process_switch_statement_inner(&smnt->data.switch_smnt, inner))
+			return false;
+	}
+	if (smnt->data.switch_smnt.sema.case_count == 0)
 	{
 		return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
 			"switch statement has no case or default statement");
 	}
 
-	if (!process_expression(smnt->data.switch_smnt.expr))
-		return false;
+	if (smnt->data.switch_smnt.sema.last_smnt_was_case)
+	{
+		/*last item must have statement
 
+			This is fine:
+			case 1:
+			case 2:
+				return;
+
+			This is an error:
+			case 1:
+				return;
+			case 2:
+			*/
+		return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
+			"invalid case in switch");
+	}
+
+#if 0
 	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
 	while (case_data)
 	{
@@ -723,7 +857,7 @@ bool process_switch_statement(ast_statement_t * smnt)
 
 		case_data = case_data->next;
 	}
-
+#endif
 	return true;
 }
 
@@ -802,6 +936,9 @@ bool process_statement(ast_statement_t* smnt)
 	case smnt_goto:
 		return process_goto_statement(smnt);
 		break;
+	case smnt_case:
+		return _report_err(smnt->tokens.start, ERR_SYNTAX,
+			"case must be within a switch statement");
 	}
 
 	return true;

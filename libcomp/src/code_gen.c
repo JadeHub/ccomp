@@ -91,6 +91,7 @@ void gen_annotate_end()
 	gen_annotate_depth--;
 }
 
+//todo - replace with sema version
 void gen_make_label_name(char* name)
 {
 	static uint32_t next_label = 0;
@@ -285,34 +286,38 @@ void gen_scope_block_leave()
 	var_leave_block(_var_set);
 }
 
+void gen_case_statement(ast_statement_t* smnt)
+{
+	ast_case_smnt_data_t* case_data = &smnt->data.case_smnt;
+	if (!case_data->dflt) //default case handled in gen_switch_statement
+	{
+		gen_asm("%s:", case_data->sema.lbl);
+		if (case_data->smnt)
+			gen_statement(case_data->smnt);
+	}
+}
+
 void gen_switch_statement(ast_statement_t* smnt)
 {
 	gen_annotate("switch statement");
-	char lbl_end[16];
-	char lbl_default[16];
+	char lbl_end[MAX_LBL_LEN];
 
 	gen_make_label_name(lbl_end);
-	gen_make_label_name(lbl_default);
 
-	gen_expression(smnt->data.switch_smnt.expr);
+	ast_switch_smnt_data_t* data = &smnt->data.switch_smnt;
 
-	char** case_labels = (char**)malloc(smnt->data.switch_smnt.case_count * sizeof(char*));
+	gen_expression(data->expr);
 
-	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
-	for (uint32_t case_idx = 0; case_idx < smnt->data.switch_smnt.case_count; case_idx++)
+	for (uint32_t case_idx = 0; case_idx < data->sema.case_count; case_idx++)
 	{
-		case_labels[case_idx] = (char*)malloc(16);
-		gen_make_label_name(case_labels[case_idx]);
-
-		gen_asm("cmpl $%d, %%eax", int_val_as_uint32(&case_data->const_expr->data.int_literal.val));
-		gen_asm("je %s", case_labels[case_idx]);
-
-		case_data = case_data->next;
+		ast_case_smnt_data_t* case_data = data->sema.case_smnts[case_idx];
+		gen_asm("cmpl $%d, %%eax", int_val_as_uint32(&case_data->expr->data.int_literal.val));
+		gen_asm("je %s", case_data->sema.lbl);
 	}
 
-	if (smnt->data.switch_smnt.default_case)
+	if (data->sema.dflt_case)
 	{
-		gen_asm("jmp %s", lbl_default);
+		gen_asm("jmp %s", data->sema.dflt_case->sema.lbl);
 	}
 	else
 	{
@@ -321,26 +326,15 @@ void gen_switch_statement(ast_statement_t* smnt)
 
 	const char* prev_break_lbl = _cur_break_label;
 	_cur_break_label = lbl_end;
+	gen_statement(smnt->data.switch_smnt.smnt);
 
-	case_data = smnt->data.switch_smnt.cases;
-	for (uint32_t case_idx = 0; case_idx < smnt->data.switch_smnt.case_count; case_idx++)
+	if (data->sema.dflt_case)
 	{
-		gen_asm("%s:", case_labels[case_idx]);
-		if (case_data->statement)
-			gen_statement(case_data->statement);
-
-		free(case_labels[case_idx]);
-		case_data = case_data->next;
-	}
-
-	if (smnt->data.switch_smnt.default_case)
-	{
-		gen_asm("%s:", lbl_default);
-		gen_statement(smnt->data.switch_smnt.default_case->statement);
+		gen_asm("%s:", data->sema.dflt_case->sema.lbl);
+		gen_statement(data->sema.dflt_case->smnt);
 	}
 	gen_asm("%s:", lbl_end);
 	_cur_break_label = prev_break_lbl;
-	free(case_labels);
 
 	gen_annotate_end();
 }
@@ -404,6 +398,10 @@ void gen_statement(ast_statement_t* smnt)
 	if (smnt->kind == smnt_switch)
 	{
 		gen_switch_statement(smnt);
+	}
+	else if (smnt->kind == smnt_case)
+	{
+		gen_case_statement(smnt);
 	}
 	else if (smnt->kind == smnt_return)
 	{

@@ -73,7 +73,7 @@ static expr_result_t _process_array_subscript_binary_op(ast_expression_t* expr)
 	if (expr->data.binary_op.rhs->kind == expr_int_literal)
 	{
 		//bounds checks
-		ast_expression_t* int_expr = expr->data.binary_op.rhs;
+		//ast_expression_t* int_expr = expr->data.binary_op.rhs;
 		int_val_t* idx = &expr->data.binary_op.rhs->data.int_literal.val;
 		if (idx->is_signed && idx->v.int64 < 0)
 		{

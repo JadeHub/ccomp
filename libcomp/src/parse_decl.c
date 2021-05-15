@@ -228,8 +228,11 @@ ast_declaration_t* parse_declarator(ast_type_spec_t* type_spec, uint32_t type_fl
 			{
 				next_tok();
 
-				if ((ast_type_is_array(type_ref->spec) || ast_type_is_struct_union(type_ref->spec))
-					&& current_is(tok_l_brace))
+				if (/*
+					type has not been resolved so these dont work for typedefs
+					(ast_type_is_array(type_ref->spec) || ast_type_is_struct_union(type_ref->spec))
+					&&*/
+					current_is(tok_l_brace))
 				{
 					result->data.var.init_expr = parse_compound_init_list();
 				}

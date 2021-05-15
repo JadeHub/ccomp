@@ -23,6 +23,32 @@ TEST_F(SwitchValidationTest, valid)
 	ExpectNoError(code);
 }
 
+TEST_F(SwitchValidationTest, multiline_case)
+{
+	std::string code = R"(
+
+	void some_fn();
+
+	void foo()
+	{
+		int i;
+		switch (i)
+		{
+			case 1:
+				some_fn();
+				break;
+			case 2:
+			{
+				some_fn();
+				break;
+			}
+		}
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(SwitchValidationTest, err_missing_colon)
 {
 	std::string code = R"(
@@ -73,7 +99,7 @@ TEST_F(SwitchValidationTest, err_multiple_default)
 	}
 	)";
 
-	ExpectCompilerError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_INVALID_SWITCH);
 }
 
 TEST_F(SwitchValidationTest, err_missing_case_expr)
@@ -108,6 +134,18 @@ TEST_F(SwitchValidationTest, err_no_smnt)
 	)";
 
 	ExpectCompilerError(code, ERR_INVALID_SWITCH);
+}
+
+TEST_F(SwitchValidationTest, err_spurious_case)
+{
+	std::string code = R"(
+	void foo()
+	{
+		case 1: x;
+	}
+	)";
+
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(SwitchValidationTest, err_default_with_expr)

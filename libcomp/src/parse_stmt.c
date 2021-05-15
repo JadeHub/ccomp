@@ -1,6 +1,7 @@
 #include "parse_internal.h"
 #include "diag.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -53,6 +54,7 @@ ast_expression_t* parse_optional_expression(tok_kind term_tok)
 /*
 <switch_case> ::= "case" <constant-exp> ":" <statement> | "default" ":" <statement>
 */
+/*
 ast_switch_case_data_t* parse_switch_case()
 {
 	bool def = current_is(tok_default);
@@ -81,6 +83,34 @@ ast_switch_case_data_t* parse_switch_case()
 	if (!current_is(tok_case) && !current_is(tok_default) && !current_is(tok_r_brace))
 		result->statement = parse_statement();
 	return result;
+}*/
+
+ast_statement_t* parse_case_statement()
+{
+	ast_statement_t* smnt = _alloc_smnt();
+	smnt->kind = smnt_case;
+	ast_case_smnt_data_t* data = &smnt->data.case_smnt;
+	data->dflt = current_is(tok_default);
+	next_tok();
+
+	if (!data->dflt)
+	{
+		data->expr = parse_constant_expression();
+		if (!data->expr)
+		{
+			parse_err(ERR_SYNTAX, "Failed to parse switch case expression");
+			return NULL;
+		}
+	}
+
+	if (!expect_cur(tok_colon))
+		return NULL;
+	next_tok();
+
+	if (!current_is(tok_case) && !current_is(tok_default) && !current_is(tok_r_brace))
+		data->smnt = parse_statement();
+
+	return smnt;
 }
 
 ast_statement_t* parse_switch_statement()
@@ -105,7 +135,11 @@ ast_statement_t* parse_switch_statement()
 
 	if (current_is(tok_l_brace))
 	{
-		next_tok();
+		data->smnt = parse_statement();
+		if (!data->smnt)
+			goto _parse_switch_err;
+
+		/*next_tok();
 
 		ast_switch_case_data_t* last_case = NULL;
 		while (current_is(tok_case) || current_is(tok_default))
@@ -140,11 +174,7 @@ ast_statement_t* parse_switch_statement()
 				next_tok();
 				break;
 			}
-		}
-	}
-	//else if (current_is(tok_case) || current_is(tok_default))
-	{
-	//	parse_switch_case(&result->data.switch_smnt);
+		}*/
 	}
 
 	return smnt;
@@ -436,6 +466,10 @@ ast_statement_t* parse_statement()
 	{
 		return parse_switch_statement();
 	}
+	else if (current_is(tok_case) || current_is(tok_default))
+	{
+		return parse_case_statement();
+	}
 	else if (current_is(tok_identifier) && next_is(tok_colon))
 	{
 		//statement ::= <label_smnt>
@@ -464,6 +498,11 @@ ast_statement_t* parse_statement()
 		smnt->tokens.end = current();
 		return smnt;
 	}
+	else if (current_is(tok_case))
+	{
+		assert(false);
+	}
+
 
 	//expression statement
 	//<statement ::= <exp-option> ";"

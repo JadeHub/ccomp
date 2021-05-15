@@ -8,6 +8,7 @@
 #include "ast_op_kinds.h"
 
 #define MAX_LITERAL_NAME 32
+#define MAX_LBL_LEN 16
 
 /*
 Unary operation expression data
@@ -546,6 +547,7 @@ typedef enum
 	smnt_break,
 	smnt_continue,
 	smnt_switch,
+	smnt_case,
 	smnt_label,
 	smnt_goto
 }statement_kind;
@@ -593,12 +595,17 @@ typedef struct
 /*
 switch statement case data
 */
-typedef struct ast_switch_case_data
+typedef struct
 {
-	ast_expression_t* const_expr;
-	struct ast_statement* statement;
-	struct ast_switch_case_data* next;
-}ast_switch_case_data_t;
+	ast_expression_t* expr;
+	struct ast_statement* smnt;
+	bool dflt;
+
+	struct
+	{
+		char lbl[MAX_LBL_LEN];
+	}sema;
+}ast_case_smnt_data_t;
 
 /*
 switch statement data
@@ -606,9 +613,21 @@ switch statement data
 typedef struct
 {
 	ast_expression_t* expr;
-	ast_switch_case_data_t* default_case;
+
+	struct ast_statement* smnt; //most likely a compound statement containing case statements
+	
+	struct
+	{
+		ast_case_smnt_data_t* dflt_case;
+		size_t case_count;
+		bool last_smnt_was_case;
+
+		ast_case_smnt_data_t** case_smnts;
+	}sema;
+
+	/*ast_switch_case_data_t* default_case;
 	ast_switch_case_data_t* cases;
-	uint32_t case_count;
+	uint32_t case_count;*/
 }ast_switch_smnt_data_t;
 
 /*
@@ -651,6 +670,7 @@ typedef struct ast_statement
 		ast_while_smnt_data_t while_smnt;
 		ast_for_smnt_data_t for_smnt;
 		ast_switch_smnt_data_t switch_smnt;
+		ast_case_smnt_data_t case_smnt;
 		ast_label_smnt_data_t label_smnt;
 		ast_goto_smnt_data_t goto_smnt;
 	}data;

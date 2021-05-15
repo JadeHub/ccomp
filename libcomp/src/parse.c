@@ -961,7 +961,7 @@ ast_trans_unit_t* parse_translation_unit()
 			next_tok();
 		}
 		else
-		{			
+		{
 			if (decls.first->kind == decl_func && decls.first->next == NULL)
 			{	
 				//function definition must be the only decl
