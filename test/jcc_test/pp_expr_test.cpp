@@ -2,7 +2,7 @@
 
 #include <optional>
 
-class PreProcExprTest : public LexPreProcTest 
+class PreProcExprTest : public LexTest
 {
 public:
 

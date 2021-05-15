@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class ArrayValidationTest : public ValidationTest {};
+class ArrayValidationTest : public CompilerTest {};
 
 TEST_F(ArrayValidationTest, var_array_decl)
 {
@@ -71,7 +71,7 @@ TEST_F(ArrayValidationTest, err_array_subscript_not_ptr)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 
@@ -86,7 +86,7 @@ TEST_F(ArrayValidationTest, err_array_subscript_not_ptr_idx)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(ArrayValidationTest, ptr_fn_subscript)
@@ -112,7 +112,7 @@ TEST_F(ArrayValidationTest, err_array_init_too_few)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_INIT);
+	ExpectCompilerError(code, ERR_INVALID_INIT);
 }
 
 TEST_F(ArrayValidationTest, err_array_init_too_many)
@@ -124,7 +124,7 @@ TEST_F(ArrayValidationTest, err_array_init_too_many)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_INIT);
+	ExpectCompilerError(code, ERR_INVALID_INIT);
 }
 
 TEST_F(ArrayValidationTest, multi_dimention_decl_init)
@@ -192,6 +192,15 @@ TEST_F(ArrayValidationTest, unknown_len_array)
 	ExpectNoError(code);
 }
 
+TEST_F(ArrayValidationTest, unknown_len_array_global)
+{
+	std::string code = R"(
+	int i[] = {1, 2};
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(ArrayValidationTest, unknown_len_array_multi_d)
 {
 	//array containing 3 arrays each of 2 elements
@@ -217,7 +226,7 @@ TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_oob_1)
 	}
 	)";
 
-	ExpectError(code, ERR_ARRAY_BOUNDS);
+	ExpectCompilerError(code, ERR_ARRAY_BOUNDS);
 }
 
 TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_oob_2)
@@ -232,7 +241,7 @@ TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_oob_2)
 	}
 	)";
 
-	ExpectError(code, ERR_ARRAY_BOUNDS);
+	ExpectCompilerError(code, ERR_ARRAY_BOUNDS);
 }
 
 TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_mixed_len_init)
@@ -244,7 +253,7 @@ TEST_F(ArrayValidationTest, err_unknown_len_array_multi_d_mixed_len_init)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_INIT);
+	ExpectCompilerError(code, ERR_INVALID_INIT);
 }
 
 TEST_F(ArrayValidationTest, ptr_to_array)

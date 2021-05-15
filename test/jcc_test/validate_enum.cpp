@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class EnumValidationTest : public ValidationTest {};
+class EnumValidationTest : public CompilerTest {};
 
 /*
 //todo fails with missing ;
@@ -67,7 +67,7 @@ TEST_F(EnumValidationTest, err_redefine)
 	enum foo {blah};
 	)";
 
-	ExpectError(code, ERR_DUP_TYPE_DEF);
+	ExpectCompilerError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(EnumValidationTest, err_redefine_struct_as_enum)
@@ -82,7 +82,7 @@ TEST_F(EnumValidationTest, err_redefine_struct_as_enum)
 	};
 	)";
 
-	ExpectError(code, ERR_DUP_TYPE_DEF);
+	ExpectCompilerError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(EnumValidationTest, err_redefine_as_struct)
@@ -97,7 +97,7 @@ TEST_F(EnumValidationTest, err_redefine_as_struct)
 	struct foo;
 	)";
 
-	ExpectError(code, ERR_DUP_TYPE_DEF);
+	ExpectCompilerError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(EnumValidationTest, redefine_item_as_struct)
@@ -129,7 +129,7 @@ TEST_F(EnumValidationTest, err_redefine_item)
 	};
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(EnumValidationTest, err_dup_item)
@@ -142,7 +142,7 @@ TEST_F(EnumValidationTest, err_dup_item)
 	};
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(EnumValidationTest, var)

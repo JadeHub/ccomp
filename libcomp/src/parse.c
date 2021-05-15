@@ -904,24 +904,6 @@ ast_block_item_t* parse_block_item()
 	return result;
 }
 
-/*static void _add_decl_to_tl(ast_trans_unit_t* tl, ast_declaration_t* decl)
-{
-	decl->next = NULL;
-	ast_declaration_t* tmp = tl->decls;
-
-	if (!tmp)
-	{
-		tl->decls = decl;
-		return;
-	}
-
-	while (tmp->next)
-	{
-		tmp = tmp->next;
-	}
-	tmp->next = decl;
-}*/
-
 void parse_init(token_t* tok)
 {
 	types_init();
@@ -958,13 +940,6 @@ ast_block_item_t* parse_block_list()
 	parse_on_leave_block();
 	return result;
 }
-
-
-
-//int a, b(), const c;
-
-//int b() { return 2; }
-
 
 //<translation_unit> :: = { <function> | <declaration> }
 ast_trans_unit_t* parse_translation_unit()

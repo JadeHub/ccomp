@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class GlobalFnsValidationTest : public ValidationTest {};
+class GlobalFnsValidationTest : public CompilerTest {};
 
 TEST_F(GlobalFnsValidationTest, err_fn_shadows_var)
 {
@@ -9,7 +9,7 @@ TEST_F(GlobalFnsValidationTest, err_fn_shadows_var)
 	int foo(int a);
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalFnsValidationTest, err_dup_definition)
@@ -19,7 +19,7 @@ TEST_F(GlobalFnsValidationTest, err_dup_definition)
 	int foo(int a) {return 2;}
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalFnsValidationTest, err_incomplete_ret_type_definition)
@@ -28,7 +28,7 @@ TEST_F(GlobalFnsValidationTest, err_incomplete_ret_type_definition)
 	struct B foo(int a) {return 1;}
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }
 
 TEST_F(GlobalFnsValidationTest, err_incomplete_param_type)
@@ -37,7 +37,7 @@ TEST_F(GlobalFnsValidationTest, err_incomplete_param_type)
 	int foo(struct B a) {return 1;}
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }
 
 TEST_F(GlobalFnsValidationTest, err_diff_ret_type)
@@ -47,7 +47,7 @@ TEST_F(GlobalFnsValidationTest, err_diff_ret_type)
 	void foo(void);
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(GlobalFnsValidationTest, err_diff_param_type)
@@ -57,7 +57,7 @@ TEST_F(GlobalFnsValidationTest, err_diff_param_type)
 	int foo(int);
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(GlobalFnsValidationTest, err_diff_param_type2)
@@ -67,7 +67,7 @@ TEST_F(GlobalFnsValidationTest, err_diff_param_type2)
 	int foo(int, int);
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(GlobalFnsValidationTest, err_void_param1)
@@ -76,7 +76,7 @@ TEST_F(GlobalFnsValidationTest, err_void_param1)
 	int foo(void, int);
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(GlobalFnsValidationTest, err_void_param2)
@@ -85,7 +85,7 @@ TEST_F(GlobalFnsValidationTest, err_void_param2)
 	int foo(int, void);
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(GlobalFnsValidationTest, void_param)

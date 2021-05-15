@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class LocalVarsValidationTest : public ValidationTest {};
+class LocalVarsValidationTest : public CompilerTest {};
 
 TEST_F(LocalVarsValidationTest, err_dup_var)
 {
@@ -12,7 +12,7 @@ TEST_F(LocalVarsValidationTest, err_dup_var)
 	}	
 	)";
 
-	ExpectError(code, ERR_DUP_VAR);
+	ExpectCompilerError(code, ERR_DUP_VAR);
 }
 
 TEST_F(LocalVarsValidationTest, dup_new_scope)
@@ -42,7 +42,7 @@ TEST_F(LocalVarsValidationTest, err_undeclared_var)
 	}	
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_IDENTIFIER);
+	ExpectCompilerError(code, ERR_UNKNOWN_IDENTIFIER);
 }
 
 TEST_F(LocalVarsValidationTest, err_incorrect_type_assign)
@@ -57,7 +57,7 @@ TEST_F(LocalVarsValidationTest, err_incorrect_type_assign)
 	}	
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(LocalVarsValidationTest, err_incorrect_type_initialisation)
@@ -72,7 +72,7 @@ TEST_F(LocalVarsValidationTest, err_incorrect_type_initialisation)
 	}	
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(LocalVarsValidationTest, char_variable)

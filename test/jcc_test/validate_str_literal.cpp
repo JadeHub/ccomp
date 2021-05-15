@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class StringLiteralValidationTest : public ValidationTest {};
+class StringLiteralValidationTest : public CompilerTest {};
 
 TEST_F(StringLiteralValidationTest, local_str_literal)
 {

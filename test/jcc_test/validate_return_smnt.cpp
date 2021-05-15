@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class ReturnValidationTest : public ValidationTest {};
+class ReturnValidationTest : public CompilerTest {};
 
 
 TEST_F(ReturnValidationTest, err_return_when_void)
@@ -12,7 +12,7 @@ TEST_F(ReturnValidationTest, err_return_when_void)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(ReturnValidationTest, err_missing_expr)
@@ -24,7 +24,7 @@ TEST_F(ReturnValidationTest, err_missing_expr)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_RETURN);
+	ExpectCompilerError(code, ERR_INVALID_RETURN);
 }
 
 TEST_F(ReturnValidationTest, err_wrong_type)
@@ -36,7 +36,7 @@ TEST_F(ReturnValidationTest, err_wrong_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(ReturnValidationTest, return_struct)

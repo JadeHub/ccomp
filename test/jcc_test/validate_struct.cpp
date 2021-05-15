@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class StructValidationTest : public ValidationTest {};
+class StructValidationTest : public CompilerTest {};
 
 /*
 //todo fails with missing ;
@@ -105,7 +105,7 @@ TEST_F(StructValidationTest, err_incorrect_ret_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_incorrect_type_assign)
@@ -123,7 +123,7 @@ TEST_F(StructValidationTest, err_incorrect_type_assign)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_unknown_member)
@@ -140,7 +140,7 @@ TEST_F(StructValidationTest, err_unknown_member)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_MEMBER_REF);
+	ExpectCompilerError(code, ERR_UNKNOWN_MEMBER_REF);
 }
 
 TEST_F(StructValidationTest, err_unknown_member2)
@@ -158,7 +158,7 @@ TEST_F(StructValidationTest, err_unknown_member2)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_MEMBER_REF);
+	ExpectCompilerError(code, ERR_UNKNOWN_MEMBER_REF);
 }
 
 TEST_F(StructValidationTest, err_undefined_sizeof)
@@ -170,7 +170,7 @@ TEST_F(StructValidationTest, err_undefined_sizeof)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_TYPE);
+	ExpectCompilerError(code, ERR_UNKNOWN_TYPE);
 }
 
 TEST_F(StructValidationTest, defined_sizeof)
@@ -220,7 +220,7 @@ TEST_F(StructValidationTest, err_declare_define_new_scope)
 
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }
 
 TEST_F(StructValidationTest, err_ptr_member_op_not_ptr)
@@ -233,7 +233,7 @@ TEST_F(StructValidationTest, err_ptr_member_op_not_ptr)
 		a->i = 1;
 	})";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_member_op_ptr)
@@ -246,7 +246,7 @@ TEST_F(StructValidationTest, err_member_op_ptr)
 		a.i = 1;
 	})";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_member_op_not_user_type)
@@ -259,7 +259,7 @@ TEST_F(StructValidationTest, err_member_op_not_user_type)
 		a.i = 1;
 	})";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, err_member_op_member_not_id)
@@ -273,7 +273,7 @@ TEST_F(StructValidationTest, err_member_op_member_not_id)
 		a.x = 1;
 	})";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, inline_decl)
@@ -333,7 +333,7 @@ TEST_F(StructValidationTest, err_typedef_struct_dup)
 
 	)";
 
-	ExpectError(code, ERR_DUP_TYPE_DEF);
+	ExpectCompilerError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(StructValidationTest, err_duplicate_member_name)
@@ -347,7 +347,7 @@ TEST_F(StructValidationTest, err_duplicate_member_name)
 
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(StructValidationTest, err_member_incomplete_type)
@@ -361,7 +361,7 @@ TEST_F(StructValidationTest, err_member_incomplete_type)
 
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }
 
 TEST_F(StructValidationTest, err_member_non_const_bitsize)
@@ -375,7 +375,7 @@ TEST_F(StructValidationTest, err_member_non_const_bitsize)
 
 	)";
 
-	ExpectError(code, ERR_INITIALISER_NOT_CONST);
+	ExpectCompilerError(code, ERR_INITIALISER_NOT_CONST);
 }
 
 TEST_F(StructValidationTest, err_member_bitsize_too_large)
@@ -389,7 +389,7 @@ TEST_F(StructValidationTest, err_member_bitsize_too_large)
 
 	)";
 
-	ExpectError(code, ERR_UNSUPPORTED);
+	ExpectCompilerError(code, ERR_UNSUPPORTED);
 }
 
 TEST_F(StructValidationTest, err_member_bitsize_negative)
@@ -403,7 +403,7 @@ TEST_F(StructValidationTest, err_member_bitsize_negative)
 
 	)";
 
-	ExpectError(code, ERR_UNSUPPORTED);
+	ExpectCompilerError(code, ERR_UNSUPPORTED);
 }
 
 TEST_F(StructValidationTest, err_member_bitsize_invalid_type)
@@ -417,7 +417,7 @@ TEST_F(StructValidationTest, err_member_bitsize_invalid_type)
 
 	)";
 
-	ExpectError(code, ERR_UNSUPPORTED);
+	ExpectCompilerError(code, ERR_UNSUPPORTED);
 }
 
 TEST_F(StructValidationTest, err_member_bitsize_zero_named)
@@ -431,7 +431,7 @@ TEST_F(StructValidationTest, err_member_bitsize_zero_named)
 
 	)";
 
-	ExpectError(code, ERR_UNSUPPORTED);
+	ExpectCompilerError(code, ERR_UNSUPPORTED);
 }
 
 TEST_F(StructValidationTest, member_bit_sizes)
@@ -465,7 +465,7 @@ TEST_F(StructValidationTest, err_address_of_bit_field)
 
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(StructValidationTest, typedef_struct_self)
@@ -499,6 +499,41 @@ TEST_F(StructValidationTest, struct_init)
 	ExpectNoError(code);
 }
 
+TEST_F(StructValidationTest, struct_ptr_init)
+{
+	std::string code = R"(
+	
+	void fn()
+	{
+		struct A {int* i; int* j;} v = {0, 0};
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(StructValidationTest, typedef_struct_init)
+{
+	std::string code = R"(
+
+	typedef struct s
+	{	
+		int i;
+	}s_t;
+
+	void* make();
+
+	void fn()
+	{
+		s_t* s = (s_t*)make();
+	}
+
+	)";
+
+	ExpectNoError(code);
+}
+
 TEST_F(StructValidationTest, global_struct_init)
 {
 	std::string code = R"(
@@ -521,7 +556,7 @@ TEST_F(StructValidationTest, err_struct_init_to_few)
 
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(StructValidationTest, err_struct_init_to_many)
@@ -535,7 +570,7 @@ TEST_F(StructValidationTest, err_struct_init_to_many)
 
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(StructValidationTest, nested_struct_init)
@@ -567,5 +602,5 @@ TEST_F(StructValidationTest, err_member_unknown_array_len)
 
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }

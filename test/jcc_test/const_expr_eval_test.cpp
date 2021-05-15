@@ -9,7 +9,7 @@ extern "C"
 class ConstExprEvalTest : public CompilerTest
 {
 public:
-	int_val_t Eval(const std::string& code)
+	ast_expression_t* Eval(const std::string& code)
 	{
 		SetSource(code);
 		Lex();
@@ -17,21 +17,23 @@ public:
 		parse_init(mTokens);
 		ast_expression_t* expr = parse_constant_expression();
 
-		int_val_t iv = sema_fold_const_int_expr(expr);
-
-		return iv;
+		return sema_fold_const_int_expr(expr);
 	}
 
-	void EvalExpectUnsigned(uint64_t val, const std::string& expr)
+	void EvalExpectUnsigned(uint64_t val, const std::string& code)
 	{
-		int_val_t result = Eval(expr);
-		EXPECT_EQ(val, result.v.uint64);
+		auto* expr = Eval(code);
+		ASSERT_NE(nullptr, expr);
+		ASSERT_EQ(expr_int_literal, expr->kind);
+		ASSERT_EQ(val, expr->data.int_literal.val.v.uint64);
 	}
 
-	void EvalExpectSigned(int64_t val, const std::string& expr)
+	void EvalExpectSigned(int64_t val, const std::string& code)
 	{
-		int_val_t result = Eval(expr);
-		EXPECT_EQ(val, result.v.int64);
+		auto* expr = Eval(code);
+		ASSERT_NE(nullptr, expr);
+		ASSERT_EQ(expr_int_literal, expr->kind);
+		ASSERT_EQ(val, expr->data.int_literal.val.v.int64);
 	}
 };
 

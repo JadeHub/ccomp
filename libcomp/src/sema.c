@@ -111,7 +111,9 @@ static bool _process_struct_members(ast_user_type_spec_t* user_type_spec)
 					"bit field size must be a constant integer expression");
 			}
 
-			int_val_t val = sema_fold_const_int_expr(member->decl->data.var.bit_sz);
+			sema_fold_const_int_expr(member->decl->data.var.bit_sz);
+			assert(member->decl->data.var.bit_sz->kind == expr_int_literal);
+			int_val_t val = member->decl->data.var.bit_sz->data.int_literal.val;
 
 			if (val.v.uint64 > 32)
 			{
@@ -240,6 +242,41 @@ static ast_type_spec_t* _process_user_type(ast_type_spec_t* spec)
 	return spec;
 }
 
+bool sema_resolve_function_sig_types(ast_func_sig_type_spec_t* fsig, token_t* start)
+{
+	//return type
+	fsig->ret_type = sema_resolve_type(fsig->ret_type, start);
+	if (!fsig->ret_type)
+		return false;
+
+	//parameter types
+	ast_func_param_decl_t* param = fsig->params->first_param;
+	while (param)
+	{
+		if (param->decl->type_ref->spec->kind == type_void)
+		{
+			diag_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
+				"function param '%s' of void type",
+				param->decl->name);
+			return false;
+		}
+
+		if (ast_type_is_array(param->decl->type_ref->spec))
+		{
+			//array param types are transformed to pointers
+			ast_type_spec_t* elem_type = param->decl->type_ref->spec->data.array_spec->element_type;
+			param->decl->type_ref->spec = ast_make_ptr_type(elem_type);
+		}
+
+		if (!sema_resolve_type_ref(param->decl->type_ref))
+			return false;
+
+		param = param->next;
+	}
+
+	return true;
+}
+
 ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 {
 	if (spec->kind == type_alias)
@@ -259,6 +296,13 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		return decl->type_ref->spec;
 	}
 
+	if (spec->kind == type_func_sig)
+	{
+		if (!sema_resolve_function_sig_types(spec->data.func_sig_spec, start))
+			return NULL;
+		return spec;
+	}
+
 	if (spec->kind == type_ptr)
 	{
 		spec->data.ptr_type = sema_resolve_type(spec->data.ptr_type, start);
@@ -272,7 +316,7 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 		return spec;
 	}
 
-	if (spec->kind == type_array )// && spec->data.array_spec->size_expr->kind != expr_null && spec->data.array_spec->sema.array_sz == 0)
+	if (spec->kind == type_array)
 	{
 		if (spec->size == 0 && spec->data.array_spec->size_expr->kind != expr_null)
 		{
@@ -292,7 +336,9 @@ ast_type_spec_t* sema_resolve_type(ast_type_spec_t* spec, token_t* start)
 					"array size must be a constant integer expression");
 				return NULL;
 			}
-			int_val_t expr_val = sema_fold_const_int_expr(array_spec->size_expr);
+			sema_fold_const_int_expr(array_spec->size_expr);
+			assert(array_spec->size_expr->kind == expr_int_literal);
+			int_val_t expr_val = array_spec->size_expr->data.int_literal.val;
 
 			if (expr_val.is_signed && expr_val.v.int64 <= 0)
 			{
@@ -513,10 +559,17 @@ bool sema_can_convert_type(ast_type_spec_t* target, ast_type_spec_t* type)
 		return sema_can_convert_type(target->data.ptr_type, type->data.ptr_type);
 	}
 
+	if (ast_type_is_fn_ptr(target) && type->kind == type_func_sig)
+	{
+		//implicit conversion to function pointer
+		return sema_is_same_func_sig(target->data.ptr_type->data.func_sig_spec, type->data.func_sig_spec);
+	}
+
 	//todo - function pointers
 	if (target->kind == type_func_sig && type->kind == type_func_sig)
 	{
-
+		//return sema_is_same_func_sig(target->data.func_sig_spec, type->data.func_sig_spec);
+		return false; //?
 	}
 
 	return false;
@@ -647,6 +700,9 @@ bool process_switch_statement(ast_statement_t * smnt)
 				"case must be a constant expression");
 		}
 
+		if (!process_statement(case_data->statement))
+			return false;
+
 		if (case_data->next == NULL && case_data->statement == NULL)
 		{
 			/*last item must have statement
@@ -681,13 +737,15 @@ bool process_return_statement(ast_statement_t* smnt)
 	
 	if (smnt->data.expr && smnt->data.expr->kind != expr_null)
 	{
-		if (!sema_can_convert_type(ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl), result.result_type))
+		//if (!sema_can_convert_type(ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl), result.result_type))
+		if(!sema_can_perform_assignment(ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl),
+			smnt->data.expr))
 		{
 			sema_report_type_conversion_error(smnt->data.expr, ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl), result.result_type, "return statement");
 			return false;
 		}
 	}
-	else if (sema_get_cur_fn_ctx()->decl->type_ref->spec->kind != type_void)
+	else if (ast_func_decl_return_type(sema_get_cur_fn_ctx()->decl)->kind != type_void)
 	{
 		return _report_err(smnt->tokens.start, ERR_INVALID_RETURN,
 			"function must return a value");

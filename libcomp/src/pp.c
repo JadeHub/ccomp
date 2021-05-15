@@ -915,7 +915,7 @@ static token_range_t* _expand_param_range(token_range_t* range)
 
 	while (!_is_expansion_complete(me))
 	{
-		if (!_process_token(_pop_next()))
+		if (!_process_token(tok_duplicate(_pop_next())))
 			return NULL;
 	}
 
@@ -1250,38 +1250,24 @@ static bool _process_token(token_t* tok)
 	switch (tok->kind)
 	{
 	case tok_pp_pragma:
-		if (!_process_pragma(tok))
-			return false;
-		break;
+		return _process_pragma(tok);
 	case tok_hash:
-		//consume
 		return _process_hash_op(tok);
-		break;
 	case tok_pp_include:
-		if (!_process_include(tok))
-			return false;
-		break;
+		return _process_include(tok);
 	case tok_pp_define:
-		if (!_process_define(tok))
-			return false;
-		break;
+		return _process_define(tok);
 	case tok_pp_if:
 	case tok_pp_ifdef:
 	case tok_pp_ifndef:
-		if (!_process_condition(tok))
-			return false;
-		break;
+		return _process_condition(tok);
 	case tok_pp_undef:
-		if (!_process_undef(tok))
-			return false;
-		break;
+		return _process_undef(tok);
 	case tok_pp_null:
 		//consume
-		break;
+		return true;
 	case tok_identifier:
-		if (!_process_identifier(tok))
-			return false;
-		break;
+		return _process_identifier(tok);
 	default:
 		_emit_token(tok);
 		break;
@@ -1289,19 +1275,42 @@ static bool _process_token(token_t* tok)
 	return true;
 }
 
+static bool _load_built_in_defs()
+{
+	source_range_t* sr = (source_range_t*)malloc(sizeof(source_range_t));
+	memset(sr, 0, sizeof(source_range_t));
+	sr->ptr = pp_built_in_defs();
+	sr->end = sr->ptr + strlen(sr->ptr);
+
+	if (!src_is_valid_range(sr))
+	{
+		free(sr);
+		return false;
+	}
+
+	//lex the file
+	token_range_t toks = lex_source(sr);
+	if (!toks.start)
+		return false;
+
+	return _process_token_range(&toks);
+}
+
 token_range_t pre_proc_file(const char* src_dir, token_range_t* range)
 {
 	src_dir;
 	_begin_token_range_expansion(range);
 
+	token_range_t result = { NULL, NULL };
+	
+	if (!_load_built_in_defs())
+		return result;
+
 	token_t* tok = _pop_next();
 	while (tok->kind != tok_eof)
 	{
 		if (!_process_token(tok))
-		{
-			token_range_t result = { NULL, NULL };
 			return result;
-		}
 		tok = _pop_next();
 	}
 	_emit_token(tok);

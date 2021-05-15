@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class StructMemberAccessValidationTest : public ValidationTest {};
+class StructMemberAccessValidationTest : public CompilerTest {};
 
 /*TEST_F(StructMemberAccessValidationTest, err_missing_member)
 {

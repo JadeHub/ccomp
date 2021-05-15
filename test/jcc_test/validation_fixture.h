@@ -23,7 +23,7 @@ extern "C"
 
 using namespace ::testing;
 
-struct TestWithErrorHandling : public ::testing::Test 
+struct TestWithErrorHandling : public ::testing::Test
 {
 	TestWithErrorHandling()
 	{
@@ -60,9 +60,9 @@ public:
 
 	CompilerTest()
 	{
-		sema_observer_t observer{ NULL };
-		sema_init(observer);
 		lex_init();
+		sema_observer_t observer{ nullptr };
+		sema_init(observer);
 	}
 
 	void SetSource(const std::string& src)
@@ -70,115 +70,59 @@ public:
 		mSrc = src;
 	}
 
-	void Lex()
+	bool Lex()
 	{
 		source_range_t sr;
 		sr.ptr = mSrc.c_str();
 		sr.end = sr.ptr + mSrc.length();
 
 		mTokens = lex_source(&sr).start;
+		return mTokens != nullptr;
 	}
 
-	void Parse()
+	bool Parse()
 	{
 		parse_init(mTokens);
 		mAst = parse_translation_unit();
+		return mAst != nullptr;
 	}
 
-	void Validate()
+	bool LexAndParse(const std::string& src)
+	{
+		SetSource(src);
+		if (!Lex())
+			return false;
+
+		if (!Parse())
+			return false;
+		return true;
+	}
+
+	bool Analyse()
 	{
 		mTL = sema_analyse(mAst);
+		return mTL != nullptr;
+	}
+
+	void ExpectCompilerError(const std::string& code, uint32_t err, testing::Cardinality times = Exactly(1))
+	{
+		TestWithErrorHandling::ExpectError(err, times);
+
+		if (LexAndParse(code))
+			Analyse();
+	}
+
+	void ExpectNoError(const std::string& code)
+	{
+		TestWithErrorHandling::ExpectNoError();
+		ASSERT_TRUE(LexAndParse(code));
+		ASSERT_TRUE(Analyse());
 	}
 
 	std::string mSrc;
 	token_t* mTokens = nullptr;
 	ast_trans_unit_t* mAst = nullptr;
 	valid_trans_unit_t* mTL = nullptr;
-};
-
-class ValidationTest : public TestWithErrorHandling
-{
-public:
-	ValidationTest()
-	{
-		lex_init();
-		sema_observer_t observer{ NULL };
-		sema_init(observer);
-	}
-
-	virtual ~ValidationTest()
-	{
-		tl_destroy(tl);
-	}
-
-	void parse(const std::string& src)
-	{
-		source_range_t sr;
-		sr.ptr = src.c_str();
-		sr.end = sr.ptr + src.length();
-		token_t* toks = lex_source(&sr).start;
-		
-		parse_init(toks);
-		ast = parse_translation_unit();
-	}
-
-	void validate()
-	{
-		if (ast)
-		{
-			
-			tl = sema_analyse(ast);
-		}
-	}
-
-	static void diag_cb(token_t* tok, uint32_t err, const char* msg, void* data)
-	{
-		((ValidationTest*)data)->on_diag(tok, err, msg);
-	}
-
-	void ExpectError(const std::string& code, uint32_t err, testing::Cardinality times = Exactly(1))
-	{
-		TestWithErrorHandling::ExpectError(err, times);
-
-		parse(code);
-		if(ast)
-			validate();
-	}
-
-	void ExpectNoError(const std::string& code)
-	{
-		TestWithErrorHandling::ExpectNoError();
-		parse(code);
-		validate();
-	}
-
-	void ExpectSyntaxErrors(const std::string& code)
-	{
-		TestWithErrorHandling::ExpectError(ERR_SYNTAX, ::testing::Cardinality(AtLeast(1)));
-		parse(code);
-		EXPECT_EQ(ast, nullptr);
-	}
-
-	/*ast_function_decl_t* AstFunction(const std::string& name)
-	{
-		tl_decl_t* fn = tl->fn_decls;
-
-		while (fn)
-		{
-			if (name == fn->decl->.name)
-			{
-				return &fn->decl->data.func;
-			}
-			fn = fn->next;
-		}
-		//FAIL() << "failed to find function " << name;
-		//return NULL;
-		//ASSERT_EQ(1, 2);
-	}*/
-
-	//std::vector<token_t*> tokens;
-	ast_trans_unit_t* ast = nullptr;
-	valid_trans_unit_t* tl = nullptr;
 };
 
 class LexTest : public TestWithErrorHandling
@@ -195,7 +139,7 @@ public:
 	~LexTest()
 	{
 		pre_proc_deinit();
-	//	src_deinit();
+		src_deinit();
 	}
 
 	void Lex(const std::string& src, const std::string path = "test.c")
@@ -291,23 +235,4 @@ public:
 		sr.end = sr.ptr + code.size() + 1;
 		EXPECT_CALL(*this, on_load_file(path)).Times(times).WillRepeatedly(Return(sr));
 	}
-};
-
-class LexPreProcTest : public LexTest
-{
-public:
-
-	LexPreProcTest()
-	{
-		
-	
-	}
-
-	~LexPreProcTest()
-	{
-	
-		
-	}
-
-	
 };

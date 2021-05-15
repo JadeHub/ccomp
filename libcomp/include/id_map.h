@@ -65,7 +65,7 @@ typedef struct
 	type_t* tags;
 	
 	/*
-	map of unique string literal value to label name 
+	map of unique string literal value to label name
 	multiple string literals with the same value will map to the same label
 	*/
 	hash_table_t* string_literals;

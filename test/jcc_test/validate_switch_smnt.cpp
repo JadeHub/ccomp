@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class SwitchValidationTest : public ValidationTest {};
+class SwitchValidationTest : public CompilerTest {};
 
 TEST_F(SwitchValidationTest, valid)
 {
@@ -41,7 +41,7 @@ TEST_F(SwitchValidationTest, err_missing_colon)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(SwitchValidationTest, err_no_cases)
@@ -54,7 +54,7 @@ TEST_F(SwitchValidationTest, err_no_cases)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_SWITCH);
+	ExpectCompilerError(code, ERR_INVALID_SWITCH);
 }
 
 TEST_F(SwitchValidationTest, err_multiple_default)
@@ -73,7 +73,7 @@ TEST_F(SwitchValidationTest, err_multiple_default)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(SwitchValidationTest, err_missing_case_expr)
@@ -90,7 +90,7 @@ TEST_F(SwitchValidationTest, err_missing_case_expr)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(SwitchValidationTest, err_no_smnt)
@@ -107,7 +107,7 @@ TEST_F(SwitchValidationTest, err_no_smnt)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_SWITCH);
+	ExpectCompilerError(code, ERR_INVALID_SWITCH);
 }
 
 TEST_F(SwitchValidationTest, err_default_with_expr)
@@ -124,9 +124,8 @@ TEST_F(SwitchValidationTest, err_default_with_expr)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
-
 
 TEST_F(SwitchValidationTest, valid_missing_case_statement)
 {
@@ -140,6 +139,39 @@ TEST_F(SwitchValidationTest, valid_missing_case_statement)
 			case 2:
 				break;
 		}
+	}
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(SwitchValidationTest, switch_on_enum)
+{
+	std::string code = R"(
+
+	typedef enum
+	{
+		A_1,
+		A_2
+	}A;
+
+	typedef enum
+	{
+		B_1,
+		B_2
+	}B;
+
+	int foo()
+	{
+		B b = B_1;
+		switch (b)
+		{
+			case B_1:
+				return A_1;
+			case B_2:
+				return A_2;
+		}
+		return -1;
 	}
 	)";
 

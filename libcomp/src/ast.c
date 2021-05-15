@@ -343,7 +343,10 @@ void ast_type_spec_desc(str_buff_t* sb, ast_type_spec_t* spec)
 	case type_user:
 		sb_append(sb, ast_user_type_kind_name(spec->data.user_type_spec->kind));
 		sb_append(sb, " ");
-		sb_append(sb, spec->data.user_type_spec->name);
+		if(strlen(spec->data.user_type_spec->name))
+			sb_append(sb, spec->data.user_type_spec->name);
+		else
+			sb_append(sb, "<anonymous>");
 		break;
 	case type_ptr:
 		ast_type_spec_desc(sb, spec->data.ptr_type);
@@ -456,6 +459,11 @@ ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn)
 	return fn->type_ref->spec->data.func_sig_spec->params;
 }
 
+bool ast_expr_is_int_literal(ast_expression_t* expr, int64_t val)
+{
+	return expr->kind == expr_int_literal && expr->data.int_literal.val.v.int64 == val;
+}
+
 bool ast_type_is_fn_ptr(ast_type_spec_t* type)
 {
 	return type->kind == type_ptr && type->data.ptr_type->kind == type_func_sig;
@@ -464,6 +472,11 @@ bool ast_type_is_fn_ptr(ast_type_spec_t* type)
 bool ast_type_is_array(ast_type_spec_t* type)
 {
 	return type->kind == type_array;
+}
+
+bool ast_type_is_alias(ast_type_spec_t* type)
+{
+	return type->kind == type_alias;
 }
 
 bool ast_type_is_ptr(ast_type_spec_t* type)
@@ -515,6 +528,12 @@ bool ast_type_is_enum(ast_type_spec_t* type)
 bool ast_type_is_struct_union(ast_type_spec_t* type)
 {
 	return type->kind == type_user && type->data.user_type_spec->kind != user_type_enum;
+}
+
+bool ast_type_is_void_ptr(ast_type_spec_t* spec)
+{
+	return spec->kind == type_ptr &&
+		spec->data.ptr_type->kind == type_void;
 }
 
 bool ast_is_bit_field_member(ast_struct_member_t* member)

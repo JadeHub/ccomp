@@ -480,7 +480,7 @@ ast_type_spec_t* try_parse_type_spec(uint32_t* flag_result)
 		}
 		else if (current_is(tok_identifier) && _is_alias_name(tok->data.str))
 		{
-			//id -> occurs when the type has been typedef'd
+			//alias -> occurs when the type has been typedef'd
 			if (type_type != tt_none)
 				break; //we've already seen int, struct, void etc
 			alias = strdup(current()->data.str);
@@ -605,6 +605,20 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 	result.type->spec = type_spec;
 	result.type->tokens.start = current();
 
+	while (current_is(tok_star))
+	{
+		//pointer
+		next_tok();
+		ast_type_spec_t* ptr_type = ast_make_ptr_type(result.type->spec);
+
+		if (current_is(tok_const))
+		{
+			next_tok();
+			//?
+		}
+		result.type->spec = ptr_type;
+	}
+
 	if (current_is(tok_l_paren) && next_is(tok_star))
 	{
 		//function pointer 'int (*fn)(void)'
@@ -636,19 +650,7 @@ parse_type_ref_result_t parse_type_ref(ast_type_spec_t* type_spec, uint32_t flag
 	}
 	else
 	{
-		while (current_is(tok_star))
-		{
-			//pointer
-			next_tok();
-			ast_type_spec_t* ptr_type = ast_make_ptr_type(result.type->spec);
-
-			if (current_is(tok_const))
-			{
-				next_tok();
-				//?
-			}
-			result.type->spec = ptr_type;
-		}
+		
 	}
 	
 	result.type->tokens.end = current();

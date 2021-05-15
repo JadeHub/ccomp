@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class PreProcIncludeTest : public LexPreProcTest 
+class PreProcIncludeTest : public LexTest
 {
 public:
 

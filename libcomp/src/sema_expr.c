@@ -151,6 +151,47 @@ static expr_result_t _process_member_access_binary_op(ast_expression_t* expr)
 	return result;
 }
 
+bool sema_is_const_pointer(ast_expression_t* expr)
+{
+	if (expr->kind == expr_str_literal)
+		return true;
+
+	if (expr->kind == expr_int_literal)
+		return true;
+
+	return expr->kind == expr_cast && 
+		ast_type_is_ptr(expr->data.cast.type_ref->spec) &&
+		sema_is_const_pointer(expr->data.cast.expr);
+}
+
+bool sema_is_null_ptr_expr(ast_expression_t* expr)
+{
+	return expr->kind == expr_cast &&
+		ast_type_is_void_ptr(expr->data.cast.type_ref->spec) &&
+		ast_expr_is_int_literal(expr->data.cast.expr, 0);
+}
+
+bool sema_can_perform_assignment(ast_type_spec_t* target, ast_expression_t* source)
+{
+	if (ast_type_is_ptr(target) &&
+		(source->kind == expr_int_literal ||
+		sema_is_const_pointer(source) ||
+		ast_type_is_void_ptr(source->sema.result.type)))
+	{
+		return true;
+	}
+
+	ast_type_spec_t* src_type = source->sema.result.type;
+
+	if (ast_type_is_fn_ptr(target) && src_type->kind == type_func_sig)
+	{
+		//implicit conversion to function pointer
+		return sema_is_same_func_sig(target->data.ptr_type->data.func_sig_spec, src_type->data.func_sig_spec);
+	}
+
+	return sema_can_convert_type(target, source->sema.result.type);
+}
+
 static expr_result_t _process_assignment(ast_expression_t* expr)
 {
 	ast_expression_t* target = expr->data.binary_op.lhs;
@@ -176,30 +217,34 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 		result.result_type = ast_make_ptr_type(result.result_type);
 	}
 
-	if (source->kind == expr_int_literal)
+	if (!sema_can_perform_assignment(target_result.result_type, source))
 	{
-		if (target_result.result_type->kind == type_ptr)
-		{
-			if (source->data.int_literal.val.v.int64 != 0)
-			{
-				return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-					"assignment to incompatible type. expected %s",
-					ast_type_name(target_result.result_type));
-			}
-		}
-		else if (!int_val_will_fit(&source->data.int_literal.val, target_result.result_type))
-		{
-			return _report_err(expr, ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(target_result.result_type));
-		}
-	}
-	else if (!sema_can_convert_type(target_result.result_type, result.result_type))
-	{
-		return sema_report_type_conversion_error(expr, target_result.result_type, result.result_type, "assignment");
+		sema_report_type_conversion_error(expr,
+			target_result.result_type,
+			result.result_type, "assignment");
+		target_result.failure = true;
+		return target_result;
 	}
 
 	return target_result;
+}
+
+static expr_result_t _process_comparison_op(ast_expression_t* expr)
+{
+	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
+	if (lhs_result.failure)
+		return lhs_result;
+
+	expr_result_t rhs_result = sema_process_expression(expr->data.binary_op.rhs);
+	if (rhs_result.failure)
+		return rhs_result;
+
+	expr_result_t result;
+	memset(&result, 0, sizeof(expr_result_t));
+
+	result.result_type = int8_type_spec; //todo
+
+	return result;
 }
 
 static expr_result_t _process_binary_op(ast_expression_t* expr)
@@ -226,6 +271,13 @@ static expr_result_t _process_binary_op(ast_expression_t* expr)
 		return _process_member_access_binary_op(expr);
 	case op_array_subscript:
 		return _process_array_subscript_binary_op(expr);
+	case op_eq:
+	case op_neq:
+	case op_lessthan:
+	case op_lessthanequal:
+	case op_greaterthan:
+	case op_greaterthanequal:
+		return _process_comparison_op(expr);
 	}
 
 	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
@@ -236,7 +288,14 @@ static expr_result_t _process_binary_op(ast_expression_t* expr)
 	if (rhs_result.failure)
 		return rhs_result;
 
-	result.result_type = int32_type_spec;
+	//this is crap
+	if (ast_type_is_ptr(lhs_result.result_type) && ast_type_is_int(rhs_result.result_type))
+		result.result_type = lhs_result.result_type;
+	else if (sema_is_same_type(lhs_result.result_type, rhs_result.result_type))
+		result.result_type = rhs_result.result_type;
+	else
+		result.result_type = int32_type_spec; //todo
+	
 
 	return result;
 }
@@ -307,7 +366,7 @@ static expr_result_t _process_str_literal(ast_expression_t* expr)
 	return result;
 }
 
-static expr_result_t _process_variable_reference(ast_expression_t* expr)
+static expr_result_t _process_identifier_reference(ast_expression_t* expr)
 {
 	expr_result_t result;
 	memset(&result, 0, sizeof(expr_result_t));
@@ -326,7 +385,7 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 			}
 			result.result_type = decl->type_ref->spec;
 
-			if (decl->data.var.init_expr && 
+			if (decl->data.var.init_expr &&
 				decl->data.var.init_expr->kind == expr_int_literal &&
 				decl->type_ref->flags & TF_QUAL_CONST)
 			{
@@ -347,33 +406,106 @@ static expr_result_t _process_variable_reference(ast_expression_t* expr)
 			return result;
 		}
 	}
-	
+
 	return _report_err(expr, ERR_UNKNOWN_IDENTIFIER,
 		"identifier '%s' not defined",
 		expr->data.identifier.name);
 }
 
-static expr_result_t _process_condition(ast_expression_t* expr)
+static expr_result_t _process_conditional_branches(ast_expression_t* expr, ast_type_spec_t* lhs_type, ast_type_spec_t* rhs_type)
+{
+	expr_result_t result;
+	memset(&result, 0, sizeof(expr_result_t));
+
+	if (lhs_type == rhs_type)
+	{
+		result.result_type = lhs_type;
+		return result;
+	}
+
+	/*
+	Only the following expressions are allowed as expression-true and expression-false
+	- two expressions of any arithmetic type
+	- two expressions of the same struct or union type
+	- two expressions of void type
+	- two expressions of pointer type, pointing to types that are compatible, ignoring cvr-qualifiers
+	- one expression is a pointer and the other is the null pointer constant (such as NULL)
+	- one expression is a pointer to object and the other is a pointer to void (possibly qualified)
+	*/
+
+	if (ast_type_is_int(lhs_type))
+	{
+		if (!ast_type_is_int(rhs_type))
+		{
+			return _report_err(expr->data.condition.false_branch,
+				ERR_INCOMPATIBLE_TYPE,
+				"arithmetic type expected");
+		}
+
+		//todo - which int type
+		result.result_type = int32_type_spec;
+	}
+	else if (ast_type_is_struct_union(lhs_type))
+	{
+		if (lhs_type != rhs_type)
+		{
+			return _report_err(expr->data.condition.false_branch,
+				ERR_INCOMPATIBLE_TYPE,
+				"incompatible operand types, expected '%s'", lhs_type->data.user_type_spec->name);
+		}
+		result.result_type = lhs_type;
+	}
+	else if (lhs_type->kind == type_void)
+	{
+		if (lhs_type != rhs_type)
+		{
+			return _report_err(expr->data.condition.false_branch,
+				ERR_INCOMPATIBLE_TYPE,
+				"incompatible operand types, expected void");
+		}
+		result.result_type = lhs_type;
+	}
+	else if (ast_type_is_ptr(lhs_type))
+	{
+		if (!ast_type_is_ptr(rhs_type))
+		{
+			return _report_err(expr->data.condition.false_branch,
+				ERR_INCOMPATIBLE_TYPE,
+				"incompatible operand types, expected pointer");
+		}
+
+		result = _process_conditional_branches(expr, lhs_type->data.ptr_type, rhs_type->data.ptr_type);
+		if (!result.failure)
+			result.result_type = ast_make_ptr_type(result.result_type);
+	}
+
+	//todo
+
+	result.failure = result.result_type == NULL;
+	return result;
+}
+
+static expr_result_t _process_conditional(ast_expression_t* expr)
 {
 	expr_result_t result = sema_process_expression(expr->data.condition.cond);
 	if (result.failure)
 		return result;
 
-	if (expr->data.condition.true_branch)
-	{
-		result = sema_process_expression(expr->data.condition.true_branch);
-		if (result.failure)
-			return result;
-	}
+	result = sema_process_expression(expr->data.condition.true_branch);
+	if (result.failure)
+		return result;
+	ast_type_spec_t* lhs_type = expr->data.condition.true_branch->sema.result.type;
 
-	if (expr->data.condition.false_branch)
-	{
-		result = sema_process_expression(expr->data.condition.false_branch);
-		if (result.failure)
-			return result;
-	}
+	result = sema_process_expression(expr->data.condition.false_branch);
+	if (result.failure)
+		return result;
+	ast_type_spec_t* rhs_type = expr->data.condition.false_branch->sema.result.type;
+	
 
-	result.result_type = int32_type_spec;
+	result = _process_conditional_branches(expr, lhs_type, rhs_type);
+
+
+
 	return result;
 }
 
@@ -519,7 +651,14 @@ static expr_result_t _process_null(ast_expression_t* expr)
 expr_result_t _process_cast(ast_expression_t* expr)
 {
 	expr_result_t result = sema_process_expression(expr->data.cast.expr);
-	result.result_type = expr->data.cast.type_ref->spec;
+	if (result.failure)
+		return result;
+
+	ast_type_spec_t* target_type = sema_resolve_type(expr->data.cast.type_ref->spec, expr->tokens.start);
+	if (target_type)
+		result.result_type = target_type;
+	else
+		result.failure = true;
 	return result;
 }
 
@@ -531,7 +670,11 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 	if (sema_is_const_int_expr(expr))
 	{
 		//we can evalulate to a constant
-		sema_fold_const_int_expr(expr);
+		if (!sema_fold_const_int_expr(expr))
+		{
+			result.failure = true;
+			return result;
+		}
 	}
 
 	switch (expr->kind)
@@ -552,10 +695,10 @@ expr_result_t sema_process_expression(ast_expression_t* expr)
 		result = _process_str_literal(expr);
 		break;
 	case expr_identifier:
-		result = _process_variable_reference(expr);
+		result = _process_identifier_reference(expr);
 		break;
 	case expr_condition:
-		result = _process_condition(expr);
+		result = _process_conditional(expr);
 		break;
 	case expr_func_call:
 		result = _process_func_call(expr);

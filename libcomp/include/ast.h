@@ -373,6 +373,7 @@ typedef struct ast_func_sig_type_spec
 
 typedef struct
 {
+	//todo use ast_type_ref_t*
 	struct ast_type_spec* element_type;
 	ast_expression_t* size_expr;
 
@@ -513,7 +514,6 @@ typedef struct ast_declaration
 	//optional name
 	char name[MAX_LITERAL_NAME];
 
-	//variable or function return type
 	ast_type_ref_t* type_ref;
 
 	union
@@ -754,6 +754,8 @@ returns the function parameter data from the given function declaration
 */
 ast_func_params_t* ast_func_decl_params(ast_declaration_t* fn);
 
+bool ast_expr_is_int_literal(ast_expression_t* expr, int64_t val);
+
 /*
 returns true if the given type spec is a pointer to a function signature
 */
@@ -763,6 +765,11 @@ bool ast_type_is_fn_ptr(ast_type_spec_t* type);
 returns true if the given type spec is an array
 */
 bool ast_type_is_array(ast_type_spec_t* type);
+
+/*
+returns true if the given type spec is an alias
+*/
+bool ast_type_is_alias(ast_type_spec_t* type);
 
 /*
 returns true if the given type spec is a pointer
@@ -788,6 +795,11 @@ bool ast_type_is_enum(ast_type_spec_t* type);
 returns true if the given type spec is a struct or union
 */
 bool ast_type_is_struct_union(ast_type_spec_t* type);
+
+/*
+returns true if the given type spec is a pointer to void (void*)
+*/
+bool ast_type_is_void_ptr(ast_type_spec_t* spec);
 
 /*
 returns true if the given struct member is a bit field

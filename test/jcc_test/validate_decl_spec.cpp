@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class DeclSpecValidationTest : public ValidationTest {};
+class DeclSpecValidationTest : public CompilerTest {};
 
 TEST_F(DeclSpecValidationTest, void_valid)
 {
@@ -21,7 +21,7 @@ TEST_F(DeclSpecValidationTest, err_void_int)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_void_short)
@@ -31,7 +31,7 @@ TEST_F(DeclSpecValidationTest, err_void_short)
 	}
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, short_valid)
@@ -175,7 +175,7 @@ TEST_F(DeclSpecValidationTest, err_int_char)
 	int char foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_char_char)
@@ -184,7 +184,7 @@ TEST_F(DeclSpecValidationTest, err_char_char)
 	char char foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_short_char)
@@ -193,7 +193,7 @@ TEST_F(DeclSpecValidationTest, err_short_char)
 	short char foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_int_int)
@@ -202,7 +202,7 @@ TEST_F(DeclSpecValidationTest, err_int_int)
 	int int foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_int_struct)
@@ -211,7 +211,7 @@ TEST_F(DeclSpecValidationTest, err_int_struct)
 	int struct foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_struct_void)
@@ -220,7 +220,7 @@ TEST_F(DeclSpecValidationTest, err_struct_void)
 	struct void foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_unsigned_signed)
@@ -229,7 +229,7 @@ TEST_F(DeclSpecValidationTest, err_unsigned_signed)
 	unsigned signed foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_struct_union)
@@ -238,7 +238,7 @@ TEST_F(DeclSpecValidationTest, err_struct_union)
 	struct union foo;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }
 
 TEST_F(DeclSpecValidationTest, err_invalid_type)
@@ -247,5 +247,5 @@ TEST_F(DeclSpecValidationTest, err_invalid_type)
 	iint i;
 	)";
 
-	ExpectError(code, ERR_SYNTAX);
+	ExpectCompilerError(code, ERR_SYNTAX);
 }

@@ -90,3 +90,5 @@ typedef struct
 }pp_context_t;
 
 bool pre_proc_eval_expr(pp_context_t* pp, token_range_t range, uint32_t* val);
+
+const char* pp_built_in_defs();

@@ -1,17 +1,9 @@
 #include "validation_fixture.h"
 
-class CastValidationTest : public ValidationTest {};
+class CastValidationTest : public CompilerTest {};
 
 TEST_F(CastValidationTest, int_cast)
 {
-	/*
-	std::string code = R"(
-	
-	int j = 5;
-	char c = (char)j;
-	)";
-	*/
-
 	std::string code = R"(
 	
 	char foo()

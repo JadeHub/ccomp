@@ -9,7 +9,10 @@ expr_result_t sema_process_compound_init(ast_expression_t* expr, ast_type_spec_t
 
 bool sema_process_array_compound_init(ast_expression_t* expr, ast_type_spec_t* array_spec)
 {
-	ast_type_spec_t* elem_type = array_spec->data.array_spec->element_type;
+	ast_type_spec_t* elem_type = sema_resolve_type(array_spec->data.array_spec->element_type, expr->tokens.start);
+	if (!elem_type)
+		return false;
+	array_spec->data.array_spec->element_type = elem_type;
 
 	ast_compound_init_item_t* init_item = expr->data.compound_init.item_list;
 	size_t elem_count = 0;
@@ -71,14 +74,19 @@ bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* 
 		expr_result_t init_result;
 
 		if (init_item->expr->kind == expr_compound_init)
+		{
 			init_result = sema_process_compound_init(init_item->expr, member->decl->type_ref->spec);
+		}
 		else
+		{
 			init_result = sema_process_expression(init_item->expr);
+		}
 
 		if (init_result.failure)
 			return false;
 
-		if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
+		if (!sema_can_perform_assignment(member->decl->type_ref->spec, init_item->expr))
+		//if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
 		{
 			sema_report_type_conversion_error(init_item->expr, member->decl->type_ref->spec, init_result.result_type,
 				"initialisation of member '%s'", member->decl->name);
@@ -135,33 +143,41 @@ static bool _process_global_var_init(ast_declaration_t* decl)
 {
 	if (decl->data.var.init_expr)
 	{
-		if (decl->data.var.init_expr->kind == expr_compound_init)
+		ast_expression_t* expr = decl->data.var.init_expr;
+		if (expr->kind == expr_compound_init)
 		{
-			if (sema_process_compound_init(decl->data.var.init_expr, decl->type_ref->spec).failure)
+			if (sema_process_compound_init(expr, decl->type_ref->spec).failure)
 				return false;
 		}
 		else
 		{
-			if (sema_process_expression(decl->data.var.init_expr).failure)
+			if (sema_process_expression(expr).failure)
 				return false;
 
 			ast_type_spec_t* var_type = decl->type_ref->spec;
 
-			if (decl->data.var.init_expr->kind == expr_int_literal)
+			if(ast_type_is_ptr(var_type))
+			{ 
+				if (!sema_is_const_pointer(expr) && expr->kind != expr_int_literal)
+				{
+					diag_err(expr->tokens.start,
+						ERR_INITIALISER_NOT_CONST,
+						"global pointer '%s' must be initialised with a const value",
+						ast_type_name(var_type));
+					return false;
+				}
+			}
+			else if (expr->kind == expr_int_literal)
 			{
-				if (!int_val_will_fit(&decl->data.var.init_expr->data.int_literal.val, var_type))
+				if (!int_val_will_fit(&expr->data.int_literal.val, var_type))
 				{
 					//sema_report_type_conversion_error(decl->data.var.init_expr, &decl->data.var.init_expr->data.int_literal.val, var_type, "assignment");
-					diag_err(decl->data.var.init_expr->tokens.start,
+					diag_err(expr->tokens.start,
 						ERR_INCOMPATIBLE_TYPE,
 						"assignment to incompatible type. expected %s",
 						ast_type_name(var_type));
 					return false;
 				}
-			}
-			else if (decl->data.var.init_expr->kind == expr_str_literal)
-			{
-
 			}
 			else
 			{
@@ -178,14 +194,6 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 {
 	if (!sema_resolve_type_ref(decl->type_ref))
 		return proc_decl_error;
-
-	if( decl->type_ref->spec->size == 0)
-	{
-		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
-			"global var '%s' uses incomplete type '%s'",
-			decl->name, ast_type_name(decl->type_ref->spec));
-		return proc_decl_error;
-	}
 
 	ast_type_spec_t* type = decl->type_ref->spec;
 	ast_declaration_t* exist = idm_find_decl(sema_id_map(), decl->name);
@@ -235,6 +243,14 @@ proc_decl_result sema_process_global_variable_declaration(ast_declaration_t* dec
 	if (!_process_global_var_init(decl))
 		return proc_decl_error;
 
+	if (decl->type_ref->spec->size == 0)
+	{
+		diag_err(decl->tokens.start, ERR_TYPE_INCOMPLETE,
+			"global var '%s' uses incomplete type '%s'",
+			decl->name, ast_type_name(decl->type_ref->spec));
+		return proc_decl_error;
+	}
+
 	idm_add_decl(sema_id_map(), decl);
 	return proc_decl_new_def;
 }
@@ -275,20 +291,12 @@ bool sema_process_variable_declaration(ast_declaration_t* decl)
 		if (result.failure)
 			return false;
 
-		if (result.result_type->kind == type_func_sig)
-		{
-			//implicit conversion to function pointer
-			result.result_type = ast_make_ptr_type(result.result_type);
-		}
-
 		ast_type_spec_t* init_type = result.result_type;
 
-		if (!sema_can_convert_type(decl->type_ref->spec, init_type))
+		if(!sema_can_perform_assignment(decl->type_ref->spec, decl->data.var.init_expr))
 		{
-			diag_err(decl->data.var.init_expr->tokens.start,
-				ERR_INCOMPATIBLE_TYPE,
-				"assignment to incompatible type. expected %s",
-				ast_type_name(decl->type_ref->spec));
+			sema_report_type_conversion_error(decl->data.var.init_expr,
+				decl->type_ref->spec, init_type, "initialisation");
 			return false;
 		}
 	}
@@ -339,9 +347,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 {
 	ast_func_sig_type_spec_t* fsig = decl->type_ref->spec->data.func_sig_spec;
 
-	//return type
-	fsig->ret_type = sema_resolve_type(fsig->ret_type, decl->tokens.start);
-	if (!fsig->ret_type)
+	if (!sema_resolve_function_sig_types(fsig, decl->tokens.start))
 		return false;
 
 	if (_is_fn_definition(decl) &&
@@ -354,30 +360,10 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 		return false;
 	}
 
-	//parameter types
 	ast_func_param_decl_t* param = fsig->params->first_param;
 	while (param)
 	{
-		if (param->decl->type_ref->spec->kind == type_void)
-		{
-			diag_err(param->decl->tokens.start, ERR_INVALID_PARAMS,
-				"function param '%s' of void type",
-				param->decl->name);
-			return false;
-		}
-
-		if (ast_type_is_array(param->decl->type_ref->spec))
-		{
-			//array param types are transformed to pointers
-			ast_type_spec_t* elem_type = param->decl->type_ref->spec->data.array_spec->element_type;
-			param->decl->type_ref->spec = ast_make_ptr_type(elem_type);
-		}
-
-		if (!sema_resolve_type_ref(param->decl->type_ref))
-			return false;
-
 		ast_type_spec_t* param_type = param->decl->type_ref->spec;
-
 		if (_is_fn_definition(decl) &&
 			param_type->kind != type_void &&
 			param_type->size == 0)
@@ -390,6 +376,7 @@ bool resolve_function_decl_types(ast_declaration_t* decl)
 
 		param = param->next;
 	}
+
 	return true;
 }
 

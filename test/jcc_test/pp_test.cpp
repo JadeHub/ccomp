@@ -1,8 +1,15 @@
 #include "validation_fixture.h"
 
-class PreProcDefineBuiltInTest : public LexPreProcTest {};
+class PreProcTest : public LexTest {};
 
-TEST_F(PreProcDefineBuiltInTest, __file__)
+TEST_F(PreProcTest, __version__)
+{
+	std::string src = "COMP_JCC_1";
+	PreProc(src);
+	ExpectCode("1");
+}
+
+TEST_F(PreProcTest, __file__)
 {
 	std::string path = "test/stdio.h";
 	std::string inc_code = "__FILE__";
@@ -15,7 +22,7 @@ TEST_F(PreProcDefineBuiltInTest, __file__)
 	EXPECT_THAT(GetToken(0)->data.str, EndsWith("/test/stdio.h"));
 }
 
-TEST_F(PreProcDefineBuiltInTest, __line__)
+TEST_F(PreProcTest, __line__)
 {
 	std::string src = R"(__LINE__
 A

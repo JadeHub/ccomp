@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class FnPtrSmntValidationTest : public ValidationTest {};
+class FnPtrSmntValidationTest : public CompilerTest {};
 
 TEST_F(FnPtrSmntValidationTest, assign_fn)
 {
@@ -30,6 +30,27 @@ TEST_F(FnPtrSmntValidationTest, call)
 		void (*fn)() = foo;
 		fn();
 
+	}
+	
+	)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(FnPtrSmntValidationTest, call_via_typedef)
+{
+	std::string code = R"(
+	
+
+	typedef struct a {int i;} a_t;
+	typedef a_t* (*fn_ptr_t)();
+
+	a_t* foo();
+
+	void test()
+	{
+		fn_ptr_t fn = foo;
+		fn();
 	}
 	
 	)";

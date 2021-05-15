@@ -12,8 +12,7 @@ static bool _file_exists(const char* path)
 {
 	DWORD attrib = GetFileAttributes(path);
 
-	return (attrib != INVALID_FILE_ATTRIBUTES &&
-		!(attrib & FILE_ATTRIBUTE_DIRECTORY));
+	return attrib != INVALID_FILE_ATTRIBUTES;
 }
 
 const char* path_resolve(const char* path)

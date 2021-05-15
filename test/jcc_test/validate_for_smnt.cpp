@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class ForSmntValidationTest : public ValidationTest {};
+class ForSmntValidationTest : public CompilerTest {};
 
 TEST_F(ForSmntValidationTest, foo)
 {

@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class FnCallValidationTest : public ValidationTest {};
+class FnCallValidationTest : public CompilerTest {};
 
 TEST_F(FnCallValidationTest, err_var_shaddows_fn)
 {
@@ -16,7 +16,7 @@ TEST_F(FnCallValidationTest, err_var_shaddows_fn)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_undefined)
@@ -28,7 +28,7 @@ TEST_F(FnCallValidationTest, err_undefined)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_IDENTIFIER);
+	ExpectCompilerError(code, ERR_UNKNOWN_IDENTIFIER);
 }
 
 TEST_F(FnCallValidationTest, err_too_many_params)
@@ -41,7 +41,7 @@ TEST_F(FnCallValidationTest, err_too_many_params)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(FnCallValidationTest, err_too_many_params2)
@@ -54,7 +54,7 @@ TEST_F(FnCallValidationTest, err_too_many_params2)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(FnCallValidationTest, err_incorrect_param_type)
@@ -67,7 +67,7 @@ TEST_F(FnCallValidationTest, err_incorrect_param_type)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_incorrect_param_type2)
@@ -81,7 +81,7 @@ TEST_F(FnCallValidationTest, err_incorrect_param_type2)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, param_fn_call)
@@ -109,7 +109,7 @@ TEST_F(FnCallValidationTest, err_param_fn_call)
 	}
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(FnCallValidationTest, err_too_few_params)
@@ -122,7 +122,7 @@ TEST_F(FnCallValidationTest, err_too_few_params)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(FnCallValidationTest, err_too_few_params2)
@@ -135,7 +135,7 @@ TEST_F(FnCallValidationTest, err_too_few_params2)
 	}
 	)";
 
-	ExpectError(code, ERR_INVALID_PARAMS);
+	ExpectCompilerError(code, ERR_INVALID_PARAMS);
 }
 
 TEST_F(FnCallValidationTest, no_param)

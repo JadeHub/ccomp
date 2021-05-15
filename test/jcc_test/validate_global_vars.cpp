@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class GlobalVarsValidationTest : public ValidationTest {};
+class GlobalVarsValidationTest : public CompilerTest {};
 
 TEST_F(GlobalVarsValidationTest, err_var_shadows_fn)
 {
@@ -9,7 +9,7 @@ TEST_F(GlobalVarsValidationTest, err_var_shadows_fn)
 	int foo = 5;
 	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalVarsValidationTest, err_dup_definition)
@@ -18,7 +18,7 @@ TEST_F(GlobalVarsValidationTest, err_dup_definition)
 	int foo = 4;
 	int foo = 5;)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalVarsValidationTest, err_change_type)
@@ -27,7 +27,7 @@ TEST_F(GlobalVarsValidationTest, err_change_type)
 	int foo = 4;
 	short foo;	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalVarsValidationTest, err_change_type2)
@@ -36,7 +36,7 @@ TEST_F(GlobalVarsValidationTest, err_change_type2)
 	int foo = 4;
 	struct B{int b;} foo;	)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalVarsValidationTest, err_struct_redefined)
@@ -45,7 +45,7 @@ TEST_F(GlobalVarsValidationTest, err_struct_redefined)
 	struct B{int b;} foo;
 	struct B{int b;} foo1;	)";
 
-	ExpectError(code, ERR_DUP_TYPE_DEF);
+	ExpectCompilerError(code, ERR_DUP_TYPE_DEF);
 }
 
 TEST_F(GlobalVarsValidationTest, err_struct_incomplete)
@@ -54,7 +54,7 @@ TEST_F(GlobalVarsValidationTest, err_struct_incomplete)
 	struct B foo;
 	)";
 
-	ExpectError(code, ERR_TYPE_INCOMPLETE);
+	ExpectCompilerError(code, ERR_TYPE_INCOMPLETE);
 }
 
 TEST_F(GlobalVarsValidationTest, struct_referenced)
@@ -91,7 +91,7 @@ TEST_F(GlobalVarsValidationTest, invalid_init)
 	int fooA = 4;
 	int foo = fooA;	)";
 
-	ExpectError(code, ERR_INITIALISER_NOT_CONST);
+	ExpectCompilerError(code, ERR_INITIALISER_NOT_CONST);
 }
 
 TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
@@ -100,7 +100,7 @@ TEST_F(GlobalVarsValidationTest, global_fn_shadows_var)
 	int foo = 5;	
 	int foo(int a);)";
 
-	ExpectError(code, ERR_DUP_SYMBOL);
+	ExpectCompilerError(code, ERR_DUP_SYMBOL);
 }
 
 TEST_F(GlobalVarsValidationTest, overflow_uint)
@@ -109,7 +109,7 @@ TEST_F(GlobalVarsValidationTest, overflow_uint)
 	unsigned int foo = 0xFFFFFFFF + 1;
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(GlobalVarsValidationTest, overflow_uchar)
@@ -118,7 +118,7 @@ TEST_F(GlobalVarsValidationTest, overflow_uchar)
 	unsigned char foo = 0xFF + 1;
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(GlobalVarsValidationTest, overflow_char)
@@ -127,7 +127,7 @@ TEST_F(GlobalVarsValidationTest, overflow_char)
 	char foo = 0xFF;
 	)";
 
-	ExpectError(code, ERR_INCOMPATIBLE_TYPE);
+	ExpectCompilerError(code, ERR_INCOMPATIBLE_TYPE);
 }
 
 TEST_F(GlobalVarsValidationTest, valid_char)

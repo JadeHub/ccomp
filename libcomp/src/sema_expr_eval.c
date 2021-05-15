@@ -1,7 +1,14 @@
 #include "sema_internal.h"
 
+#include "std_types.h"
+
 #include <assert.h>
 #include <string.h>
+
+static bool _is_const_int_type(ast_type_spec_t* spec)
+{
+	return ast_type_is_int(spec) || ast_type_is_ptr(spec);
+}
 
 bool sema_is_const_int_expr(ast_expression_t* expr)
 {
@@ -12,8 +19,8 @@ bool sema_is_const_int_expr(ast_expression_t* expr)
 	case expr_identifier:
 	case expr_str_literal:
 	case expr_null:
-	case expr_cast: //?
 	case expr_compound_init:
+	case expr_cast:
 		return false;
 	case expr_unary_op:
 		switch (expr->data.unary_op.operation)
@@ -37,54 +44,67 @@ bool sema_is_const_int_expr(ast_expression_t* expr)
 			return false;
 		}		
 		return sema_is_const_int_expr(expr->data.binary_op.lhs) && sema_is_const_int_expr(expr->data.binary_op.rhs);
-	case expr_int_literal:	
+	case expr_int_literal:
 	case expr_sizeof:
-	
 		break;
 	}
 	return true;
 }
 
-int_val_t sema_eval_constant_expr(ast_expression_t* expr)
+static ast_expression_t* _conv_expr_to_int_literal(ast_expression_t* expr, int_val_t val)
+{
+	ast_destroy_expression_data(expr);
+	memset(expr, 0, sizeof(ast_expression_t));
+	expr->kind = expr_int_literal;
+	expr->data.int_literal.val = val;
+	return expr;
+}
+
+ast_expression_t* _sema_eval_constant_expr(ast_expression_t* expr)
 {
 	switch (expr->kind)
 	{
 	case expr_unary_op:
 	{
-		int_val_t v = sema_eval_constant_expr(expr->data.unary_op.expression);
-		return int_val_unary_op(&v, expr->data.unary_op.operation);
+		ast_expression_t* inner = _sema_eval_constant_expr(expr->data.unary_op.expression);
+		if (!inner)
+			return NULL;
+
+		int_val_t val = int_val_unary_op(&inner->data.int_literal.val, expr->data.unary_op.operation);
+
+		expr = _conv_expr_to_int_literal(expr, val);
+		expr->sema.result.type = inner->sema.result.type; //todo
+		break;
 	}
 	case expr_binary_op:
 	{
-		int_val_t lhs = sema_eval_constant_expr(expr->data.binary_op.lhs);
-		int_val_t rhs = sema_eval_constant_expr(expr->data.binary_op.rhs);
-		return int_val_binary_op(&lhs, &rhs, expr->data.binary_op.operation);
-	}
+		ast_expression_t * lhs = _sema_eval_constant_expr(expr->data.binary_op.lhs);
+		ast_expression_t* rhs = _sema_eval_constant_expr(expr->data.binary_op.rhs);
+		if (!lhs || !rhs)
+			return NULL;
 
+		int_val_t val = int_val_binary_op(&lhs->data.int_literal.val, &rhs->data.int_literal.val, expr->data.binary_op.operation);
+
+		expr = _conv_expr_to_int_literal(expr, val);
+		expr->sema.result.type = lhs->sema.result.type; //todo
+		break;
+	}
 	case expr_int_literal:
-		sema_process_int_literal(expr);
-		return expr->data.int_literal.val;
+		if(sema_process_int_literal(expr).failure)
+			return NULL;
+		break;
 	case expr_sizeof:
 		if (!process_sizeof_expr(expr))
-			return int_val_zero(); //this is not ideal
-		return expr->data.int_literal.val;
-	case expr_null:
+			return NULL;
 		break;
 	}
 
-	return int_val_zero();
+	return expr;
 }
 
-int_val_t sema_fold_const_int_expr(ast_expression_t* expr)
+ast_expression_t* sema_fold_const_int_expr(ast_expression_t* expr)
 {
-	if (expr->kind == expr_int_literal)
-		return expr->data.int_literal.val;
-
 	assert(sema_is_const_int_expr(expr));
-	int_val_t result = sema_eval_constant_expr(expr);
-	ast_destroy_expression_data(expr);
-	memset(expr, 0, sizeof(ast_expression_t));
-	expr->kind = expr_int_literal;
-	expr->data.int_literal.val = result;
-	return result;
+	return _sema_eval_constant_expr(expr);
+	
 }

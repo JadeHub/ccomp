@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class PtrValidationTest : public ValidationTest {};
+class PtrValidationTest : public CompilerTest {};
 
 TEST_F(PtrValidationTest, global_ptr)
 {
@@ -76,6 +76,41 @@ TEST_F(PtrValidationTest, global_array)
 TEST_F(PtrValidationTest, string_literal)
 {
 	std::string code = R"(char *p = "Hello";)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(PtrValidationTest, assign_null)
+{
+	std::string code = R"(
+	void fn()
+	{
+		int* p = ((void*)0);
+	}
+)";
+
+	ExpectNoError(code);
+}
+
+TEST_F(PtrValidationTest, assign_null_global)
+{
+	std::string code = R"(
+	int* p = ((void*)0);
+)";
+
+	ExpectNoError(code);
+}
+
+
+TEST_F(PtrValidationTest, return_void_ptr)
+{
+	std::string code = R"(
+	void* fn();
+	int* test()
+	{
+		return fn();
+	}
+)";
 
 	ExpectNoError(code);
 }

@@ -36,7 +36,7 @@ void diag_err_print(token_t* tok, uint32_t err, const char* msg, void* data)
         fp.path ? fp.path : "unknown",
         fp.line, fp.col,
         err, msg);    
-    exit(1); 
+      exit(1); 
 }
 
 source_range_t _file_loader(const char* dir, const char* file, void* data)

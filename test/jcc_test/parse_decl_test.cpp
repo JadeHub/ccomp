@@ -76,7 +76,7 @@ public:
 		EXPECT_EQ(decl_func, decl->kind);
 		EXPECT_EQ(name, decl->name);
 		ASSERT_EQ(type_func_sig, decl->type_ref->spec->kind);
-		EXPECT_EQ(return_type, decl->type_ref->spec->data.func_sig_spec->ret_type);
+		EXPECT_TRUE(sema_is_same_type(return_type, decl->type_ref->spec->data.func_sig_spec->ret_type));
 	}
 
 	ast_declaration_t* DeclNo(size_t i)
@@ -123,7 +123,7 @@ TEST_F(ParstDeclTest, global_int_list)
 
 TEST_F(ParstDeclTest, err_const_after_spec)
 {
-	ExpectError(ERR_SYNTAX);
+	TestWithErrorHandling::ExpectError(ERR_SYNTAX);
 	ParseDecl("int a, const b;");
 }
 
@@ -145,9 +145,12 @@ TEST_F(ParstDeclTest, var_fn_ptr_decl)
 	ASSERT_EQ(1, count);
 }
 
-TEST_F(ParstDeclTest, var_fn_ptr_typedef)
+TEST_F(ParstDeclTest, fn_ret_ptr)
 {
-	ParseDecl("typedef int (*fn)(int);");
+	ParseDecl("int* fn()");
+	AssertValid();
+	ASSERT_EQ(1, count);
+	ExpectFnDecl(0, "fn", ast_make_ptr_type(int32_type_spec));
 }
 
 TEST_F(ParstDeclTest, array_of_ptrs)
@@ -216,4 +219,39 @@ TEST_F(ParstDeclTest, array_ptr)
 	AssertValid();
 	ASSERT_EQ(1, count);
 
+	ast_declaration_t* decl = DeclNo(0);
+	ast_type_spec_t* spec = decl->type_ref->spec;
+	//decl is a pointer
+	ASSERT_TRUE(ast_type_is_ptr(spec));
+	//..to an array
+	ast_type_spec_t* array_type = spec->data.ptr_type;
+	ASSERT_TRUE(ast_type_is_array(array_type));
+	//..of ints
+	ASSERT_TRUE(sema_is_same_type(array_type->data.array_spec->element_type, int32_type_spec));
+	//... with lenth 5
+	ast_expression_t* sz_expr = array_type->data.array_spec->size_expr;
+	ASSERT_TRUE(sz_expr->kind == expr_int_literal);
+	ASSERT_EQ(5, sz_expr->data.int_literal.val.v.int64);
+}
+
+TEST_F(ParstDeclTest, typedef_fn_ptr)
+{
+	ParseDecl("typedef int* (*fn_name)();");
+	AssertValid();
+	//1 declaration
+	ASSERT_EQ(1, count);
+	ast_declaration_t* decl = DeclNo(0);
+	//it is a typedef
+	ASSERT_TRUE(decl->type_ref->flags & TF_SC_TYPEDEF);
+	ASSERT_TRUE(decl->kind == decl_type);
+	//.. named "fn_name"
+	ASSERT_STREQ("fn_name", decl->name);
+	ast_type_spec_t* spec = decl->type_ref->spec;
+	//...whic is a pointer to a function
+	ASSERT_TRUE(ast_type_is_fn_ptr(spec));
+	//...which returns int*
+	ast_type_spec_t* fn_type = spec->data.ptr_type;
+	ASSERT_TRUE(sema_is_same_type(fn_type->data.func_sig_spec->ret_type, ast_make_ptr_type(int32_type_spec)));
+	//...and takes no params
+	ASSERT_TRUE(fn_type->data.func_sig_spec->params->param_count == 0);
 }

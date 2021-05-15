@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class PreProcDefineTest : public LexPreProcTest {};
+class PreProcDefineTest : public LexTest {};
 
 TEST_F(PreProcDefineTest, define)
 {
@@ -235,6 +235,19 @@ TEST();
 
 	PreProc(src);
 	ExpectCode(";");
+}
+
+TEST_F(PreProcDefineTest, fn_use_arg_twice)
+{
+	std::string src = R"(
+#define TEST(A) A+A
+
+TEST(1);
+
+)";
+
+	PreProc(src);
+	ExpectCode("1+1;");
 }
 
 TEST_F(PreProcDefineTest, fn_start_of_line)
@@ -744,6 +757,8 @@ xglue(HIGH, LOW);
 "hello";
 "hello" ", world";
 )");
+
+
 
 }
 

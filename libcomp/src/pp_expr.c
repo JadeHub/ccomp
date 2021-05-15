@@ -9,7 +9,6 @@
 typedef struct
 {
 	int_val_t val;
-	//uint32_t value;
 	token_range_t range;
 }const_expr_result_t;
 

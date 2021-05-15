@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class GotoValidationTest : public ValidationTest {};
+class GotoValidationTest : public CompilerTest {};
 
 TEST_F(GotoValidationTest, multi_label_goto)
 {
@@ -25,7 +25,7 @@ l1:	;
 	}
 	)";
 
-	ExpectError(code, ERR_DUP_LABEL);
+	ExpectCompilerError(code, ERR_DUP_LABEL);
 }
 
 TEST_F(GotoValidationTest, err_unknown_label)
@@ -37,7 +37,7 @@ TEST_F(GotoValidationTest, err_unknown_label)
 	}
 	)";
 
-	ExpectError(code, ERR_UNKNOWN_LABEL);
+	ExpectCompilerError(code, ERR_UNKNOWN_LABEL);
 }
 
 TEST_F(GotoValidationTest, goto_before_label)

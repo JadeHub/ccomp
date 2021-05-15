@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class BinOpValidationTest : public ValidationTest {};
+class BinOpValidationTest : public CompilerTest {};
 
 TEST_F(BinOpValidationTest, greater_than_lhs_not_int)
 {

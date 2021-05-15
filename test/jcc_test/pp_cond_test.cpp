@@ -1,6 +1,6 @@
 #include "validation_fixture.h"
 
-class PreProcCondTest : public LexPreProcTest {};
+class PreProcCondTest : public LexTest {};
 
 TEST_F(PreProcCondTest, pp_null)
 {
