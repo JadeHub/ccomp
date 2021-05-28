@@ -866,22 +866,22 @@ lex_next_tok:
 
 	if (slashstar)
 	{
-		/**/
+		/* */
 		bool star = false;
 		while(1)
 		{
+			star = *pos == '*';
+
 			if (!_adv_pos(src, &pos))
 			{
 				diag_err(result, ERR_SYNTAX, "unterminated comment");
 				goto _hit_end;
 			}
-
 			if (star && *pos == '/')
 			{
 				_adv_pos(src, &pos);
 				break;
 			}
-			star = *pos == '*';
 		} ;
 
 		//replace with single space

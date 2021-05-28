@@ -173,10 +173,11 @@ bool sema_is_null_ptr_expr(ast_expression_t* expr)
 
 bool sema_can_perform_assignment(ast_type_spec_t* target, ast_expression_t* source)
 {
-	if (ast_type_is_ptr(target) &&
-		(source->kind == expr_int_literal ||
-		sema_is_const_pointer(source) ||
-		ast_type_is_void_ptr(source->sema.result.type)))
+	if (ast_type_is_ptr(target) && //when assigning to a pointer we accept...
+		(source->kind == expr_int_literal || //a const int
+		sema_is_const_pointer(source) || //a constant pointer
+		ast_type_is_void_ptr(source->sema.result.type) // a void pointer
+	))
 	{
 		return true;
 	}
@@ -229,6 +230,24 @@ static expr_result_t _process_assignment(ast_expression_t* expr)
 	return target_result;
 }
 
+static expr_result_t _process_logical_bin_op(ast_expression_t* expr)
+{
+	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
+	if (lhs_result.failure)
+		return lhs_result;
+
+	expr_result_t rhs_result = sema_process_expression(expr->data.binary_op.rhs);
+	if (rhs_result.failure)
+		return rhs_result;
+
+	expr_result_t result;
+	memset(&result, 0, sizeof(expr_result_t));
+
+	result.result_type = int8_type_spec; //todo
+
+	return result;
+}
+
 static expr_result_t _process_comparison_op(ast_expression_t* expr)
 {
 	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);
@@ -278,6 +297,10 @@ static expr_result_t _process_binary_op(ast_expression_t* expr)
 	case op_greaterthan:
 	case op_greaterthanequal:
 		return _process_comparison_op(expr);
+
+	case op_and:
+	case op_or:
+		return _process_logical_bin_op(expr);
 	}
 
 	expr_result_t lhs_result = sema_process_expression(expr->data.binary_op.lhs);

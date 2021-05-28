@@ -86,7 +86,6 @@ bool sema_process_struct_compound_init(ast_expression_t* expr, ast_type_spec_t* 
 			return false;
 
 		if (!sema_can_perform_assignment(member->decl->type_ref->spec, init_item->expr))
-		//if (!sema_can_convert_type(member->decl->type_ref->spec, init_result.result_type))
 		{
 			sema_report_type_conversion_error(init_item->expr, member->decl->type_ref->spec, init_result.result_type,
 				"initialisation of member '%s'", member->decl->name);

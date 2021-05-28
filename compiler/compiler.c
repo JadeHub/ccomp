@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 {
     diag_set_handler(&diag_err_print, NULL);
 
-    options = parse_command_line(argc, argv);
+    options = parse_command_line(argc, (const char**)argv);
 
     if (!options.valid)
     {

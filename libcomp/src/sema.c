@@ -818,46 +818,6 @@ bool process_switch_statement(ast_statement_t * smnt)
 		return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
 			"invalid case in switch");
 	}
-
-#if 0
-	ast_switch_case_data_t* case_data = smnt->data.switch_smnt.cases;
-	while (case_data)
-	{
-		//todo - fold const_expr?
-
-		if (!process_expression(case_data->const_expr))
-			return false;
-
-		if (case_data->const_expr->kind != expr_int_literal)
-		{
-			return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
-				"case must be a constant expression");
-		}
-
-		if (!process_statement(case_data->statement))
-			return false;
-
-		if (case_data->next == NULL && case_data->statement == NULL)
-		{
-			/*last item must have statement
-
-			This is fine:
-			case 1:
-			case 2:
-				return;
-
-			This is an error:
-			case 1:
-				return;
-			case 2:
-			*/
-			return _report_err(smnt->tokens.start, ERR_INVALID_SWITCH,
-				"invalid case in switch");
-		}
-
-		case_data = case_data->next;
-	}
-#endif
 	return true;
 }
 

@@ -91,6 +91,9 @@ bool int_val_will_fit(int_val_t* val, ast_type_spec_t* type)
 	if (!ast_type_is_int(type))
 		return false;
 
+	if (val->v.int64 == 0)
+		return true;
+
 	if (val->is_signed)
 	{
 		return val->v.int64 >= ast_int_type_min(type) && val->v.int64 <= (int64_t)ast_int_type_max(type);

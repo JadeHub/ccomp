@@ -302,3 +302,10 @@ TEST_F(LexerTest, tok_spelling_len)
 	ExpectTokTypes({ tok_identifier, tok_eof });
 	EXPECT_EQ(3, tok_spelling_len(GetToken(0)));
 }
+
+TEST_F(LexerTest, empty_comment)
+{
+	Lex(R"(/**/)");
+
+	ExpectTokTypes({ tok_eof });
+}

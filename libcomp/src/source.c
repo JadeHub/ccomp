@@ -236,7 +236,7 @@ void src_add_header_path(const char* path)
 		{
 			_include_dirs[i] = path_resolve(path);
 			if (!_include_dirs[i])
-				fprintf(stderr, "failed to resolve include path '%s'", path);
+				fprintf(stderr, "failed to resolve include path '%s'\n", path);
 			return;
 		}
 	}
