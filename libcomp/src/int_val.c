@@ -1,7 +1,8 @@
 #include "int_val.h"
 
-#include <limits.h>
 #include <string.h>
+#include <limits.h>
+#include <assert.h>
 
 static inline bool _is_zero(int_val_t* v)
 {
@@ -330,21 +331,26 @@ size_t int_val_required_width(int_val_t* val)
 {
 	if (val->is_signed)
 	{
-		if (val->v.int64 >= SCHAR_MIN && val->v.int64 <= SCHAR_MAX)
+		if (val->v.int64 >= INT8_MIN && val->v.int64 <= INT8_MAX)
 			return 8;
-		if (val->v.int64 >= SHRT_MIN && val->v.int64 <= SHRT_MAX)
+		if (val->v.int64 >= INT16_MIN && val->v.int64 <= INT16_MAX)
 			return 16;
-		if (val->v.int64 >= LONG_MIN && val->v.int64 <= LONG_MAX)
+		if (val->v.int64 >= INT32_MIN && val->v.int64 <= INT32_MAX)
 			return 32;
+		if (val->v.int64 >= INT64_MIN && val->v.int64 <= INT64_MAX)
+			return 64;
 	}
 	else
 	{
-		if (val->v.uint64 <= UCHAR_MAX)
+		if (val->v.uint64 <= UINT8_MAX)
 			return 8;
-		else if (val->v.uint64 <= USHRT_MAX)
+		else if (val->v.uint64 <= UINT16_MAX)
 			return 16;
-		else if (val->v.uint64 <= ULONG_MAX)
+		else if (val->v.uint64 <= UINT32_MAX)
 			return 32;
+		else if (val->v.uint64 <= UINT64_MAX)
+			return 64;
 	}
-	return 64;
+	assert(false);
+	return 0;
 }

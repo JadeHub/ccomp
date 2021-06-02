@@ -239,7 +239,6 @@ __LINE__
 )";
 
 	PreProc(src.c_str());
-	PrintTokens();
 	ExpectCode(R"(int i = 1;
 int b = 1;
 3

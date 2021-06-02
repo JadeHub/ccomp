@@ -8,3 +8,4 @@ build
 winbuild
 *.o
 test
+jcc_build/asm/

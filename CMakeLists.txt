@@ -20,6 +20,7 @@ ENDFOREACH (MODE)
 
 ELSE (WIN32)
 
+# set (CMAKE_CXX_FLAGS "-m32")
 add_definitions("-g")
 
 ENDIF (WIN32)
